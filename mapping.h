@@ -11,24 +11,6 @@
 
 #include <TMath.h>
 
-// class Hit{
-
-// public:
-//   std::string label;
-//   unsigned short ch;
-//   double energy;
-//   unsigned long long timestamp;
-//   Hit() : label(""), ch(-1), energy(TMath::QuietNaN()), timestamp(0) {}
-
-//   Hit(std::string label, unsigned short ch, double energy, unsigned long long timestamp){
-//     this->label = label;
-//     this->ch = ch;
-//     this->energy = energy;
-//     this->timestamp = timestamp;
-//   }
-
-// };
-
 const std::map<int, unsigned short> board = {
    {0, 17122},  // id, sn
    {1, 17123},
@@ -42,6 +24,9 @@ const std::map<int, unsigned short> board = {
    {9,   405}
 };
 const int nBd = board.size();
+
+const int nV1740 = 7;
+const int nV1725 = 3;
 
 //+++++++++++++++++++ detID;
 // The detectors are seperated into 2 type: SuperX3, QQQ, and PC

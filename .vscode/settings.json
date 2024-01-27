@@ -13,6 +13,8 @@
     "initializer_list": "cpp",
     "span": "cpp",
     "ApplyMapping.C": "cpp",
-    "script.C": "cpp"
+    "script.C": "cpp",
+    "Analyzer.C": "cpp",
+    "PreAnalysis.C": "cpp"
   }
 }

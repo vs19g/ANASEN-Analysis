@@ -19,6 +19,6 @@ all	:	$(ALL)
 clean	:
 		/bin/rm -f $(OBJS) $(ALL)
 
-Mapper	:	Mapper.cpp  mapping.h
+Mapper	:	Mapper.cpp  mapping.h ClassDet.h
 		@echo "--------- making Mapper"
 		$(CC) $(COPTS) -o Mapper Mapper.cpp $(ROOTLIBS)

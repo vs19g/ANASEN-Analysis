@@ -1,4 +1,3 @@
-
 #include <string>
 #include <cstdio>
 
@@ -9,36 +8,7 @@
 #include <TBenchmark.h>
 
 #include "mapping.h"
-
-#define MAXMULTI 1000
-
-class Det{
-public:
-  Det(): multi(0) {Clear(); }
-
-  UShort_t   multi;
-  UShort_t   id[MAXMULTI];
-  UShort_t   ch[MAXMULTI];
-  UShort_t    e[MAXMULTI];
-  ULong64_t   t[MAXMULTI];
-
-  void Clear(){
-    multi = 0;
-    for( int i = 0; i < MAXMULTI; i++){
-      id[i] = 0;
-      ch[i] = 0;
-       e[i] = 0;
-       t[i] = 0;
-    }
-  }
-
-  void Print(){
-    printf("=============================== multi : %u\n", multi);
-    for( int i = 0; i < multi; i++) {
-      printf(" %3d | %2d-%2d %5u %llu \n", i, id[i], ch[i], e[i], t[i]);
-    }
-  }
-};
+#include "ClassDet.h"
 
 //===============================
 int main(int argc, char **argv){
@@ -57,7 +27,6 @@ int main(int argc, char **argv){
   std::string inFileName = argv[1];
 
   PrintMapping();
-
 
   TFile * inFile = new TFile(inFileName.c_str(), "READ");
   TTree * tree = (TTree*) inFile->Get("tree");
@@ -101,7 +70,7 @@ int main(int argc, char **argv){
 
   printf(" Raw root file : %s\n", inFileName.c_str());
   printf("           Run : %03d\n", run);
-  printf( "  total Entry : %lld \n", totnumEntry);
+  printf("   total Entry : %lld \n", totnumEntry);
   printf(" Out file name : %s \n", outFileName.Data());
 
   TFile * saveFile = new TFile( outFileName,"RECREATE");
