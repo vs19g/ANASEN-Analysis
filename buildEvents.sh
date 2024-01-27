@@ -9,8 +9,11 @@ fi
 runID=$1
 timeWindow=$2
 
-fileList=`\ls -1 ../*${runID}*.fsu`
+rawFolder=/media/nvmeData/ANASEN_test
+rootFoler=/media/nvmeData/ANASEN_test/root_data
+
+fileList=`\ls -1 ${rawFolder}/*${runID}*.fsu`
 
 ./EventBuilderNoTrace ${timeWindow} 0 ${fileList}
 
-mv -vf ../*${runID}*${timeWindow}_noTrace.root .
+mv -vf ${rawFolder}/*${runID}*${timeWindow}_noTrace.root ${rootFoler}/.

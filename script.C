@@ -3,8 +3,11 @@
 #include <TGraph.h>
 #include <TFile.h>
 #include <TTree.h>
+#include <TROOT.h>
 #include <TString.h>
 #include <TMath.h>
+
+#include "mapping.h"
 
 class PulserChecker {
 public:
@@ -66,7 +69,7 @@ private:
 
 };
 
-void ryanScript(TString fileName, int maxEvent = -1){
+void script(TString fileName, int maxEvent = -1){
 
   /*
   //+++++++++++++++++++++++++++++++++++++++++++
@@ -145,8 +148,8 @@ void ryanScript(TString fileName, int maxEvent = -1){
   file0->Close();
   f1->Close();
   */
+  /*
   //+++++++++++++++++++++++++++++++++++++++++++
-
   printf("######### file : %s \n", fileName.Data());
   TFile * file0 = new TFile(fileName); 
 
@@ -232,7 +235,8 @@ void ryanScript(TString fileName, int maxEvent = -1){
   for( int i = 0; i< nBd; i++){ 
     printf(" %5d | %16llu \n", stat[i]->getSN(), stat[i]->getTime0() - time0);
   }
-
+  */
+  //+++++++++++++++++++++++++++++++++++++++++++
 
 
 }
