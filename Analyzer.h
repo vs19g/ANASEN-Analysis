@@ -73,6 +73,9 @@ void Analyzer::Init(TTree *tree){
    fChain->SetBranchAddress("evID", &evID, &b_eventID);
    fChain->SetBranchAddress("run", &run, &b_run);
 
+   sx3.SetDetDimension(24,12);
+   qqq.SetDetDimension(4,32);
+   pc.SetDetDimension(2,24);
 
    fChain->SetBranchAddress("sx3Multi", &sx3.multi, &b_sx3Multi);
    fChain->SetBranchAddress("sx3ID",    &sx3.id, &b_sx3ID);
@@ -84,11 +87,11 @@ void Analyzer::Init(TTree *tree){
    fChain->SetBranchAddress("qqqCh",    &qqq.ch, &b_qqqCh);
    fChain->SetBranchAddress("qqqE",     &qqq.e, &b_qqqE);
    fChain->SetBranchAddress("qqqT",     &qqq.t, &b_qqqT);
-   fChain->SetBranchAddress("pcMulti", &pc.multi, &b_pcMulti);
-   fChain->SetBranchAddress("pcID",    &pc.id, &b_pcID);
-   fChain->SetBranchAddress("pcCh",    &pc.ch, &b_pcCh);
-   fChain->SetBranchAddress("pcE",     &pc.e, &b_pcE);
-   fChain->SetBranchAddress("pcT",     &pc.t, &b_pcT);
+   fChain->SetBranchAddress("pcMulti",  &pc.multi, &b_pcMulti);
+   fChain->SetBranchAddress("pcID",     &pc.id, &b_pcID);
+   fChain->SetBranchAddress("pcCh",     &pc.ch, &b_pcCh);
+   fChain->SetBranchAddress("pcE",      &pc.e, &b_pcE);
+   fChain->SetBranchAddress("pcT",      &pc.t, &b_pcT);
 
 }
 
