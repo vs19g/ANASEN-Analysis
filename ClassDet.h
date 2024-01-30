@@ -16,6 +16,7 @@ public:
   unsigned long long   t[MAXMULTI];
 
   unsigned short  index[MAXMULTI]; // id * 12 + ch;
+  bool  used[MAXMULTI];
 
   void Clear(){
     multi = 0;
@@ -25,6 +26,7 @@ public:
        e[i] = 0;
        t[i] = 0;
        index[i] = 0;
+       used[i] = false;
     }
   }
 
