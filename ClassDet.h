@@ -15,7 +15,7 @@ public:
   unsigned short       e[MAXMULTI];
   unsigned long long   t[MAXMULTI];
 
-  unsigned short  index[MAXMULTI]; // id * 12 + ch;
+  unsigned short  index[MAXMULTI]; // id * nCh + ch;
   bool  used[MAXMULTI];
 
   void Clear(){

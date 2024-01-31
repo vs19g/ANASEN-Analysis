@@ -61,7 +61,7 @@ void ANASEN_model(int anodeID1 = -1, int anodeID2 = -1, int cathodeID1 = -1, int
   pcA->SetLineColor(4);  
 
   for( int i = 0; i < nWire; i++){
-    if( i < anodeID1 || i > anodeID2) continue;   
+    if( anodeID2 >= 0 &&  (i < anodeID1 || i > anodeID2) ) continue;   
     worldBox->AddNode(pcA, i+1, new TGeoCombiTrans( radiusAnew * TMath::Cos( TMath::TwoPi() / nWire *i + dAngle / 2), 
                                                     radiusAnew * TMath::Sin( TMath::TwoPi() / nWire *i + dAngle / 2), 
                                                     0, 
@@ -76,7 +76,7 @@ void ANASEN_model(int anodeID1 = -1, int anodeID2 = -1, int cathodeID1 = -1, int
   TGeoVolume *pcC = geom->MakeTube("tub2", Al, 0, 0.01, wireCLength/2);
   pcC->SetLineColor(6);
   for( int i = 0; i < nWire; i++){
-    if( i < cathodeID1 || i > cathodeID2) continue;   
+    if( cathodeID2 >= 0 && (i < cathodeID1 || i > cathodeID2) ) continue;   
     worldBox->AddNode(pcC, i+1, new TGeoCombiTrans( radiusCnew * TMath::Cos( TMath::TwoPi() / nWire *i - dAngle/2), 
                                                     radiusCnew * TMath::Sin( TMath::TwoPi() / nWire *i - dAngle/2), 
                                                     0, 
@@ -92,15 +92,26 @@ void ANASEN_model(int anodeID1 = -1, int anodeID2 = -1, int cathodeID1 = -1, int
   TGeoVolume * sx3 = geom->MakeBox("box", Al, 0.1, sx3Width/2, sx3Length/2);
   sx3->SetLineColor(kGreen+3);
   for( int i = 0; i < nSX3; i++){
-    worldBox->AddNode(sx3, 2*i+1., new TGeoCombiTrans( sx3Radius * TMath::Cos( TMath::TwoPi() / nSX3 *i), 
-                                                       sx3Radius * TMath::Sin( TMath::TwoPi() / nSX3 *i), 
+    worldBox->AddNode(sx3, 2*i+1., new TGeoCombiTrans( sx3Radius * TMath::Cos( TMath::TwoPi() / nSX3 * (i + 0.5)), 
+                                                       sx3Radius * TMath::Sin( TMath::TwoPi() / nSX3 * (i + 0.5)), 
                                                      sx3Length/2+sx3Gap, 
-                                                     new TGeoRotation("rot1", 360/nSX3 * (i), 0., 0.)));
+                                                     new TGeoRotation("rot1", 360/nSX3 * (i + 0.5), 0., 0.)));
 
-    worldBox->AddNode(sx3, 2*i+2., new TGeoCombiTrans( sx3Radius* TMath::Cos( TMath::TwoPi() / nSX3 *i), 
-                                                     sx3Radius * TMath::Sin( TMath::TwoPi() / nSX3 *i), 
-                                                     -sx3Length/2-sx3Gap, 
-                                                     new TGeoRotation("rot1", 360/nSX3 * (i), 0., 0.)));
+    worldBox->AddNode(sx3, 2*i+2., new TGeoCombiTrans( sx3Radius * TMath::Cos( TMath::TwoPi() / nSX3 * (i + 0.5)), 
+                                                       sx3Radius * TMath::Sin( TMath::TwoPi() / nSX3 * (i + 0.5)), 
+                                                       -sx3Length/2-sx3Gap, 
+                                                       new TGeoRotation("rot1", 360/nSX3 * (i + 0.5), 0., 0.)));
+  }
+
+  const int qqqR1 = 10;
+  const int qqqR2 = 50;
+  TGeoVolume *qqq = geom->MakeTubs("qqq", Al, qqqR1, qqqR2, 0.5, 5, 85);
+  qqq->SetLineColor(7);
+  for( int i = 0; i < 4; i++){
+    worldBox->AddNode(qqq, i+1, new TGeoCombiTrans( 0, 
+                                                    0, 
+                                                    100, 
+                                                    new TGeoRotation("rot1", 360/4 * (i), 0., 0.)));
   }
 
   geom->CloseGeometry();

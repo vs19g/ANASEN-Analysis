@@ -15,6 +15,7 @@
     "ApplyMapping.C": "cpp",
     "script.C": "cpp",
     "Analyzer.C": "cpp",
-    "PreAnalysis.C": "cpp"
+    "PreAnalysis.C": "cpp",
+    "ANASEN_model.C": "cpp"
   }
 }
