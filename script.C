@@ -9,6 +9,8 @@
 
 #include "mapping.h"
 
+#include "ClassAnasen.h"
+
 class PulserChecker {
 public:
   PulserChecker(int sn) : SN(sn){
@@ -69,7 +71,7 @@ private:
 
 };
 
-void script(TString fileName, int maxEvent = -1){
+void script(TString fileName = "", int maxEvent = -1){
 
   /*
   //+++++++++++++++++++++++++++++++++++++++++++
@@ -237,6 +239,31 @@ void script(TString fileName, int maxEvent = -1){
   }
   */
   //+++++++++++++++++++++++++++++++++++++++++++
+  // TCanvas * c1 = new TCanvas();
+  // ANASEN * kaka = new ANASEN();
+  // kaka->DrawAnasen();
+
+  TCanvas * c2 = new TCanvas();
+  ANASEN * haha = new ANASEN();
+
+  TVector3 pos (0, 10, 50);
+  TVector3 dir (1, 0, 0);
+
+  // dir.SetPhi( 10 * TMath::DegToRad());
+  // dir.SetTheta( 90 * TMath::DegToRad());
+
+  std::pair<int, int> wireID = haha->FindWireID(pos, dir, true);
+  SX3 sx3 = haha->FindSX3Pos(pos, dir, true);
+
+  haha->CalTrack(sx3.hitPos, wireID.first, wireID.second, true);
+
+  haha->DrawDeducedTrack(sx3.hitPos, wireID.first, wireID.second);
+
+  // haha->DrawTrack(pos, dir);
+
+
+
+
 
 
 }
