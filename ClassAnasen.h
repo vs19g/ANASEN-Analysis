@@ -472,11 +472,11 @@ inline void ANASEN::CalTrack(TVector3 sx3Pos, int anodeID, int cathodeID, bool v
 
   trackPos = sx3Pos;
 
-  TVector3 n1 = (P1[anodeID].first - P1[anodeID].second).Cross((sx3Pos - P1[anodeID].second));
-  TVector3 n2 = (Q1[anodeID].first - Q1[anodeID].second).Cross((sx3Pos - Q1[anodeID].second));
+  TVector3 n1 = (P1[anodeID].first - P1[anodeID].second).Cross((sx3Pos - P1[anodeID].second)).Unit();
+  TVector3 n2 = (Q1[cathodeID].first - Q1[cathodeID].second).Cross((sx3Pos - Q1[cathodeID].second)).Unit();
 
   // if the handiness of anode and cathode revered, it should be n2 cross n1
-  trackVec = (n1.Cross(n2)).Unit();
+  trackVec = (n2.Cross(n1)).Unit();
 
   if( verbose ) printf("Theta, Phi = %f, %f \n", trackVec.Theta() *TMath::RadToDeg(), trackVec.Phi()*TMath::RadToDeg()); 
 
