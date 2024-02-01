@@ -6,6 +6,7 @@
 #include <TROOT.h>
 #include <TString.h>
 #include <TMath.h>
+#include <TRandom.h>
 
 #include "mapping.h"
 
@@ -243,23 +244,39 @@ void script(TString fileName = "", int maxEvent = -1){
   // ANASEN * kaka = new ANASEN();
   // kaka->DrawAnasen();
 
-  TCanvas * c2 = new TCanvas();
+  TCanvas * c2 = new TCanvas("c2", "ANASEN Simulation", 800, 800);
+  c2->cd();
   ANASEN * haha = new ANASEN();
 
-  TVector3 pos (0, 10, 50);
+  gRandom->SetSeed(0);
+
+  int xRan = gRandom->Integer(20) - 10;
+  int yRan = gRandom->Integer(20) - 10;
+  int zRan = gRandom->Integer(20) - 10;
+  int pRan = gRandom->Integer(360); // phi deg
+
+  int tRan = 0 ;
+  do{
+    tRan = gRandom->Integer(100) + 40 ; // theta deg
+  }while( 75 < tRan && tRan < 105); 
+
+  TVector3 pos (xRan, yRan, zRan);
   TVector3 dir (1, 0, 0);
 
-  // dir.SetPhi( 10 * TMath::DegToRad());
-  // dir.SetTheta( 90 * TMath::DegToRad());
+  dir.SetPhi( pRan * TMath::DegToRad());
+  dir.SetTheta( tRan * TMath::DegToRad());
+
+  pos.Print();
+  dir.Print();
 
   std::pair<int, int> wireID = haha->FindWireID(pos, dir, true);
   SX3 sx3 = haha->FindSX3Pos(pos, dir, true);
 
-  haha->CalTrack(sx3.hitPos, wireID.first, wireID.second, true);
+  // haha->CalTrack(sx3.hitPos, wireID.first, wireID.second, true);
 
   //haha->DrawDeducedTrack(sx3.hitPos, wireID.first, wireID.second);
 
-  // haha->DrawTrack(pos, dir);
+  haha->DrawTrack(pos, dir, true);
 
 
 

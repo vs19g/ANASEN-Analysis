@@ -60,7 +60,7 @@ public:
   //Simulation
   SX3 FindSX3Pos(TVector3 pos, TVector3 direction, bool verbose = false);
   std::pair<int, int> FindWireID(TVector3 pos, TVector3 direction, bool verbose = false);
-  void DrawTrack(TVector3 pos, TVector3 direction);
+  void DrawTrack(TVector3 pos, TVector3 direction, bool drawEstimatedTrack = false);
 
   std::pair<TVector3,TVector3> GetAnode(unsigned short id) const{return P1[id];};
   std::pair<TVector3,TVector3> GetCathode(unsigned short id) const{return Q1[id];};
@@ -78,6 +78,7 @@ private:
 
   std::vector<std::pair<TVector3,TVector3>> S1; // coners of the SX3  0-11, z = mid point
   std::vector<std::pair<TVector3,TVector3>> S2; // coners of the SX3 12-23, z = mid point
+  std::vector<TVector3> SNorml; // normal of the SX3 (outward)
 
   void CalGeometry();
 
@@ -107,7 +108,7 @@ private:
   void Construct3DModel(int anodeID1 = -1, int anodeID2 = -1, int cathodeID1 = -1, int cathodeID2 = -1, bool DrawQQQ = true);
 
   double Distance(TVector3 a1, TVector3 a2, TVector3 b1, TVector3 b2); 
-  std::pair<double, double> Intersect(TVector3 a1, TVector3 a2, TVector3 b1, TVector3 b2); 
+  std::pair<double, double> Intersect(TVector3 a1, TVector3 a2, TVector3 b1, TVector3 b2, bool verbose = false); 
 
 };
 
@@ -160,17 +161,24 @@ inline void ANASEN::CalGeometry(){
 
   }
 
-  TVector3 sa, sb;
+  TVector3 sa, sb, sc, sn;
   for(int i = 0; i < nSX3; i++){
-    sa.SetXYZ( sx3Radius,  sx3Width/2, sx3Gap/2 + sx3Length/2 );
-    sb.SetXYZ( sx3Radius, -sx3Width/2, sx3Gap/2 + sx3Length/2 );
+    sa.SetXYZ( sx3Radius, -sx3Width/2, sx3Gap/2 + sx3Length/2 );
+    sb.SetXYZ( sx3Radius,  sx3Width/2, sx3Gap/2 + sx3Length/2 );
 
     sa.RotateZ( TMath::TwoPi() / nSX3 * (i + 0.5) );
     sb.RotateZ( TMath::TwoPi() / nSX3 * (i + 0.5) );
     S1.push_back(std::pair(sa,sb));
 
-    sa.SetXYZ( sx3Radius,  sx3Width/2, -sx3Gap/2 - sx3Length/2 );
-    sb.SetXYZ( sx3Radius, -sx3Width/2, -sx3Gap/2 - sx3Length/2 );
+
+    sc.SetXYZ( sx3Radius, -sx3Width/2, sx3Gap/2 );
+    sc.RotateZ( TMath::TwoPi() / nSX3 * (i + 0.5) );
+
+    sn = ((sc-sa).Cross(sb-sa)).Unit();
+    SNorml.push_back(sn);
+
+    sa.SetXYZ( sx3Radius, -sx3Width/2, -sx3Gap/2 - sx3Length/2 );
+    sb.SetXYZ( sx3Radius,  sx3Width/2, -sx3Gap/2 - sx3Length/2 );
 
     sa.RotateZ( TMath::TwoPi() / nSX3 * (i + 0.5) );
     sb.RotateZ( TMath::TwoPi() / nSX3 * (i + 0.5) );
@@ -306,7 +314,7 @@ inline double ANASEN::Distance(TVector3 a1, TVector3 a2, TVector3 b1, TVector3 b
 } 
 
 
-inline std::pair<double, double> ANASEN::Intersect(TVector3 p1, TVector3 p2, TVector3 q1, TVector3 q2){
+inline std::pair<double, double> ANASEN::Intersect(TVector3 p1, TVector3 p2, TVector3 q1, TVector3 q2, bool verbose){
 
   //see https://nukephysik101.wordpress.com/2023/12/30/intersect-between-2-line-segments/
   //zero all z-component
@@ -318,8 +326,10 @@ inline std::pair<double, double> ANASEN::Intersect(TVector3 p1, TVector3 p2, TVe
 
   double A = ((b0-b1).Cross(a0-a1)).Mag();
 
-  double h = ((b0-a0).Cross(b1-a0)).Mag()/ A;
-  double k = ((a1-b0).Cross(a0-b0)).Mag()/ A;
+  double h = ((b0-a0).Cross(b1-a0)).Z()/ A;
+  double k = ((a1-b0).Cross(a0-b0)).Z()/ A;
+
+  if( verbose ) printf(" ----h, k : %f, %f\n", h, k);
 
   return std::pair(h,k);
 } 
@@ -339,7 +349,7 @@ inline std::pair<int, int> ANASEN::FindWireID(TVector3 pos, TVector3 direction, 
     double disA = 99999999;
     double disC = 99999999;
 
-    if(P1[i].first.Phi()-TMath::PiOver4() < phi && phi < P1[i].second.Phi()+TMath::PiOver4()) {
+    if(P1[i].first.Phi()-TMath::PiOver2() < phi && phi < P1[i].second.Phi()+TMath::PiOver2()) {
       disA = Distance( pos, pos + direction, P1[i].first, P1[i].second);
 
       if( disA < minAnodeDis ){
@@ -349,7 +359,7 @@ inline std::pair<int, int> ANASEN::FindWireID(TVector3 pos, TVector3 direction, 
 
     }
 
-    if(Q1[i].second.Phi() < phi && phi < Q1[i].first.Phi()) {
+    if(Q1[i].second.Phi() - TMath::PiOver2() < phi && phi < Q1[i].first.Phi() + TMath::PiOver2()) {
       disC = Distance( pos, pos + direction, Q1[i].first, Q1[i].second);
 
       if( disC < minCathodeDis ){
@@ -371,10 +381,23 @@ inline SX3 ANASEN::FindSX3Pos(TVector3 pos, TVector3 direction, bool verbose){
 
   haha.id = -1;
   for( int i = 0 ; i < nSX3; i++){
-    std::pair<double, double> frac = Intersect( pos, pos + direction, S1[i].first, S1[i].second);
+
+    if(verbose) printf(" %d ", i);
+    std::pair<double, double> frac = Intersect( pos, pos + direction, S1[i].first, S1[i].second, verbose);
+
 
     if( frac.second < 0 || frac.second > 1 ) continue;
     haha.hitPos = pos + frac.first * direction;
+
+    double dis = haha.hitPos.Dot(SNorml[i]);
+
+    if(verbose) {
+      printf("reduced distance : %f\n", dis);
+      printf(" %d*", (i+1)%nSX3); 
+      Intersect( pos, pos + direction, S1[(i+1)%nSX3].first, S1[(i+1)%nSX3].second, verbose);
+    }
+
+    if( TMath::Abs(dis - sx3Radius) > 0.1 ) continue;
 
     haha.chDown = 2 * TMath::Floor(frac.second * 4);
     haha.chUp = haha.chDown + 1;
@@ -391,6 +414,8 @@ inline SX3 ANASEN::FindSX3Pos(TVector3 pos, TVector3 direction, bool verbose){
       if( verbose) haha.Print();
 
       return haha;
+    }else{
+      if( verbose ) printf(" zPos out of sensitive region\n");
     }
   }
 
@@ -409,7 +434,7 @@ inline void ANASEN::DrawAnasen(int anodeID1, int anodeID2, int cathodeID1, int c
 
 }
 
-inline  void ANASEN::DrawTrack(TVector3 pos, TVector3 direction){
+inline  void ANASEN::DrawTrack(TVector3 pos, TVector3 direction, bool drawEstimatedTrack){
 
   std::pair<int, int> id = FindWireID(pos, direction);
 
@@ -425,7 +450,7 @@ inline  void ANASEN::DrawTrack(TVector3 pos, TVector3 direction){
   // printf("Theta, Phi = %.2f %.2f \n", theta, phi);
   // pos.Print();
 
-  TGeoVolume * Track = geom->MakeTube("track", 0, 0, 0.1, 100.);
+  TGeoVolume * Track = geom->MakeTube("track", 0, 0, 0.1, 150.);
   Track->SetLineColor(kRed);
   worldBox->AddNode(Track, 1, new TGeoCombiTrans( pos.X(), pos.Y(), pos.Z(), new TGeoRotation("rotA", phi +  90, theta, 0.)));
 
@@ -437,6 +462,19 @@ inline  void ANASEN::DrawTrack(TVector3 pos, TVector3 direction){
     TGeoVolume * hit = geom->MakeSphere("hitpos", 0, 0, 3);
     hit->SetLineColor(kRed);
     worldBox->AddNode(hit, 2, new TGeoCombiTrans( sx3.hitPos.X(), sx3.hitPos.Y(), sx3.hitPos.Z(), new TGeoRotation("rotA", 0, 0, 0.)));
+
+    if( drawEstimatedTrack ){
+      CalTrack(sx3.hitPos, id.first, id.second, true);
+
+      double thetaDeduce = trackVec.Theta() * TMath::RadToDeg();
+      double phiDeduce = trackVec.Phi()  * TMath::RadToDeg();
+
+      TGeoVolume * trackDeduce = geom->MakeTube("trackDeduce", 0, 0, 0.1, 100.);
+      trackDeduce->SetLineColor(kOrange);
+      worldBox->AddNode(trackDeduce, 1, new TGeoCombiTrans( sx3.hitPos.X(), sx3.hitPos.Y(), sx3.hitPos.Z(), new TGeoRotation("rotA", phiDeduce +  90, thetaDeduce, 0.)));
+
+    }
+
   }
   
   geom->CloseGeometry();
