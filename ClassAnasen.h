@@ -433,10 +433,12 @@ inline  void ANASEN::DrawTrack(TVector3 pos, TVector3 direction){
   startPos->SetLineColor(kBlack);
   worldBox->AddNode(startPos, 3, new TGeoCombiTrans( pos.X(), pos.Y(), pos.Z(), new TGeoRotation("rotA", 0, 0, 0.)));
 
-  TGeoVolume * hit = geom->MakeSphere("hitpos", 0, 0, 3);
-  hit->SetLineColor(kRed);
-  worldBox->AddNode(hit, 2, new TGeoCombiTrans( sx3.hitPos.X(), sx3.hitPos.Y(), sx3.hitPos.Z(), new TGeoRotation("rotA", 0, 0, 0.)));
-
+  if( sx3.id >= 0 ){
+    TGeoVolume * hit = geom->MakeSphere("hitpos", 0, 0, 3);
+    hit->SetLineColor(kRed);
+    worldBox->AddNode(hit, 2, new TGeoCombiTrans( sx3.hitPos.X(), sx3.hitPos.Y(), sx3.hitPos.Z(), new TGeoRotation("rotA", 0, 0, 0.)));
+  }
+  
   geom->CloseGeometry();
   geom->SetVisLevel(4);
   worldBox->Draw("ogle");

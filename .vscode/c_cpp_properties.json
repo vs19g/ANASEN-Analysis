@@ -11,6 +11,19 @@
             "cStandard": "c17",
             "cppStandard": "gnu++17",
             "intelliSenseMode": "linux-gcc-x64"
+        },
+        {
+            "name": "Ryan",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "/home/ryan/Downloads/root_build/**",
+                "/home/ryan/Downloads/root_build/include"
+            ],
+            "defines": [],
+            "compilerPath": "/usr/bin/gcc",
+            "cStandard": "c17",
+            "cppStandard": "gnu++17",
+            "intelliSenseMode": "linux-gcc-x64"
         }
     ],
     "version": 4

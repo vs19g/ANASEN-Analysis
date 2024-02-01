@@ -257,7 +257,7 @@ void script(TString fileName = "", int maxEvent = -1){
 
   haha->CalTrack(sx3.hitPos, wireID.first, wireID.second, true);
 
-  haha->DrawDeducedTrack(sx3.hitPos, wireID.first, wireID.second);
+  //haha->DrawDeducedTrack(sx3.hitPos, wireID.first, wireID.second);
 
   // haha->DrawTrack(pos, dir);
 
