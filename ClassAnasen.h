@@ -69,15 +69,15 @@ private:
 
   const int nWire = 24;
   const int wireShift = 3;
-  const int zLen = 380; //mm
-  const int radiusA = 37;
-  const int radiusC = 43;
+  const float zLen = 380; //mm
+  const float radiusA = 37;
+  const float radiusC = 43;
 
   std::vector<std::pair<TVector3,TVector3>> P1; // the anode wire position vector in space 
   std::vector<std::pair<TVector3,TVector3>> Q1; // the cathode wire position vector in space 
 
-  std::vector<std::pair<TVector3,TVector3>> S1; // coners of the SX3  0-11, z = mid point
-  std::vector<std::pair<TVector3,TVector3>> S2; // coners of the SX3 12-23, z = mid point
+  std::vector<std::pair<TVector3,TVector3>> SD; // coners of the SX3  0-11, z = mid point
+  std::vector<std::pair<TVector3,TVector3>> SU; // coners of the SX3 12-23, z = mid point
   std::vector<TVector3> SNorml; // normal of the SX3 (outward)
 
   void CalGeometry();
@@ -92,14 +92,14 @@ private:
   TVector3 trackVecErrorC; // error vector prependicular to the Cathode-Pos plan
 
   const int nSX3 = 12;
-  const int sx3Radius = 88;
-  const int sx3Width = 40;
-  const int sx3Length = 75;
-  const int sx3Gap = 46;
+  const float sx3Radius = 88;
+  const float sx3Width = 40;
+  const float sx3Length = 75;
+  const float sx3Gap = 46;
 
-  const int qqqR1 = 50;
-  const int qqqR2 = 100;
-  const int qqqZPos = sx3Gap/2 + sx3Length + 30;
+  const float qqqR1 = 50;
+  const float qqqR2 = 100;
+  const float qqqZPos = sx3Gap/2 + sx3Length + 30;
 
   // int geomID;
   TGeoManager *geom;
@@ -168,7 +168,7 @@ inline void ANASEN::CalGeometry(){
 
     sa.RotateZ( TMath::TwoPi() / nSX3 * (i + 0.5) );
     sb.RotateZ( TMath::TwoPi() / nSX3 * (i + 0.5) );
-    S1.push_back(std::pair(sa,sb));
+    SD.push_back(std::pair(sa,sb));
 
 
     sc.SetXYZ( sx3Radius, -sx3Width/2, sx3Gap/2 );
@@ -182,7 +182,7 @@ inline void ANASEN::CalGeometry(){
 
     sa.RotateZ( TMath::TwoPi() / nSX3 * (i + 0.5) );
     sb.RotateZ( TMath::TwoPi() / nSX3 * (i + 0.5) );
-    S2.push_back(std::pair(sa,sb));
+    SU.push_back(std::pair(sa,sb));
   }
 
 }
@@ -343,23 +343,48 @@ inline std::pair<int, int> ANASEN::FindWireID(TVector3 pos, TVector3 direction, 
   double minCathodeDis = 999999;
 
   double phi = direction.Phi();
+  
 
   for( int i = 0; i < nWire; i++){
 
     double disA = 99999999;
     double disC = 99999999;
 
-    if(P1[i].first.Phi()-TMath::PiOver2() < phi && phi < P1[i].second.Phi()+TMath::PiOver2()) {
-      disA = Distance( pos, pos + direction, P1[i].first, P1[i].second);
+    double phiS = P1[i].first.Phi()  - TMath::PiOver4();
+    double phiL = P1[i].second.Phi() + TMath::PiOver4();
 
+    // printf("A%2d: %f %f | %f\n", i, phiS * TMath::RadToDeg(), phiL * TMath::RadToDeg(), phi * TMath::RadToDeg());
+
+    if( phi > 0 && phiS > phiL ) {
+      phiL = phiL + TMath::TwoPi();
+      // printf("------ %f %f\n", phiS * TMath::RadToDeg(), phiL * TMath::RadToDeg());
+    }
+    if( phi < 0 && phiS > phiL ) {
+      phiS = phiS - TMath::TwoPi();
+      // printf("------ %f %f\n", phiS * TMath::RadToDeg(), phiL * TMath::RadToDeg());
+    }
+
+    if( phiS < phi && phi < phiL) {
+      disA = Distance( pos, pos + direction, P1[i].first, P1[i].second);
       if( disA < minAnodeDis ){
         minAnodeDis = disA;
         anodeID = i;
       }
-
     }
 
-    if(Q1[i].second.Phi() - TMath::PiOver2() < phi && phi < Q1[i].first.Phi() + TMath::PiOver2()) {
+    phiS = Q1[i].second.Phi()- TMath::PiOver4();
+    phiL = Q1[i].first.Phi() + TMath::PiOver4();
+    // printf("C%2d: %f %f\n", i, phiS * TMath::RadToDeg(), phiL * TMath::RadToDeg());
+    if( phi > 0 && phiS > phiL ) {
+      phiL = phiL + TMath::TwoPi();
+      // printf("------ %f %f\n", phiS * TMath::RadToDeg(), phiL * TMath::RadToDeg());
+    }
+    if( phi < 0 && phiS > phiL ) {
+      phiS = phiS - TMath::TwoPi();
+      // printf("------ %f %f\n", phiS * TMath::RadToDeg(), phiL * TMath::RadToDeg());
+    }
+
+    if(phiS < phi && phi < phiL) {
       disC = Distance( pos, pos + direction, Q1[i].first, Q1[i].second);
 
       if( disC < minCathodeDis ){
@@ -383,7 +408,7 @@ inline SX3 ANASEN::FindSX3Pos(TVector3 pos, TVector3 direction, bool verbose){
   for( int i = 0 ; i < nSX3; i++){
 
     if(verbose) printf(" %d ", i);
-    std::pair<double, double> frac = Intersect( pos, pos + direction, S1[i].first, S1[i].second, verbose);
+    std::pair<double, double> frac = Intersect( pos, pos + direction, SD[i].first, SD[i].second, verbose);
 
 
     if( frac.second < 0 || frac.second > 1 ) continue;
@@ -394,7 +419,7 @@ inline SX3 ANASEN::FindSX3Pos(TVector3 pos, TVector3 direction, bool verbose){
     if(verbose) {
       printf("reduced distance : %f\n", dis);
       printf(" %d*", (i+1)%nSX3); 
-      Intersect( pos, pos + direction, S1[(i+1)%nSX3].first, S1[(i+1)%nSX3].second, verbose);
+      Intersect( pos, pos + direction, SD[(i+1)%nSX3].first, SD[(i+1)%nSX3].second, verbose);
     }
 
     if( TMath::Abs(dis - sx3Radius) > 0.1 ) continue;
@@ -407,9 +432,9 @@ inline SX3 ANASEN::FindSX3Pos(TVector3 pos, TVector3 direction, bool verbose){
 
       haha.id = zPos > 0 ? i : i + 12;
 
-      haha.zFrac = zPos > 0 ?  (zPos - sx3Gap/2 - sx3Length/2)/sx3Length : (zPos - ( - sx3Gap/2 - sx3Length/2) )/sx3Length ;
+      haha.zFrac = zPos > 0 ?  (zPos - sx3Gap/2. - sx3Length/2.)/sx3Length : (zPos - ( - sx3Gap/2. - sx3Length/2.) )/sx3Length ;
 
-      haha.chBack = TMath::Floor( haha.zFrac * 4 ) + 8;
+      haha.chBack = TMath::Floor( (haha.zFrac + 0.5) * 4 ) + 8;
 
       if( verbose) haha.Print();
 
@@ -443,7 +468,8 @@ inline  void ANASEN::DrawTrack(TVector3 pos, TVector3 direction, bool drawEstima
   int a1 = id.first - 1; if( a1 < 0 ) a1 += nWire;
   int b1 = id.second - 1; if( b1 < 0 ) b1 += nWire;
 
-  Construct3DModel(a1, id.first+1, b1, id.second+1, false);
+  //Construct3DModel(a1, id.first+1, b1, id.second+1, false);
+  Construct3DModel(id.first, id.first, id.second, id.second, false);
 
   double theta = direction.Theta() * TMath::RadToDeg();
   double phi = direction.Phi()  * TMath::RadToDeg();
@@ -534,13 +560,13 @@ inline TVector3 ANASEN::CalSX3Pos(unsigned short ID, unsigned short chUp, unsign
 
   if( ID < nSX3 ){ //down
 
-    sa = S1[reducedID].first;
-    sb = S1[reducedID].second;
+    sa = SD[reducedID].first;
+    sb = SD[reducedID].second;
 
   }else{
 
-    sa = S2[reducedID].first;
-    sb = S2[reducedID].second;
+    sa = SU[reducedID].first;
+    sb = SU[reducedID].second;
 
   }
 

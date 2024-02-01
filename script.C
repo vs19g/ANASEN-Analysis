@@ -253,7 +253,7 @@ void script(TString fileName = "", int maxEvent = -1){
   int xRan = gRandom->Integer(20) - 10;
   int yRan = gRandom->Integer(20) - 10;
   int zRan = gRandom->Integer(20) - 10;
-  int pRan = gRandom->Integer(360); // phi deg
+  int pRan = gRandom->Integer(10) + 175; // phi deg
 
   int tRan = 0 ;
   do{
