@@ -188,26 +188,30 @@ inline void PW::FindWireID(TVector3 pos, TVector3 direction, bool verbose ){
 
   //==== find the 2nd nearest wire
   short anode1 = hitInfo.nearestWire.first;
+  short aaa1 = anode1 - 1; if( aaa1 < 0 ) aaa1 += nWire;
+  short aaa2 = (anode1 + 1) % nWire; 
 
-  double haha1 = Distance( pos, pos + direction, An[anode1-1].first, An[anode1-1].second);
-  double haha2 = Distance( pos, pos + direction, An[anode1+1].first, An[anode1+1].second);
+  double haha1 = Distance( pos, pos + direction, An[aaa1].first, An[aaa1].second);
+  double haha2 = Distance( pos, pos + direction, An[aaa2].first, An[aaa2].second);
   if( haha1 < haha2){
-    hitInfo.nextNearestWire.first = anode1-1;
+    hitInfo.nextNearestWire.first = aaa1;
     hitInfo.nextNearestDist.first = haha1;
   }else{
-    hitInfo.nextNearestWire.first = anode1+1;
+    hitInfo.nextNearestWire.first = aaa2;
     hitInfo.nextNearestDist.first = haha2;
   }
 
   short cathode1 = hitInfo.nearestWire.second;
+  short ccc1 = cathode1 - 1; if( ccc1 < 0 ) ccc1 += nWire;
+  short ccc2 = (cathode1 + 1) % nWire; 
 
-  haha1 = Distance( pos, pos + direction, Ca[cathode1-1].first, Ca[cathode1-1].second);
-  haha2 = Distance( pos, pos + direction, Ca[cathode1+1].first, Ca[cathode1+1].second);
+  haha1 = Distance( pos, pos + direction, Ca[ccc1].first, Ca[ccc1].second);
+  haha2 = Distance( pos, pos + direction, Ca[ccc2].first, Ca[ccc2].second);
   if( haha1 < haha2){
-    hitInfo.nextNearestWire.second = cathode1-1;
+    hitInfo.nextNearestWire.second = ccc1;
     hitInfo.nextNearestDist.second = haha1;
   }else{
-    hitInfo.nextNearestWire.second = cathode1+1;
+    hitInfo.nextNearestWire.second = ccc2;
     hitInfo.nextNearestDist.second = haha2;
   }
 
@@ -241,11 +245,11 @@ inline void PW::CalTrack2(TVector3 sx3Pos, PWHitInfo hitInfo, bool verbose){
   TVector3 shiftA2 = (An[anodeID2].second - An[anodeID1].second) * fracA;
 
   double totDistC = hitInfo.nearestDist.second + hitInfo.nextNearestDist.second;
-  double fracC = hitInfo.nearestDist.second / totDistA;
+  double fracC = hitInfo.nearestDist.second / totDistC;
   short cathodeID1 = hitInfo.nearestWire.second;
   short cathodeID2 = hitInfo.nextNearestWire.second;
-  TVector3 shiftC1 = (Ca[anodeID2].first - Ca[anodeID1].first) * fracC;
-  TVector3 shiftC2 = (Ca[anodeID2].second - Ca[anodeID1].second) * fracC;
+  TVector3 shiftC1 = (Ca[cathodeID2].first - Ca[cathodeID1].first) * fracC;
+  TVector3 shiftC2 = (Ca[cathodeID2].second - Ca[cathodeID1].second) * fracC;
 
   TVector3 a1 = An[anodeID1].first + shiftA1;
   TVector3 a2 = An[anodeID1].second + shiftA2;

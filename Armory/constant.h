@@ -7,7 +7,6 @@
  *  email: goluckyryan@gmail.com
  * ********************************************************************/
 
-
 #ifndef constant
 #define constant
 #include <cmath>
@@ -69,7 +68,7 @@ const double hbar = 197.326979;
 
 
 //======================================================================
-std::vector<std::string> SplitStr(std::string tempLine, std::string splitter, int shift = 0){
+inline std::vector<std::string> SplitStr(std::string tempLine, std::string splitter, int shift = 0){
 
   std::vector<std::string> output;
 

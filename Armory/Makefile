@@ -23,6 +23,6 @@ Mapper	:	Mapper.cpp  ../mapping.h ClassDet.h
 		@echo "--------- making Mapper"
 		$(CC) $(COPTS) -o Mapper Mapper.cpp $(ROOTLIBS)
 
-AnasenMS : ClassAnasen.h anasenMS.cpp Isotope.h constant.h
+AnasenMS : constant.h Isotope.h ClassTransfer.h ClassSX3.h ClassPW.h ClassAnasen.h anasenMS.cpp 
 		@echo "--------- making ANASEN Monte Carlo"
-		$(CC) $(COPTS) -o anasenMS anasenMS.cpp $(ROOTLIBS)
+		$(CC) $(COPTS) -o AnasenMS anasenMS.cpp $(ROOTLIBS)

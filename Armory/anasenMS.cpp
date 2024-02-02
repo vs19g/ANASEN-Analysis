@@ -90,9 +90,13 @@ int main(int argc, char **argv){
   tree->Branch("sx3Y",     &sx3Y, "sx3Y/D");
   tree->Branch("sx3Z",     &sx3Z, "sx3Z/D");
 
-  int anodeID, cathodeID;
-  tree->Branch("aID", &anodeID, "anodeID/I");
-  tree->Branch("cID", &cathodeID, "cathodeID/I");
+  int anodeID[2], cathodeID[2];
+  tree->Branch("aID", anodeID, "anodeID/I");
+  tree->Branch("cID", cathodeID, "cathodeID/I");
+
+  double anodeDist[2], cathodeDist[2];
+  tree->Branch("aDist",   anodeDist, "anodeDist/D");
+  tree->Branch("cDist",  cathodeDist, "cathodeDist/D");
 
   int sx3ID, sx3Up, sx3Dn, sx3Bk;
   double sx3ZFrac;
@@ -105,6 +109,10 @@ int main(int argc, char **argv){
   double reTheta, rePhi;
   tree->Branch("reTheta", &reTheta, "reconstucted_theta/D");
   tree->Branch("rePhi",     &rePhi, "reconstucted_phi/D");
+
+  double reTheta1, rePhi1;
+  tree->Branch("reTheta1", &reTheta1, "reconstucted_theta1/D");
+  tree->Branch("rePhi1",     &rePhi1, "reconstucted_phi1/D");
 
 
   //========timer
@@ -156,10 +164,17 @@ int main(int argc, char **argv){
     pw->FindWireID(vertex, dir, false);
     sx3->FindSX3Pos(vertex, dir, false);   
 
-    std::pair<int, int> wireID = pw->GetNearestID();
+    PWHitInfo hitInfo = pw->GetHitInfo();
 
-    anodeID = wireID.first;
-    cathodeID = wireID.second;
+    anodeID[0]   = hitInfo.nearestWire.first;
+    cathodeID[0] = hitInfo.nearestWire.second;
+    anodeID[1]   = hitInfo.nextNearestWire.first;
+    cathodeID[1] = hitInfo.nextNearestWire.second;
+
+    anodeDist[0]   = hitInfo.nearestDist.first;
+    cathodeDist[0] = hitInfo.nearestDist.second;
+    anodeDist[1]   = hitInfo.nextNearestDist.first;
+    cathodeDist[1] = hitInfo.nextNearestDist.second;
 
     sx3ID = sx3->GetID();
     if( sx3ID >= 0 ){
@@ -172,10 +187,13 @@ int main(int argc, char **argv){
       sx3Y = sx3->GetHitPos().Y();
       sx3Z = sx3->GetHitPos().Z();
       
-      pw->CalTrack(sx3->GetHitPos(), wireID.first, wireID.second, false);
-  
+      pw->CalTrack(sx3->GetHitPos(), anodeID[0], cathodeID[0], false);
       reTheta = pw->GetTrackTheta() * TMath::RadToDeg();
       rePhi = pw->GetTrackPhi() * TMath::RadToDeg();
+
+      pw->CalTrack2(sx3->GetHitPos(), hitInfo, false);
+      reTheta1 = pw->GetTrackTheta() * TMath::RadToDeg();
+      rePhi1 = pw->GetTrackPhi() * TMath::RadToDeg();
 
     }else{
       sx3Up = -1;
@@ -192,7 +210,11 @@ int main(int argc, char **argv){
       // }
   
       reTheta = TMath::QuietNaN();
-      rePhi = TMath::QuietNaN();
+      rePhi = TMath::QuietNaN();  
+
+      reTheta1 = TMath::QuietNaN();
+      rePhi1 = TMath::QuietNaN();
+
     }
 
     tree->Fill();
