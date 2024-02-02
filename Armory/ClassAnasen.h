@@ -238,23 +238,36 @@ inline  void ANASEN::DrawTrack(TVector3 pos, TVector3 direction, bool drawEstima
   worldBox->AddNode(startPos, 3, new TGeoCombiTrans( pos.X(), pos.Y(), pos.Z(), new TGeoRotation("rotA", 0, 0, 0.)));
 
   if( sx3->GetID() >= 0 ){
-    TGeoVolume * hit = geom->MakeSphere("hitpos", 0, 0, 3);
-    hit->SetLineColor(kRed);
-
     TVector3 hitPos = sx3->GetHitPos();
 
+    TGeoVolume * hit = geom->MakeSphere("hitpos", 0, 0, 3);
+    hit->SetLineColor(kRed);
     worldBox->AddNode(hit, 2, new TGeoCombiTrans( hitPos.X(), hitPos.Y(), hitPos.Z(), new TGeoRotation("rotA", 0, 0, 0.)));
 
     if( drawEstimatedTrack ){
-      pw->CalTrack(hitPos, wireID.first, wireID.second, true);
 
-      double thetaDeduce = pw->GetTrackTheta() * TMath::RadToDeg();
-      double phiDeduce = pw->GetTrackPhi()  * TMath::RadToDeg();
+      {//===== simple
+        pw->CalTrack(hitPos, wireID.first, wireID.second, true);
 
-      TGeoVolume * trackDeduce = geom->MakeTube("trackDeduce", 0, 0, 0.1, 100.);
-      trackDeduce->SetLineColor(kOrange);
-      worldBox->AddNode(trackDeduce, 1, new TGeoCombiTrans( hitPos.X(), hitPos.Y(), hitPos.Z(), new TGeoRotation("rotA", phiDeduce +  90, thetaDeduce, 0.)));
+        double thetaDeduce = pw->GetTrackTheta() * TMath::RadToDeg();
+        double phiDeduce = pw->GetTrackPhi()  * TMath::RadToDeg();
 
+        TGeoVolume * trackDeduce = geom->MakeTube("trackDeduce", 0, 0, 0.1, 100.);
+        trackDeduce->SetLineColor(kOrange);
+        worldBox->AddNode(trackDeduce, 1, new TGeoCombiTrans( hitPos.X(), hitPos.Y(), hitPos.Z(), new TGeoRotation("rotA", phiDeduce +  90, thetaDeduce, 0.)));
+      }
+
+      {//===== complicated 
+        PWHitInfo hitInfo = pw->GetHitInfo();
+        pw->CalTrack2(hitPos, hitInfo, true);
+
+        double thetaDeduce = pw->GetTrackTheta() * TMath::RadToDeg();
+        double phiDeduce = pw->GetTrackPhi()  * TMath::RadToDeg();
+
+        TGeoVolume * trackDeduce2 = geom->MakeTube("trackDeduce2", 0, 0, 0.1, 100.);
+        trackDeduce2->SetLineColor(kGreen);
+        worldBox->AddNode(trackDeduce2, 1, new TGeoCombiTrans( hitPos.X(), hitPos.Y(), hitPos.Z(), new TGeoRotation("rotA", phiDeduce +  90, thetaDeduce, 0.)));
+      }
     }
 
   }

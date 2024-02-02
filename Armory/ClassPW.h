@@ -5,16 +5,36 @@
 #include <TMath.h>
 #include <TVector3.h>
 
-class PW{ // proportional wire
+struct PWHitInfo{
+  std::pair<short, short>   nearestWire; // anode, cathode
+  std::pair<double, double> nearestDist; // anode, cathode
 
+  std::pair<short, short>   nextNearestWire; // anode, cathode
+  std::pair<double, double> nextNearestDist; // anode, cathode
+
+  void Clear(){
+    nearestWire.first = -1;
+    nearestWire.second = -1;
+    nearestDist.first = 999999999;
+    nearestDist.second = 999999999;
+    nextNearestWire.first = -1;
+    nextNearestWire.second = -1;
+    nextNearestDist.first = 999999999;
+    nextNearestDist.second = 999999999;
+  }
+};
+
+//!########################################################
+class PW{ // proportional wire
 public: 
-  PW(){ Clear(); };
+  PW(){ ClearHitInfo(); };
   ~PW(){};
 
-  std::pair<short, short>   GetNearestID()          const {return std::pair(anode1, cathode1);}
-  std::pair<double, double> GetNearestDistance()    const {return std::pair(anodeDis1,cathodeDis1);}
-  std::pair<short, short>   Get2ndNearestID()       const {return std::pair(anode2,cathode2);}
-  std::pair<double, double> Get2ndNearestDistance() const {return std::pair(anodeDis2,cathodeDis2);}
+  PWHitInfo GetHitInfo() const {return hitInfo;}
+  std::pair<short, short>   GetNearestID()          const {return hitInfo.nearestWire;}
+  std::pair<double, double> GetNearestDistance()    const {return hitInfo.nearestDist;}
+  std::pair<short, short>   Get2ndNearestID()       const {return hitInfo.nextNearestWire;}
+  std::pair<double, double> Get2ndNearestDistance() const {return hitInfo.nextNearestDist;}
 
   TVector3 GetTrackPos() const {return trackPos;}
   TVector3 GetTrackVec() const {return trackVec;}
@@ -38,29 +58,27 @@ public:
   double   GetCathodeTheta(short id) const {return (Ca[id].first - Ca[id].second).Theta();}
   double   GetCathodePhi(short id)   const {return (Ca[id].first - Ca[id].second).Phi();}
 
-  void Clear();
+  void ClearHitInfo();
   void ConstructGeo();
   void FindWireID(TVector3 pos, TVector3 direction, bool verbose = false);
   void CalTrack(TVector3 sx3Pos, int anodeID, int cathodeID, bool verbose = false);
+  void CalTrack2(TVector3 sx3Pos, PWHitInfo hitInfo, bool verbose = false);
 
   void Print(){
-    printf("     The nearest | Anode: %2d(%5.2f) Cathode: %2d(%5.2f)\n", anode1, anodeDis1, cathode1, cathodeDis1);
-    printf(" The 2nd nearest | Anode: %2d(%5.2f) Cathode: %2d(%5.2f)\n", anode2, anodeDis2, cathode2, cathodeDis2);
+    printf("     The nearest | Anode: %2d(%5.2f) Cathode: %2d(%5.2f)\n", hitInfo.nearestWire.first, 
+                                                                         hitInfo.nearestDist.first, 
+                                                                         hitInfo.nearestWire.second, 
+                                                                         hitInfo.nearestDist.second);
+
+    printf(" The 2nd nearest | Anode: %2d(%5.2f) Cathode: %2d(%5.2f)\n", hitInfo.nextNearestWire.first, 
+                                                                         hitInfo.nextNearestDist.first, 
+                                                                         hitInfo.nextNearestWire.second, 
+                                                                         hitInfo.nextNearestDist.second);
   }
 
 private:
 
-  // the nearest wire
-  short anode1;
-  short cathode1;
-  double anodeDis1;
-  double cathodeDis1;
-
-  // the 2nd nearest wire
-  short anode2;
-  short cathode2;
-  double anodeDis2;
-  double cathodeDis2;
+  PWHitInfo hitInfo;
 
   TVector3 trackPos;
   TVector3 trackVec;
@@ -87,21 +105,15 @@ private:
 
 };
 
-inline void PW::Clear(){
-  anode1 = -1;
-  cathode1 = -1;
-  anodeDis1   = 999999999;
-  cathodeDis1 = 999999999;
-  anode2 = -1;
-  cathode2 = -1;
-  anodeDis2   = 999999999;
-  cathodeDis2 = 999999999;
-
-  An.clear();
-  Ca.clear();
+inline void PW::ClearHitInfo(){
+  hitInfo.Clear();
 }
 
 inline void PW::ConstructGeo(){
+
+  An.clear();
+  Ca.clear();
+
   std::pair<TVector3, TVector3> p1; // anode
   std::pair<TVector3, TVector3> q1; // cathode
 
@@ -136,29 +148,27 @@ inline void PW::ConstructGeo(){
 
 inline void PW::FindWireID(TVector3 pos, TVector3 direction, bool verbose ){
 
-  Clear();
-
+  hitInfo.Clear();
   double phi = direction.Phi();
+
   for( int i = 0; i < nWire; i++){
 
     double disA = 99999999;
-    double disC = 99999999;
-
     double phiS = An[i].first.Phi()  - TMath::PiOver4();
     double phiL = An[i].second.Phi() + TMath::PiOver4();
-
     // printf("A%2d: %f %f | %f\n", i, phiS * TMath::RadToDeg(), phiL * TMath::RadToDeg(), phi * TMath::RadToDeg());
     if( phi > 0 && phiS > phiL )  phiL = phiL + TMath::TwoPi();
     if( phi < 0 && phiS > phiL )  phiS = phiS - TMath::TwoPi();
 
     if( phiS < phi && phi < phiL) {
       disA = Distance( pos, pos + direction, An[i].first, An[i].second);
-      if( disA < anodeDis1 ){
-        anodeDis1 = disA;
-        anode1 = i;
+      if( disA < hitInfo.nearestDist.first ){
+        hitInfo.nearestDist.first = disA;
+        hitInfo.nearestWire.first = i;
       }
     }
 
+    double disC = 99999999;
     phiS = Ca[i].second.Phi()- TMath::PiOver4();
     phiL = Ca[i].first.Phi() + TMath::PiOver4();
     // printf("C%2d: %f %f\n", i, phiS * TMath::RadToDeg(), phiL * TMath::RadToDeg());
@@ -167,9 +177,9 @@ inline void PW::FindWireID(TVector3 pos, TVector3 direction, bool verbose ){
 
     if(phiS < phi && phi < phiL) {
       disC = Distance( pos, pos + direction, Ca[i].first, Ca[i].second);
-      if( disC < cathodeDis1 ){
-        cathodeDis1 = disC;
-        cathode1 = i;
+      if( disC < hitInfo.nearestDist.second ){
+        hitInfo.nearestDist.second = disC;
+        hitInfo.nearestWire.second = i;
       }
     }
 
@@ -177,24 +187,28 @@ inline void PW::FindWireID(TVector3 pos, TVector3 direction, bool verbose ){
   }
 
   //==== find the 2nd nearest wire
+  short anode1 = hitInfo.nearestWire.first;
+
   double haha1 = Distance( pos, pos + direction, An[anode1-1].first, An[anode1-1].second);
   double haha2 = Distance( pos, pos + direction, An[anode1+1].first, An[anode1+1].second);
   if( haha1 < haha2){
-    anode2 = anode1-1;
-    anodeDis2 = haha1;
+    hitInfo.nextNearestWire.first = anode1-1;
+    hitInfo.nextNearestDist.first = haha1;
   }else{
-    anode2 = anode1+1;
-    anodeDis2 = haha2;
+    hitInfo.nextNearestWire.first = anode1+1;
+    hitInfo.nextNearestDist.first = haha2;
   }
+
+  short cathode1 = hitInfo.nearestWire.second;
 
   haha1 = Distance( pos, pos + direction, Ca[cathode1-1].first, Ca[cathode1-1].second);
   haha2 = Distance( pos, pos + direction, Ca[cathode1+1].first, Ca[cathode1+1].second);
   if( haha1 < haha2){
-    cathode2 = cathode1-1;
-    cathodeDis2 = haha1;
+    hitInfo.nextNearestWire.second = cathode1-1;
+    hitInfo.nextNearestDist.second = haha1;
   }else{
-    cathode2 = cathode1+1;
-    cathodeDis2 = haha2;
+    hitInfo.nextNearestWire.second = cathode1+1;
+    hitInfo.nextNearestDist.second = haha2;
   }
 
   if( verbose ) Print();
@@ -214,4 +228,38 @@ inline void PW::CalTrack(TVector3 sx3Pos, int anodeID, int cathodeID, bool verbo
 
 }
 
+inline void PW::CalTrack2(TVector3 sx3Pos, PWHitInfo hitInfo, bool verbose){
+
+  trackPos = sx3Pos;
+
+  // fraction between the nearest wire and and the 2nd nearest wire by distance
+  double totDistA = hitInfo.nearestDist.first + hitInfo.nextNearestDist.first;
+  double fracA = hitInfo.nearestDist.first / totDistA;
+  short anodeID1 = hitInfo.nearestWire.first;
+  short anodeID2 = hitInfo.nextNearestWire.first;
+  TVector3 shiftA1 = (An[anodeID2].first - An[anodeID1].first) * fracA;
+  TVector3 shiftA2 = (An[anodeID2].second - An[anodeID1].second) * fracA;
+
+  double totDistC = hitInfo.nearestDist.second + hitInfo.nextNearestDist.second;
+  double fracC = hitInfo.nearestDist.second / totDistA;
+  short cathodeID1 = hitInfo.nearestWire.second;
+  short cathodeID2 = hitInfo.nextNearestWire.second;
+  TVector3 shiftC1 = (Ca[anodeID2].first - Ca[anodeID1].first) * fracC;
+  TVector3 shiftC2 = (Ca[anodeID2].second - Ca[anodeID1].second) * fracC;
+
+  TVector3 a1 = An[anodeID1].first + shiftA1;
+  TVector3 a2 = An[anodeID1].second + shiftA2;
+
+  TVector3 c1 = Ca[cathodeID1].first + shiftC1;
+  TVector3 c2 = Ca[cathodeID1].second + shiftC2;
+
+  TVector3 n1 = (a1 - a2).Cross((sx3Pos - a2)).Unit();
+  TVector3 n2 = (c1 - c2).Cross((sx3Pos - c2)).Unit();
+
+  // if the handiness of anode and cathode revered, it should be n2 cross n1
+  trackVec = (n2.Cross(n1)).Unit();
+
+  if( verbose ) printf("Theta, Phi = %f, %f \n", trackVec.Theta() *TMath::RadToDeg(), trackVec.Phi()*TMath::RadToDeg()); 
+
+}
 #endif 
