@@ -6,7 +6,7 @@
 #include <TFile.h>
 #include <TSelector.h>
 
-#include "ClassDet.h"
+#include "Armory/ClassDet.h"
 
 class Analyzer : public TSelector {
 public :

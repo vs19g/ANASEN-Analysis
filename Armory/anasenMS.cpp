@@ -14,9 +14,14 @@
 // find out the CalTrack and the real track
 // find out the Q-value uncertaintly
 
-void anasenMS(){
+int main(int argc, char **argv){
 
-  const int numEvent = 100000;
+  printf("=========================================\n");
+  printf("===       ANASEN Monte Carlo          ===\n");
+  printf("=========================================\n");  
+  
+  int numEvent = 1000000;
+  if( argc >= 2 ) numEvent = atoi(argv[1]);
 
   //Reaction
   TransferReaction transfer;
@@ -218,5 +223,7 @@ void anasenMS(){
   saveFile->Close();
 
   printf("=============== done. saved as %s. count(hit==1) : %d\n", saveFileName.Data(), count);
+
+  return 0;
 
 }

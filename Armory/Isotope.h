@@ -48,7 +48,7 @@ public:
   double CalSp2(int a, int z); // this is for (a,z) nucleus removal
 
   double CalBeta(double T){
-    double Etot = Mass + T;
+    // double Etot = Mass + T;
     double gamma = 1 + T/Mass;
     double beta = sqrt(1 - 1 / gamma / gamma ) ;
     return beta;
@@ -115,17 +115,17 @@ private:
   
 };
 
-void Isotope::SetIso(int a, int z){
+inline void Isotope::SetIso(int a, int z){
     this->A = a;
     this->Z = z;
     FindMassByAZ(a,z); 
 }
 
-void Isotope::SetIsoByName(string name){
+inline void Isotope::SetIsoByName(string name){
     FindMassByName(name); 
 }
 
-void Isotope::FindMassByAZ(int A, int Z){
+inline void Isotope::FindMassByAZ(int A, int Z){
   string line;
   int    lineNum=0;
   int    list_A, list_Z;
@@ -190,7 +190,7 @@ void Isotope::FindMassByAZ(int A, int Z){
   }
 }
 
-void Isotope::FindMassByName(string name){
+inline void Isotope::FindMassByName(string name){
 
     // done seperate the Mass number and the name 
   if( name == "n" ) {
@@ -302,7 +302,7 @@ void Isotope::FindMassByName(string name){
     }
 }
 
-double Isotope::CalSp(int Np, int Nn){
+inline double Isotope::CalSp(int Np, int Nn){
   Isotope nucleusD(A - Np - Nn, Z - Np);  
 
   if( nucleusD.Mass != -404){
@@ -312,7 +312,7 @@ double Isotope::CalSp(int Np, int Nn){
   }
 }
 
-double Isotope::CalSp2(int a, int z){
+inline double Isotope::CalSp2(int a, int z){
   Isotope nucleusD(A - a , Z - z);
   Isotope nucleusS(a,z);  
 
@@ -323,7 +323,7 @@ double Isotope::CalSp2(int a, int z){
   }
 }
 
-int Isotope::TwoJ(int nShell){
+inline int Isotope::TwoJ(int nShell){
 
   switch(nShell){
     case  0: return  1; break; // 0s1/2
@@ -360,7 +360,7 @@ int Isotope::TwoJ(int nShell){
   return 0;
 }
 
-string Isotope::Orbital(int nShell){
+inline string Isotope::Orbital(int nShell){
 
   switch(nShell){
     case  0: return  "0s1 "; break;  //
@@ -397,14 +397,14 @@ string Isotope::Orbital(int nShell){
   return "nan";
 }
 
-void Isotope::ListShell(){
+inline void Isotope::ListShell(){
 
   if( Mass < 0 ) return;
 
   int n = A-Z;
   int p = Z;
 
-  int k = min(n,p);
+  int k = std::min(n,p);
   int nMagic = 0;
   for( int i = 0; i < 7; i++){
     if( magic(i) < k && k <= magic(i+1) ){
@@ -422,7 +422,7 @@ void Isotope::ListShell(){
 
   printf("------------------ Core:%3s, inner Core:%3s \n", (core2.Name).c_str(), (core1.Name).c_str());
   printf("         || ");
-  int t = max(n,p);
+  int t = std::max(n,p);
   int nShell = 0;
   do{
     int occ = TwoJ(nShell)+1;
@@ -495,8 +495,7 @@ void Isotope::ListShell(){
 }
 
 
-
-void Isotope::Print(){
+inline void Isotope::Print(){
 
   if (Mass > 0){  
     

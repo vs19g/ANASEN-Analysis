@@ -7,7 +7,7 @@
 #include <TMath.h>
 #include <TBenchmark.h>
 
-#include "mapping.h"
+#include "../mapping.h"
 #include "ClassDet.h"
 
 //===============================
