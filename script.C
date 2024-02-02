@@ -273,8 +273,13 @@ void script(TString fileName = "", int maxEvent = -1){
 
   haha->DrawTrack(pos, dir, true);
 
-  PC pc = haha->FindWireID(pos, dir, true);
-  SX3 sx3 = haha->FindSX3Pos(pos, dir, true);
+  PW pc;
+  pc.ConstructGeo();
+  pc.FindWireID(pos, dir, true);
+  
+  SX3 sx3;
+  sx3.ConstructGeo();
+  sx3.FindSX3Pos(pos, dir, true);
 
   // haha->CalTrack(sx3.hitPos, wireID.first, wireID.second, true);
 

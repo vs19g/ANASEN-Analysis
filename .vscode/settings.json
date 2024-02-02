@@ -78,6 +78,14 @@
     "variant": "cpp",
     "bitset": "cpp",
     "forward_list": "cpp",
-    "anasenMS.C": "cpp"
+    "anasenMS.C": "cpp",
+    "*.icc": "cpp",
+    "any": "cpp",
+    "cfenv": "cpp",
+    "csignal": "cpp",
+    "regex": "cpp",
+    "scoped_allocator": "cpp",
+    "shared_mutex": "cpp",
+    "valarray": "cpp"
   }
 }
