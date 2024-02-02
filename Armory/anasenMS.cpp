@@ -47,7 +47,7 @@ int main(int argc, char **argv){
 
   ANASEN anasen;
 
-  TString saveFileName = "msAnasen.root";
+  TString saveFileName = "SimAnasen.root";
   printf("\e[32m#################################### building Tree in %s\e[0m\n", saveFileName.Data());
   TFile * saveFile = new TFile(saveFileName, "recreate");
   TTree * tree = new TTree("tree", "tree");

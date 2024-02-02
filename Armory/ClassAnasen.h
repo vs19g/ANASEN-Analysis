@@ -11,6 +11,7 @@
 #include "TCanvas.h"
 #include "TPolyMarker3D.h"
 #include "TPolyLine3D.h"
+#include "TRandom.h"
 
 struct SX3{
   short id = -1; // -1 when no hit
@@ -571,13 +572,13 @@ inline TVector3 ANASEN::CalSX3Pos(unsigned short ID, unsigned short chUp, unsign
 
   if( ID < nSX3 ){ //down
 
-    sa = SDn[reducedID].first;
-    sb = SDn[reducedID].second;
+    sa = SDn[reducedID].second;
+    sb = SDn[reducedID].first;
 
   }else{
 
-    sa = SUp[reducedID].first;
-    sb = SUp[reducedID].second;
+    sa = SUp[reducedID].second;
+    sb = SUp[reducedID].first;
 
   }
 
