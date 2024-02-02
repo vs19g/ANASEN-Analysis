@@ -42,6 +42,26 @@ struct SX3{
 
 };
 
+struct PW{ // proportional wire
+  // the nearest wire
+  short anode1 = -1;
+  short cathode1 = -1;
+  double anodeDis1   = 999999999;
+  double cathodeDis1 = 999999999;
+
+  // the 2nd nearest wire
+  short anode2 = -1;
+  short cathode2 = -1;
+  double anodeDis2   = 999999999;
+  double cathodeDis2 = 999999999;
+
+  void Print(){
+    printf("     The nearest | Anode: %2d(%5.2f) Cathode: %2d(%5.2f)\n", anode1, anodeDis1, cathode1, cathodeDis1);
+    printf(" The 2nd nearest | Anode: %2d(%5.2f) Cathode: %2d(%5.2f)\n", anode2, anodeDis2, cathode2, cathodeDis2);
+  }
+
+};
+
 class ANASEN{
 public:
   ANASEN();
@@ -60,7 +80,7 @@ public:
 
   //Simulation
   SX3 FindSX3Pos(TVector3 pos, TVector3 direction, bool verbose = false);
-  std::pair<int, int> FindWireID(TVector3 pos, TVector3 direction, bool verbose = false);
+  PW FindWireID(TVector3 pos, TVector3 direction, bool verbose = false);
   void DrawTrack(TVector3 pos, TVector3 direction, bool drawEstimatedTrack = false);
 
   std::pair<TVector3,TVector3> GetAnode(unsigned short id) const{return An[id];};
@@ -347,15 +367,11 @@ inline std::pair<double, double> ANASEN::Intersect(TVector3 An, TVector3 p2, TVe
 } 
 
 //!============================================== Given a position and a direction, find wireID and SX3 position
-inline std::pair<int, int> ANASEN::FindWireID(TVector3 pos, TVector3 direction, bool verbose ){
+inline PW ANASEN::FindWireID(TVector3 pos, TVector3 direction, bool verbose ){
 
-  int anodeID = -1;
-  int cathodeID = -1;
-  double minAnodeDis = 999999;
-  double minCathodeDis = 999999;
+  PW pw;
 
   double phi = direction.Phi();
-  
 
   for( int i = 0; i < nWire; i++){
 
@@ -378,9 +394,9 @@ inline std::pair<int, int> ANASEN::FindWireID(TVector3 pos, TVector3 direction, 
 
     if( phiS < phi && phi < phiL) {
       disA = Distance( pos, pos + direction, An[i].first, An[i].second);
-      if( disA < minAnodeDis ){
-        minAnodeDis = disA;
-        anodeID = i;
+      if( disA < pw.anodeDis1 ){
+        pw.anodeDis1 = disA;
+        pw.anode1 = i;
       }
     }
 
@@ -399,17 +415,39 @@ inline std::pair<int, int> ANASEN::FindWireID(TVector3 pos, TVector3 direction, 
     if(phiS < phi && phi < phiL) {
       disC = Distance( pos, pos + direction, Ca[i].first, Ca[i].second);
 
-      if( disC < minCathodeDis ){
-        minCathodeDis = disC;
-        cathodeID = i;
+      if( disC < pw.cathodeDis1 ){
+        pw.cathodeDis1 = disC;
+        pw.cathode1 = i;
       }
     }
 
     if(verbose) printf(" %2d | %8.2f, %8.2f\n", i, disA, disC);
   }
 
-  if( verbose ) printf("AnodeID %d (%.2f), Cathode %d (%.2f) \n", anodeID, minAnodeDis, cathodeID, minCathodeDis);
-  return std::pair(anodeID, cathodeID);
+  //==== find the 2nd nearest wire
+  double haha1 = Distance( pos, pos + direction, An[pw.anode1-1].first, An[pw.anode1-1].second);
+  double haha2 = Distance( pos, pos + direction, An[pw.anode1+1].first, An[pw.anode1+1].second);
+  if( haha1 < haha2){
+    pw.anode2 = pw.anode1-1;
+    pw.anodeDis2 = haha1;
+  }else{
+    pw.anode2 = pw.anode1+1;
+    pw.anodeDis2 = haha2;
+  }
+
+  haha1 = Distance( pos, pos + direction, Ca[pw.cathode1-1].first, Ca[pw.cathode1-1].second);
+  haha2 = Distance( pos, pos + direction, Ca[pw.cathode1+1].first, Ca[pw.cathode1+1].second);
+  if( haha1 < haha2){
+    pw.cathode2 = pw.cathode1-1;
+    pw.cathodeDis2 = haha1;
+  }else{
+    pw.cathode2 = pw.cathode1+1;
+    pw.cathodeDis2 = haha2;
+  }
+
+ 
+  if( verbose ) pw.Print();
+  return pw;
 }
 
 inline SX3 ANASEN::FindSX3Pos(TVector3 pos, TVector3 direction, bool verbose){
@@ -473,15 +511,15 @@ inline void ANASEN::DrawAnasen(int anodeID1, int anodeID2, int cathodeID1, int c
 
 inline  void ANASEN::DrawTrack(TVector3 pos, TVector3 direction, bool drawEstimatedTrack){
 
-  std::pair<int, int> id = FindWireID(pos, direction);
+  PW pw = FindWireID(pos, direction);
 
   SX3 sx3 = FindSX3Pos(pos, direction);
 
-  int a1 = id.first - 1; if( a1 < 0 ) a1 += nWire;
-  int b1 = id.second - 1; if( b1 < 0 ) b1 += nWire;
+  int a1 = pw.anode1 - 1; if( a1 < 0 ) a1 += nWire;
+  int b1 = pw.cathode1 - 1; if( b1 < 0 ) b1 += nWire;
 
   //Construct3DModel(a1, id.first+1, b1, id.second+1, false);
-  Construct3DModel(id.first, id.first, id.second, id.second, -1, false);
+  Construct3DModel(pw.anode1, pw.anode1, pw.cathode1, pw.cathode1, -1, false);
 
   double theta = direction.Theta() * TMath::RadToDeg();
   double phi = direction.Phi()  * TMath::RadToDeg();
@@ -502,7 +540,7 @@ inline  void ANASEN::DrawTrack(TVector3 pos, TVector3 direction, bool drawEstima
     worldBox->AddNode(hit, 2, new TGeoCombiTrans( sx3.hitPos.X(), sx3.hitPos.Y(), sx3.hitPos.Z(), new TGeoRotation("rotA", 0, 0, 0.)));
 
     if( drawEstimatedTrack ){
-      CalTrack(sx3.hitPos, id.first, id.second, true);
+      CalTrack(sx3.hitPos, pw.anode1, pw.cathode1, true);
 
       double thetaDeduce = trackVec.Theta() * TMath::RadToDeg();
       double phiDeduce = trackVec.Phi()  * TMath::RadToDeg();

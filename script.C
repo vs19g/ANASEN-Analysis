@@ -273,17 +273,12 @@ void script(TString fileName = "", int maxEvent = -1){
 
   haha->DrawTrack(pos, dir, true);
 
-  // std::pair<int, int> wireID = haha->FindWireID(pos, dir, true);
-  // SX3 sx3 = haha->FindSX3Pos(pos, dir, true);
+  PC pc = haha->FindWireID(pos, dir, true);
+  SX3 sx3 = haha->FindSX3Pos(pos, dir, true);
 
   // haha->CalTrack(sx3.hitPos, wireID.first, wireID.second, true);
 
   //haha->DrawDeducedTrack(sx3.hitPos, wireID.first, wireID.second);
-
-
-
-
-
 
 
 }
