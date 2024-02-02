@@ -10,7 +10,7 @@
 
 #include "mapping.h"
 
-#include "ClassAnasen.h"
+#include "Armory/ClassAnasen.h"
 
 class PulserChecker {
 public:
@@ -248,12 +248,14 @@ void script(TString fileName = "", int maxEvent = -1){
   c2->cd();
   ANASEN * haha = new ANASEN();
 
+  // haha->DrawAnasen(0, 1, 0, 1, -1, false);
+
   gRandom->SetSeed(0);
 
   int xRan = gRandom->Integer(20) - 10;
   int yRan = gRandom->Integer(20) - 10;
   int zRan = gRandom->Integer(20) - 10;
-  int pRan = gRandom->Integer(10) + 175; // phi deg
+  int pRan = gRandom->Integer(60) -120; // phi deg
 
   int tRan = 0 ;
   do{

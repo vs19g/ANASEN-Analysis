@@ -54,7 +54,7 @@ public:
   double GetTrackTheta() const {return trackVec.Theta();}
   double GetTrackPhi()   const {return trackVec.Phi();}
 
-  void DrawAnasen(int anodeID1 = -1, int anodeID2 = -1, int cathodeID1 = -1, int cathodeID2 = -1, bool DrawQQQ = false );
+  void DrawAnasen(int anodeID1 = -1, int anodeID2 = -1, int cathodeID1 = -1, int cathodeID2 = -1, int sx3ID = -1, bool DrawQQQ = false );
   void DrawDeducedTrack(TVector3 sx3Pos, int anodeID, int cathodeID);
 
   //Simulation
@@ -62,8 +62,8 @@ public:
   std::pair<int, int> FindWireID(TVector3 pos, TVector3 direction, bool verbose = false);
   void DrawTrack(TVector3 pos, TVector3 direction, bool drawEstimatedTrack = false);
 
-  std::pair<TVector3,TVector3> GetAnode(unsigned short id) const{return P1[id];};
-  std::pair<TVector3,TVector3> GetCathode(unsigned short id) const{return Q1[id];};
+  std::pair<TVector3,TVector3> GetAnode(unsigned short id) const{return An[id];};
+  std::pair<TVector3,TVector3> GetCathode(unsigned short id) const{return Ca[id];};
 
 private:
 
@@ -73,11 +73,11 @@ private:
   const float radiusA = 37;
   const float radiusC = 43;
 
-  std::vector<std::pair<TVector3,TVector3>> P1; // the anode wire position vector in space 
-  std::vector<std::pair<TVector3,TVector3>> Q1; // the cathode wire position vector in space 
+  std::vector<std::pair<TVector3,TVector3>> An; // the anode wire position vector in space 
+  std::vector<std::pair<TVector3,TVector3>> Ca; // the cathode wire position vector in space 
 
-  std::vector<std::pair<TVector3,TVector3>> SD; // coners of the SX3  0-11, z = mid point
-  std::vector<std::pair<TVector3,TVector3>> SU; // coners of the SX3 12-23, z = mid point
+  std::vector<std::pair<TVector3,TVector3>> SDn; // coners of the SX3  0-11, z = mid point
+  std::vector<std::pair<TVector3,TVector3>> SUp; // coners of the SX3 12-23, z = mid point
   std::vector<TVector3> SNorml; // normal of the SX3 (outward)
 
   void CalGeometry();
@@ -105,7 +105,7 @@ private:
   TGeoManager *geom;
   TGeoVolume *worldBox;
 
-  void Construct3DModel(int anodeID1 = -1, int anodeID2 = -1, int cathodeID1 = -1, int cathodeID2 = -1, bool DrawQQQ = true);
+  void Construct3DModel(int anodeID1 = -1, int anodeID2 = -1, int cathodeID1 = -1, int cathodeID2 = -1, int sx3ID = -1, bool DrawQQQ = true);
 
   double Distance(TVector3 a1, TVector3 a2, TVector3 b1, TVector3 b2); 
   std::pair<double, double> Intersect(TVector3 a1, TVector3 a2, TVector3 b1, TVector3 b2, bool verbose = false); 
@@ -134,45 +134,47 @@ inline void ANASEN::CalGeometry(){
   std::pair<TVector3, TVector3> p1; // anode
   std::pair<TVector3, TVector3> q1; // cathode
 
+  //anode and cathode start at pos-Y axis and count in left-Hand
+
+  //anode wire shift is right-hand.
+  //cathode wire shift is left-hand.
+
   for(int i = 0; i < nWire; i++ ){
     // Anode rotate right-hand
-    p1.first.SetXYZ( radiusA * TMath::Cos( TMath::TwoPi() / nWire * i ),
-                     radiusA * TMath::Sin( TMath::TwoPi() / nWire * i ),
+    p1.first.SetXYZ( radiusA * TMath::Cos( TMath::TwoPi() / nWire * (-i)  + TMath::PiOver2()),
+                     radiusA * TMath::Sin( TMath::TwoPi() / nWire * (-i)  + TMath::PiOver2()),
                      zLen/2);
-    p1.second.SetXYZ( radiusA * TMath::Cos( TMath::TwoPi() / nWire * (i + wireShift)),
-                      radiusA * TMath::Sin( TMath::TwoPi() / nWire * (i + wireShift)),
+    p1.second.SetXYZ( radiusA * TMath::Cos( TMath::TwoPi() / nWire * (-i + wireShift) + TMath::PiOver2()),
+                      radiusA * TMath::Sin( TMath::TwoPi() / nWire * (-i + wireShift) + TMath::PiOver2()),
                      -zLen/2);
-    P1.push_back(p1);
-
-    // P1.back().first.Print();
-    // P1.back().second.Print();
+    An.push_back(p1);
 
     // Cathod rotate left-hand
-    q1.first.SetXYZ( radiusC * TMath::Cos( TMath::TwoPi() * i / nWire ),
-               radiusC * TMath::Sin( TMath::TwoPi() * i / nWire ),
-               zLen/2);
-    q1.second.SetXYZ( radiusC * TMath::Cos( TMath::TwoPi() * (i - wireShift) / nWire ),
-               radiusC * TMath::Sin( TMath::TwoPi() * (i - wireShift) / nWire ),
-               -zLen/2);
-    Q1.push_back(q1);
-
-    // Q1.back().first.Print();
-    // Q1.back().second.Print();
-
+    q1.first.SetXYZ( radiusC * TMath::Cos( TMath::TwoPi() / nWire * (-i)  + TMath::PiOver2()),
+                     radiusC * TMath::Sin( TMath::TwoPi() / nWire * (-i)  + TMath::PiOver2()),
+                     zLen/2);
+    q1.second.SetXYZ( radiusC * TMath::Cos( TMath::TwoPi() / nWire * (- i - wireShift) + TMath::PiOver2()),
+                      radiusC * TMath::Sin( TMath::TwoPi() / nWire * (- i - wireShift) + TMath::PiOver2()),
+                      -zLen/2);
+    Ca.push_back(q1);
   }
+
+  // SX3 is couned in left-hand, started at neg-Y axis
 
   TVector3 sa, sb, sc, sn;
   for(int i = 0; i < nSX3; i++){
     sa.SetXYZ( sx3Radius, -sx3Width/2, sx3Gap/2 + sx3Length/2 );
     sb.SetXYZ( sx3Radius,  sx3Width/2, sx3Gap/2 + sx3Length/2 );
 
-    sa.RotateZ( TMath::TwoPi() / nSX3 * (i + 0.5) );
-    sb.RotateZ( TMath::TwoPi() / nSX3 * (i + 0.5) );
-    SD.push_back(std::pair(sa,sb));
+    double rot = TMath::TwoPi() / nSX3 * (-i - 0.5) - TMath::PiOver2();
+
+    sa.RotateZ( rot );
+    sb.RotateZ( rot );
+    SDn.push_back(std::pair(sa,sb));
 
 
     sc.SetXYZ( sx3Radius, -sx3Width/2, sx3Gap/2 );
-    sc.RotateZ( TMath::TwoPi() / nSX3 * (i + 0.5) );
+    sc.RotateZ( rot );
 
     sn = ((sc-sa).Cross(sb-sa)).Unit();
     SNorml.push_back(sn);
@@ -180,14 +182,14 @@ inline void ANASEN::CalGeometry(){
     sa.SetXYZ( sx3Radius, -sx3Width/2, -sx3Gap/2 - sx3Length/2 );
     sb.SetXYZ( sx3Radius,  sx3Width/2, -sx3Gap/2 - sx3Length/2 );
 
-    sa.RotateZ( TMath::TwoPi() / nSX3 * (i + 0.5) );
-    sb.RotateZ( TMath::TwoPi() / nSX3 * (i + 0.5) );
-    SU.push_back(std::pair(sa,sb));
+    sa.RotateZ( rot );
+    sb.RotateZ( rot );
+    SUp.push_back(std::pair(sa,sb));
   }
 
 }
 
-inline void ANASEN::Construct3DModel(int anodeID1, int anodeID2, int cathodeID1, int cathodeID2, bool DrawQQQ ){
+inline void ANASEN::Construct3DModel(int anodeID1, int anodeID2, int cathodeID1, int cathodeID2, int sx3ID, bool DrawQQQ ){
 
   if( geom ) delete geom;
 
@@ -223,14 +225,9 @@ inline void ANASEN::Construct3DModel(int anodeID1, int anodeID2, int cathodeID1,
 
   //.......... convert to wire center dimensions
   double dAngle = wireShift * TMath::TwoPi() / nWire;
-  double radiusAnew = radiusA * TMath::Cos( dAngle / 2.);
   double wireALength = TMath::Sqrt( zLen*zLen + TMath::Power(2* radiusA * TMath::Sin(dAngle/2),2) );
-  double wireATheta = TMath::ATan2( 2* radiusA * TMath::Sin( dAngle / 2.), zLen);
-
-  // printf("    dAngle : %f\n", dAngle);
-  // printf(" newRadius : %f\n", radiusAnew);
-  // printf("wireLength : %f\n", wireALength);
-  // printf("wire Theta : %f\n", wireATheta);
+  // double radiusAnew = radiusA * TMath::Cos( dAngle / 2.);
+  // double wireATheta = TMath::ATan2( 2* radiusA * TMath::Sin( dAngle / 2.), zLen);
 
   TGeoVolume *pcA = geom->MakeTube("tub1", Al, 0, 0.01, wireALength/2);
   pcA->SetLineColor(4);  
@@ -247,15 +244,19 @@ inline void ANASEN::Construct3DModel(int anodeID1, int anodeID2, int cathodeID1,
   }
 
   for( int i = startID; i <= endID; i++){
-    worldBox->AddNode(pcA, i+1, new TGeoCombiTrans( radiusAnew * TMath::Cos( TMath::TwoPi() / nWire *i + dAngle / 2), 
-                                                    radiusAnew * TMath::Sin( TMath::TwoPi() / nWire *i + dAngle / 2), 
-                                                    0, 
-                                                    new TGeoRotation("rot1", 360/ nWire * (i + wireShift/2.), wireATheta * 180/ TMath::Pi(), 0.)));
+    TVector3 a = (An[i].first + An[i].second) * 0.5;
+    double wireATheta = (An[i].first - An[i].second).Theta()* TMath::RadToDeg();
+    double wireAPhi = (An[i].first - An[i].second).Phi() * TMath::RadToDeg() + 90;
+
+    worldBox->AddNode(pcA, i+1, new TGeoCombiTrans( a.X(), 
+                                                    a.Y(), 
+                                                    a.Z(), 
+                                                    new TGeoRotation("rot1", wireAPhi , wireATheta, 0.)));
   }
 
-  double radiusCnew = radiusC * TMath::Cos( dAngle / 2.);
   double wireCLength = TMath::Sqrt( zLen*zLen + TMath::Power(2* radiusC * TMath::Sin(dAngle/2),2) );
-  double wireCTheta = TMath::ATan2( 2* radiusC * TMath::Sin( dAngle / 2.), zLen);
+  // double radiusCnew = radiusC * TMath::Cos( dAngle / 2.);
+  // double wireCTheta = TMath::ATan2( 2* radiusC * TMath::Sin( dAngle / 2.), zLen);
 
   TGeoVolume *pcC = geom->MakeTube("tub2", Al, 0, 0.01, wireCLength/2);
   pcC->SetLineColor(6);
@@ -272,24 +273,34 @@ inline void ANASEN::Construct3DModel(int anodeID1, int anodeID2, int cathodeID1,
   }
 
   for( int i = startID; i <= endID; i++){
-    worldBox->AddNode(pcC, i+1, new TGeoCombiTrans( radiusCnew * TMath::Cos( TMath::TwoPi() / nWire *i - dAngle/2), 
-                                                    radiusCnew * TMath::Sin( TMath::TwoPi() / nWire *i - dAngle/2), 
-                                                    0, 
-                                                    new TGeoRotation("rot1", 360/ nWire * (i - wireShift/2.), -wireCTheta * 180/ TMath::Pi(), 0.)));
+    TVector3 a = (Ca[i].first + Ca[i].second) * 0.5;
+    double wireATheta = (Ca[i].first - Ca[i].second).Theta()* TMath::RadToDeg();
+    double wireAPhi = (Ca[i].first - Ca[i].second).Phi() * TMath::RadToDeg() + 90;
+
+    worldBox->AddNode(pcC, i+1, new TGeoCombiTrans( a.X(), 
+                                                    a.Y(), 
+                                                    a.Z(), 
+                                                    new TGeoRotation("rot1", wireAPhi , wireATheta, 0.)));
   }
 
   TGeoVolume * sx3 = geom->MakeBox("box", Al, 0.1, sx3Width/2, sx3Length/2);
   sx3->SetLineColor(kGreen+3);
-  for( int i = 0; i < nSX3; i++){
-    worldBox->AddNode(sx3, 2*i+1., new TGeoCombiTrans( sx3Radius * TMath::Cos( TMath::TwoPi() / nSX3 * (i + 0.5)), 
-                                                       sx3Radius * TMath::Sin( TMath::TwoPi() / nSX3 * (i + 0.5)), 
-                                                     sx3Length/2+sx3Gap/2, 
-                                                     new TGeoRotation("rot1", 360/nSX3 * (i + 0.5), 0., 0.)));
 
-    worldBox->AddNode(sx3, 2*i+2., new TGeoCombiTrans( sx3Radius * TMath::Cos( TMath::TwoPi() / nSX3 * (i + 0.5)), 
-                                                       sx3Radius * TMath::Sin( TMath::TwoPi() / nSX3 * (i + 0.5)), 
-                                                       -sx3Length/2-sx3Gap/2, 
-                                                       new TGeoRotation("rot1", 360/nSX3 * (i + 0.5), 0., 0.)));
+  for( int i = 0; i < nSX3; i++){
+    if( sx3ID != -1 && i != sx3ID ) continue;
+    TVector3 aUp = (SUp[i].first + SUp[i].second)*0.5; // center of the SX3 upstream
+    TVector3 aDn = (SDn[i].first + SDn[i].second)*0.5; // center of the SX3 Downstream
+    double phi = (SUp[i].second - SUp[i].first).Phi() * TMath::RadToDeg() + 90;
+
+    worldBox->AddNode(sx3, 2*i+1., new TGeoCombiTrans( aUp.X(), 
+                                                       aUp.Y(), 
+                                                       aUp.Z(), 
+                                                       new TGeoRotation("rot1", phi, 0., 0.)));
+    worldBox->AddNode(sx3, 2*i+1., new TGeoCombiTrans( aDn.X(), 
+                                                       aDn.Y(), 
+                                                       aDn.Z(), 
+                                                       new TGeoRotation("rot1", phi, 0., 0.)));
+
   }
 
   if( DrawQQQ ){
@@ -314,11 +325,11 @@ inline double ANASEN::Distance(TVector3 a1, TVector3 a2, TVector3 b1, TVector3 b
 } 
 
 
-inline std::pair<double, double> ANASEN::Intersect(TVector3 p1, TVector3 p2, TVector3 q1, TVector3 q2, bool verbose){
+inline std::pair<double, double> ANASEN::Intersect(TVector3 An, TVector3 p2, TVector3 q1, TVector3 q2, bool verbose){
 
   //see https://nukephysik101.wordpress.com/2023/12/30/intersect-between-2-line-segments/
   //zero all z-component
-  TVector3 a0 = p1; a0.SetZ(0);
+  TVector3 a0 = An; a0.SetZ(0);
   TVector3 a1 = p2; a1.SetZ(0);
 
   TVector3 b0 = q1; b0.SetZ(0);
@@ -350,8 +361,8 @@ inline std::pair<int, int> ANASEN::FindWireID(TVector3 pos, TVector3 direction, 
     double disA = 99999999;
     double disC = 99999999;
 
-    double phiS = P1[i].first.Phi()  - TMath::PiOver4();
-    double phiL = P1[i].second.Phi() + TMath::PiOver4();
+    double phiS = An[i].first.Phi()  - TMath::PiOver4();
+    double phiL = An[i].second.Phi() + TMath::PiOver4();
 
     // printf("A%2d: %f %f | %f\n", i, phiS * TMath::RadToDeg(), phiL * TMath::RadToDeg(), phi * TMath::RadToDeg());
 
@@ -365,15 +376,15 @@ inline std::pair<int, int> ANASEN::FindWireID(TVector3 pos, TVector3 direction, 
     }
 
     if( phiS < phi && phi < phiL) {
-      disA = Distance( pos, pos + direction, P1[i].first, P1[i].second);
+      disA = Distance( pos, pos + direction, An[i].first, An[i].second);
       if( disA < minAnodeDis ){
         minAnodeDis = disA;
         anodeID = i;
       }
     }
 
-    phiS = Q1[i].second.Phi()- TMath::PiOver4();
-    phiL = Q1[i].first.Phi() + TMath::PiOver4();
+    phiS = Ca[i].second.Phi()- TMath::PiOver4();
+    phiL = Ca[i].first.Phi() + TMath::PiOver4();
     // printf("C%2d: %f %f\n", i, phiS * TMath::RadToDeg(), phiL * TMath::RadToDeg());
     if( phi > 0 && phiS > phiL ) {
       phiL = phiL + TMath::TwoPi();
@@ -385,7 +396,7 @@ inline std::pair<int, int> ANASEN::FindWireID(TVector3 pos, TVector3 direction, 
     }
 
     if(phiS < phi && phi < phiL) {
-      disC = Distance( pos, pos + direction, Q1[i].first, Q1[i].second);
+      disC = Distance( pos, pos + direction, Ca[i].first, Ca[i].second);
 
       if( disC < minCathodeDis ){
         minCathodeDis = disC;
@@ -408,7 +419,7 @@ inline SX3 ANASEN::FindSX3Pos(TVector3 pos, TVector3 direction, bool verbose){
   for( int i = 0 ; i < nSX3; i++){
 
     if(verbose) printf(" %d ", i);
-    std::pair<double, double> frac = Intersect( pos, pos + direction, SD[i].first, SD[i].second, verbose);
+    std::pair<double, double> frac = Intersect( pos, pos + direction, SDn[i].first, SDn[i].second, verbose);
 
 
     if( frac.second < 0 || frac.second > 1 ) continue;
@@ -419,7 +430,7 @@ inline SX3 ANASEN::FindSX3Pos(TVector3 pos, TVector3 direction, bool verbose){
     if(verbose) {
       printf("reduced distance : %f\n", dis);
       printf(" %d*", (i+1)%nSX3); 
-      Intersect( pos, pos + direction, SD[(i+1)%nSX3].first, SD[(i+1)%nSX3].second, verbose);
+      Intersect( pos, pos + direction, SDn[(i+1)%nSX3].first, SDn[(i+1)%nSX3].second, verbose);
     }
 
     if( TMath::Abs(dis - sx3Radius) > 0.1 ) continue;
@@ -449,9 +460,9 @@ inline SX3 ANASEN::FindSX3Pos(TVector3 pos, TVector3 direction, bool verbose){
 }
 
 //!============================================== Drawing functions
-inline void ANASEN::DrawAnasen(int anodeID1, int anodeID2, int cathodeID1, int cathodeID2, bool DrawQQQ ){
+inline void ANASEN::DrawAnasen(int anodeID1, int anodeID2, int cathodeID1, int cathodeID2, int sx3ID, bool DrawQQQ ){
 
-  Construct3DModel(anodeID1, anodeID2, cathodeID1, cathodeID2, DrawQQQ);
+  Construct3DModel(anodeID1, anodeID2, cathodeID1, cathodeID2, sx3ID, DrawQQQ);
 
   geom->CloseGeometry();
   geom->SetVisLevel(4);
@@ -469,7 +480,7 @@ inline  void ANASEN::DrawTrack(TVector3 pos, TVector3 direction, bool drawEstima
   int b1 = id.second - 1; if( b1 < 0 ) b1 += nWire;
 
   //Construct3DModel(a1, id.first+1, b1, id.second+1, false);
-  Construct3DModel(id.first, id.first, id.second, id.second, false);
+  Construct3DModel(id.first, id.first, id.second, id.second, -1, false);
 
   double theta = direction.Theta() * TMath::RadToDeg();
   double phi = direction.Phi()  * TMath::RadToDeg();
@@ -513,7 +524,7 @@ inline  void ANASEN::DrawDeducedTrack(TVector3 sx3Pos, int anodeID, int cathodeI
 
   CalTrack(sx3Pos, anodeID, cathodeID);
 
-  Construct3DModel(anodeID, anodeID, cathodeID, cathodeID, false);
+  Construct3DModel(anodeID, anodeID, cathodeID, cathodeID, -1, false);
 
   double theta = trackVec.Theta() * TMath::RadToDeg();
   double phi = trackVec.Phi()  * TMath::RadToDeg();
@@ -538,8 +549,8 @@ inline void ANASEN::CalTrack(TVector3 sx3Pos, int anodeID, int cathodeID, bool v
 
   trackPos = sx3Pos;
 
-  TVector3 n1 = (P1[anodeID].first - P1[anodeID].second).Cross((sx3Pos - P1[anodeID].second)).Unit();
-  TVector3 n2 = (Q1[cathodeID].first - Q1[cathodeID].second).Cross((sx3Pos - Q1[cathodeID].second)).Unit();
+  TVector3 n1 = (An[anodeID].first - An[anodeID].second).Cross((sx3Pos - An[anodeID].second)).Unit();
+  TVector3 n2 = (Ca[cathodeID].first - Ca[cathodeID].second).Cross((sx3Pos - Ca[cathodeID].second)).Unit();
 
   // if the handiness of anode and cathode revered, it should be n2 cross n1
   trackVec = (n2.Cross(n1)).Unit();
@@ -560,13 +571,13 @@ inline TVector3 ANASEN::CalSX3Pos(unsigned short ID, unsigned short chUp, unsign
 
   if( ID < nSX3 ){ //down
 
-    sa = SD[reducedID].first;
-    sb = SD[reducedID].second;
+    sa = SDn[reducedID].first;
+    sb = SDn[reducedID].second;
 
   }else{
 
-    sa = SU[reducedID].first;
-    sb = SU[reducedID].second;
+    sa = SUp[reducedID].first;
+    sb = SUp[reducedID].second;
 
   }
 
