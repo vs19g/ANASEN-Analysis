@@ -30,10 +30,15 @@ public:
                   int sx3ID = -1, 
                   bool DrawQQQ = false );
 
+
+
+  PW * GetPW() {return pw;}
+  SX3 * GetSX3() {return sx3;}
+
 private:
 
-  PW pw;
-  SX3 sx3;
+  PW * pw;
+  SX3 * sx3;
 
   const float qqqR1 = 50;
   const float qqqR2 = 100;
@@ -56,6 +61,9 @@ private:
 //!==============================================
 inline ANASEN::ANASEN(){
 
+  pw = new PW();
+  sx3 = new SX3();
+
   CalGeometry();
 
   geom = nullptr;
@@ -67,12 +75,16 @@ inline ANASEN::~ANASEN(){
 
   delete geom;
 
+  delete pw;
+  delete sx3;
+
 }
+
 //!==============================================
 inline void ANASEN::CalGeometry(){
 
-  sx3.ConstructGeo();
-  pw.ConstructGeo();
+  sx3->ConstructGeo();
+  pw->ConstructGeo();
 
 }
 
@@ -111,24 +123,24 @@ inline void ANASEN::Construct3DModel(int anodeID1, int anodeID2, int cathodeID1,
   worldBox->AddNode(axisZ, 1, new TGeoTranslation(0, 0,  5));
 
   //.......... convert to wire center dimensions
-  TGeoVolume *pcA = geom->MakeTube("tub1", Al, 0, 0.01, pw.GetAnodeLength()/2);
+  TGeoVolume *pcA = geom->MakeTube("tub1", Al, 0, 0.01, pw->GetAnodeLength()/2);
   pcA->SetLineColor(4);  
 
   int startID = 0;
-  int endID = pw.GetNumWire() - 1;
+  int endID = pw->GetNumWire() - 1;
 
   if( anodeID1 >= 0 && anodeID2 >= 0 ){
     startID = anodeID1;
     endID = anodeID2;
     if( anodeID1 > anodeID2 ) {
-      endID = pw.GetNumWire() + anodeID2;
+      endID = pw->GetNumWire() + anodeID2;
     }
   }
 
   for( int i = startID; i <= endID; i++){
-    TVector3 a = pw.GetAnodneMid(i);
-    double wireTheta = pw.GetAnodeTheta(i) * TMath::RadToDeg();
-    double wirePhi = pw.GetAnodePhi(i) * TMath::RadToDeg() + 90;
+    TVector3 a = pw->GetAnodneMid(i);
+    double wireTheta = pw->GetAnodeTheta(i) * TMath::RadToDeg();
+    double wirePhi = pw->GetAnodePhi(i) * TMath::RadToDeg() + 90;
 
     worldBox->AddNode(pcA, i+1, new TGeoCombiTrans( a.X(), 
                                                     a.Y(), 
@@ -136,24 +148,24 @@ inline void ANASEN::Construct3DModel(int anodeID1, int anodeID2, int cathodeID1,
                                                     new TGeoRotation("rot1", wirePhi, wireTheta, 0.)));
   }
 
-  TGeoVolume *pcC = geom->MakeTube("tub2", Al, 0, 0.01, pw.GetCathodeLength()/2);
+  TGeoVolume *pcC = geom->MakeTube("tub2", Al, 0, 0.01, pw->GetCathodeLength()/2);
   pcC->SetLineColor(6);
 
   startID = 0;
-  endID = pw.GetNumWire() - 1;
+  endID = pw->GetNumWire() - 1;
 
   if( cathodeID1 >= 0 && cathodeID2 >= 0 ){
     startID = cathodeID1;
     endID = cathodeID2;
     if( cathodeID1 > cathodeID2 ) {
-      endID = pw.GetNumWire() + cathodeID2;
+      endID = pw->GetNumWire() + cathodeID2;
     }
   }
 
   for( int i = startID; i <= endID; i++){
-    TVector3 a = pw.GetCathodneMid(i);
-    double wireTheta = pw.GetCathodeTheta(i) * TMath::RadToDeg();
-    double wirePhi = pw.GetCathodePhi(i) * TMath::RadToDeg() + 90;
+    TVector3 a = pw->GetCathodneMid(i);
+    double wireTheta = pw->GetCathodeTheta(i) * TMath::RadToDeg();
+    double wirePhi = pw->GetCathodePhi(i) * TMath::RadToDeg() + 90;
 
     worldBox->AddNode(pcC, i+1, new TGeoCombiTrans( a.X(), 
                                                     a.Y(), 
@@ -161,14 +173,14 @@ inline void ANASEN::Construct3DModel(int anodeID1, int anodeID2, int cathodeID1,
                                                     new TGeoRotation("rot1", wirePhi , wireTheta, 0.)));
   }
 
-  TGeoVolume * sx3Det = geom->MakeBox("box", Al, 0.1, sx3.GetWidth()/2, sx3.GetLength()/2);
+  TGeoVolume * sx3Det = geom->MakeBox("box", Al, 0.1, sx3->GetWidth()/2, sx3->GetLength()/2);
   sx3Det->SetLineColor(kGreen+3);
 
-  for( int i = 0; i < sx3.GetNumDet(); i++){
+  for( int i = 0; i < sx3->GetNumDet(); i++){
     if( sx3ID != -1 && i != sx3ID ) continue;
-    TVector3 aUp = sx3.GetUpMid(i); // center of the SX3 upstream
-    TVector3 aDn = sx3.GetDnMid(i); // center of the SX3 Downstream
-    double phi = sx3.GetDetPhi(i) * TMath::RadToDeg() + 90;
+    TVector3 aUp = sx3->GetUpMid(i); // center of the SX3 upstream
+    TVector3 aDn = sx3->GetDnMid(i); // center of the SX3 Downstream
+    double phi = sx3->GetDetPhi(i) * TMath::RadToDeg() + 90;
 
     worldBox->AddNode(sx3Det, 2*i+1., new TGeoCombiTrans( aUp.X(), 
                                                           aUp.Y(), 
@@ -206,10 +218,10 @@ inline void ANASEN::DrawAnasen(int anodeID1, int anodeID2, int cathodeID1, int c
 
 inline  void ANASEN::DrawTrack(TVector3 pos, TVector3 direction, bool drawEstimatedTrack){
 
-  pw.FindWireID(pos, direction);
-  sx3.FindSX3Pos(pos, direction);
+  pw->FindWireID(pos, direction);
+  sx3->FindSX3Pos(pos, direction);
 
-  std::pair<short, short> wireID = pw.GetNearestID();
+  std::pair<short, short> wireID = pw->GetNearestID();
   
   Construct3DModel(wireID.first, wireID.first, wireID.second, wireID.second, -1, false);
 
@@ -225,19 +237,19 @@ inline  void ANASEN::DrawTrack(TVector3 pos, TVector3 direction, bool drawEstima
   startPos->SetLineColor(kBlack);
   worldBox->AddNode(startPos, 3, new TGeoCombiTrans( pos.X(), pos.Y(), pos.Z(), new TGeoRotation("rotA", 0, 0, 0.)));
 
-  if( sx3.GetID() >= 0 ){
+  if( sx3->GetID() >= 0 ){
     TGeoVolume * hit = geom->MakeSphere("hitpos", 0, 0, 3);
     hit->SetLineColor(kRed);
 
-    TVector3 hitPos = sx3.GetHitPos();
+    TVector3 hitPos = sx3->GetHitPos();
 
     worldBox->AddNode(hit, 2, new TGeoCombiTrans( hitPos.X(), hitPos.Y(), hitPos.Z(), new TGeoRotation("rotA", 0, 0, 0.)));
 
     if( drawEstimatedTrack ){
-      pw.CalTrack(hitPos, wireID.first, wireID.second, true);
+      pw->CalTrack(hitPos, wireID.first, wireID.second, true);
 
-      double thetaDeduce = pw.GetTrackTheta() * TMath::RadToDeg();
-      double phiDeduce = pw.GetTrackPhi()  * TMath::RadToDeg();
+      double thetaDeduce = pw->GetTrackTheta() * TMath::RadToDeg();
+      double phiDeduce = pw->GetTrackPhi()  * TMath::RadToDeg();
 
       TGeoVolume * trackDeduce = geom->MakeTube("trackDeduce", 0, 0, 0.1, 100.);
       trackDeduce->SetLineColor(kOrange);
@@ -255,12 +267,12 @@ inline  void ANASEN::DrawTrack(TVector3 pos, TVector3 direction, bool drawEstima
 
 inline  void ANASEN::DrawDeducedTrack(TVector3 sx3Pos, int anodeID, int cathodeID){
 
-  pw.CalTrack(sx3Pos, anodeID, cathodeID);
+  pw->CalTrack(sx3Pos, anodeID, cathodeID);
 
   Construct3DModel(anodeID, anodeID, cathodeID, cathodeID, -1, false);
 
-  double theta = pw.GetTrackTheta() * TMath::RadToDeg();
-  double phi = pw.GetTrackPhi()  * TMath::RadToDeg();
+  double theta = pw->GetTrackTheta() * TMath::RadToDeg();
+  double phi = pw->GetTrackPhi()  * TMath::RadToDeg();
 
   TGeoVolume * Track = geom->MakeTube("axisX", 0, 0, 0.1, 100.);
   Track->SetLineColor(kRed);

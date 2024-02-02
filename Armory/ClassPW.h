@@ -96,6 +96,9 @@ inline void PW::Clear(){
   cathode2 = -1;
   anodeDis2   = 999999999;
   cathodeDis2 = 999999999;
+
+  An.clear();
+  Ca.clear();
 }
 
 inline void PW::ConstructGeo(){

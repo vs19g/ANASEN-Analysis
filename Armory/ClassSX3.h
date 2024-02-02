@@ -7,7 +7,7 @@
 
 class SX3{
 public:
-  SX3(){}
+  SX3(){Clear();};
   ~SX3(){}
   
   short GetID() const {return id;}
@@ -24,9 +24,9 @@ public:
   void FindSX3Pos(TVector3 pos, TVector3 direction, bool verbose = false);
   void CalSX3Pos(unsigned short ID, unsigned short chUp, unsigned short chDown, unsigned short chBack, float eUp, float eDown);
 
-  double GetNumDet() const {return nSX3;}
-  double GetWidth()  const {return sx3Width;}
-  double GetLength() const {return sx3Length;}
+  double GetNumDet() const {return numDet;}
+  double GetWidth()  const {return width;}
+  double GetLength() const {return length;}
   TVector3 GetDnL(short id) const {return SDn[id].first; } // lower strip ID
   TVector3 GetDnH(short id) const {return SDn[id].second; } // higher strip ID
   TVector3 GetUpL(short id) const {return SUp[id].first; } // lower strip ID
@@ -52,6 +52,12 @@ public:
 
 private:
 
+  const int numDet = 12;
+  const float radius = 88;
+  const float width = 40;
+  const float length = 75;
+  const float gap = 46;
+
   short id; // -1 when no hit
   short chUp;
   short chDn;
@@ -64,12 +70,6 @@ private:
   double eBk;
 
   TVector3 hitPos;
-
-  const int nSX3 = 12;
-  const float sx3Radius = 88;
-  const float sx3Width = 40;
-  const float sx3Length = 75;
-  const float sx3Gap = 46;
 
   std::vector<std::pair<TVector3,TVector3>> SDn; // coners of the SX3  0-11, z = mid point
   std::vector<std::pair<TVector3,TVector3>> SUp; // coners of the SX3 12-23, z = mid point
@@ -108,29 +108,32 @@ inline void SX3::Clear(){
   eUp = TMath::QuietNaN();
   eDn = TMath::QuietNaN();
   eBk = TMath::QuietNaN();
+
+  SDn.clear();
+  SUp.clear();
 }
 
 inline void SX3::ConstructGeo(){
   TVector3 sa, sb, sc, sn;
-  for(int i = 0; i < nSX3; i++){
-    sa.SetXYZ( sx3Radius, -sx3Width/2, sx3Gap/2 + sx3Length/2 );
-    sb.SetXYZ( sx3Radius,  sx3Width/2, sx3Gap/2 + sx3Length/2 );
 
-    double rot = TMath::TwoPi() / nSX3 * (-i - 0.5) - TMath::PiOver2();
+  for(int i = 0; i < numDet; i++){
+    sa.SetXYZ( radius, -width/2, gap/2 + length/2 );
+    sb.SetXYZ( radius,  width/2, gap/2 + length/2 );
+
+    double rot = TMath::TwoPi() / numDet * (-i - 0.5) - TMath::PiOver2();
 
     sa.RotateZ( rot );
     sb.RotateZ( rot );
     SDn.push_back(std::pair(sa,sb));
 
-
-    sc.SetXYZ( sx3Radius, -sx3Width/2, sx3Gap/2 );
+    sc.SetXYZ( radius, -width/2, gap/2 );
     sc.RotateZ( rot );
 
     sn = ((sc-sa).Cross(sb-sa)).Unit();
     SNorml.push_back(sn);
 
-    sa.SetXYZ( sx3Radius, -sx3Width/2, -sx3Gap/2 - sx3Length/2 );
-    sb.SetXYZ( sx3Radius,  sx3Width/2, -sx3Gap/2 - sx3Length/2 );
+    sa.SetXYZ( radius, -width/2, -gap/2 - length/2 );
+    sb.SetXYZ( radius,  width/2, -gap/2 - length/2 );
 
     sa.RotateZ( rot );
     sb.RotateZ( rot );
@@ -142,7 +145,7 @@ inline void SX3::ConstructGeo(){
 inline void SX3::FindSX3Pos(TVector3 pos, TVector3 direction, bool verbose){
 
   id = -1;
-  for( int i = 0 ; i < nSX3; i++){
+  for( int i = 0 ; i < numDet; i++){
 
     if(verbose) printf(" %d ", i);
     std::pair<double, double> frac = Intersect( pos, pos + direction, SDn[i].first, SDn[i].second, verbose);
@@ -155,21 +158,21 @@ inline void SX3::FindSX3Pos(TVector3 pos, TVector3 direction, bool verbose){
 
     if(verbose) {
       printf("reduced distance : %f\n", dis);
-      printf(" %d*", (i+1)%nSX3); 
-      Intersect( pos, pos + direction, SDn[(i+1)%nSX3].first, SDn[(i+1)%nSX3].second, verbose);
+      printf(" %d*", (i+1)%numDet); 
+      Intersect( pos, pos + direction, SDn[(i+1)%numDet].first, SDn[(i+1)%numDet].second, verbose);
     }
 
-    if( TMath::Abs(dis - sx3Radius) > 0.1 ) continue;
+    if( TMath::Abs(dis - radius) > 0.1 ) continue;
 
     chDn = 2 * TMath::Floor(frac.second * 4);
     chUp = chDn + 1;
 
     double zPos = hitPos.Z();
-    if( (sx3Gap/2 < zPos && zPos < sx3Gap/2 + sx3Length ) || (-sx3Gap/2 - sx3Length < zPos && zPos < -sx3Gap/2 )  ){
+    if( (gap/2 < zPos && zPos < gap/2 + length ) || (-gap/2 - length < zPos && zPos < -gap/2 )  ){
 
       id = zPos > 0 ? i : i + 12;
 
-      zFrac = zPos > 0 ?  (zPos - sx3Gap/2. - sx3Length/2.)/sx3Length : (zPos - ( - sx3Gap/2. - sx3Length/2.) )/sx3Length ;
+      zFrac = zPos > 0 ?  (zPos - gap/2. - length/2.)/length : (zPos - ( - gap/2. - length/2.) )/length ;
 
       chBk = TMath::Floor( (zFrac + 0.5) * 4 ) + 8;
 
@@ -191,11 +194,11 @@ inline void SX3::CalSX3Pos(unsigned short ID, unsigned short chUp, unsigned shor
 
   if( (chUp - chDown) != 1 || (chDown % 2) != 0) return ;
 
-  int reducedID = ID % nSX3;
+  int reducedID = ID % numDet;
 
   TVector3 sa, sb;
 
-  if( ID < nSX3 ){ //down
+  if( ID < numDet ){ //down
     sa = SDn[reducedID].second;
     sb = SDn[reducedID].first;
   }else{
@@ -207,10 +210,10 @@ inline void SX3::CalSX3Pos(unsigned short ID, unsigned short chUp, unsigned shor
   hitPos.SetY( (sb.Y() - sa.Y()) * chUp/8 + sa.Y());
 
   if( eUp == 0 || eDown == 0 ){
-    hitPos.SetZ( sa.Z() + (2*(chBk - 7)-1) * sx3Length / 8 );
+    hitPos.SetZ( sa.Z() + (2*(chBk - 7)-1) * length / 8 );
   }else{
     double frac = (eUp - eDown)/(eUp + eDown); // from +1 (downstream) to -1 (upstream)
-    double zPos = sa.Z() +  sx3Length * frac/2;
+    double zPos = sa.Z() +  length * frac/2;
     hitPos.SetZ( zPos );
   }
 

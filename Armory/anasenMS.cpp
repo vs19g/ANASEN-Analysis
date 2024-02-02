@@ -45,7 +45,9 @@ int main(int argc, char **argv){
   int nExA = ExAList.size();
   int nEx  = ExList.size();
 
-  ANASEN anasen;
+  ANASEN * anasen = new ANASEN();
+  SX3 * sx3 = anasen->GetSX3();    
+  PW * pw = anasen->GetPW(); 
 
   TString saveFileName = "SimAnasen.root";
   printf("\e[32m#################################### building Tree in %s\e[0m\n", saveFileName.Data());
@@ -92,12 +94,12 @@ int main(int argc, char **argv){
   tree->Branch("aID", &anodeID, "anodeID/I");
   tree->Branch("cID", &cathodeID, "cathodeID/I");
 
-  int sx3ID, sx3Up, sx3Down, sx3Back;
+  int sx3ID, sx3Up, sx3Dn, sx3Bk;
   double sx3ZFrac;
-  tree->Branch("sx3ID",   &sx3ID,   "sx3ID/I");
-  tree->Branch("sx3Up",   &sx3Up,   "sx3Up/I");
-  tree->Branch("sx3Down", &sx3Down, "sx3Down/I");
-  tree->Branch("sx3Back", &sx3Back, "sx3Back/I");
+  tree->Branch("sx3ID",   &sx3ID, "sx3ID/I");
+  tree->Branch("sx3Up",   &sx3Up, "sx3Up/I");
+  tree->Branch("sx3Dn",   &sx3Dn, "sx3Dn/I");
+  tree->Branch("sx3Bk",   &sx3Bk, "sx3Bk/I");
   tree->Branch("sx3ZFrac", &sx3ZFrac, "sx3ZFrac/D");
 
   double reTheta, rePhi;
@@ -150,38 +152,35 @@ int main(int argc, char **argv){
     dir.SetTheta(thetab * TMath::DegToRad());
     dir.SetPhi(phib * TMath::DegToRad());
 
-    std::pair<int, int> wireID = anasen.FindWireID(vertex, dir, false);
-    SX3 sx3 = anasen.FindSX3Pos(vertex, dir, false);    
+   
+    pw->FindWireID(vertex, dir, false);
+    sx3->FindSX3Pos(vertex, dir, false);   
+
+    std::pair<int, int> wireID = pw->GetNearestID();
 
     anodeID = wireID.first;
     cathodeID = wireID.second;
 
-    sx3ID = sx3.id;
-    if( sx3.id >= 0 ){
-      sx3Up = sx3.chUp;
-      sx3Down = sx3.chDown;
-      sx3Back = sx3.chBack;
-      sx3ZFrac = sx3.zFrac;
+    sx3ID = sx3->GetID();
+    if( sx3ID >= 0 ){
+      sx3Up    = sx3->GetChUp();
+      sx3Dn    = sx3->GetChDn();
+      sx3Bk    = sx3->GetChBk();
+      sx3ZFrac = sx3->GetZFrac();
 
-      sx3X = sx3.hitPos.X();
-      sx3Y = sx3.hitPos.Y();
-      sx3Z = sx3.hitPos.Z();
+      sx3X = sx3->GetHitPos().X();
+      sx3Y = sx3->GetHitPos().Y();
+      sx3Z = sx3->GetHitPos().Z();
       
-      // for( int i = 0; i < 12; i++){
-      //   sx3Index[i] = -1;
-      //   if( i == sx3Up ) sx3Index[i] = sx3ID * 12 + sx3Up; 
-      //   if( i == sx3Down ) sx3Index[i] = sx3ID * 12 + sx3Down; 
-      //   if( i == sx3Back ) sx3Index[i] = sx3ID * 12 + sx3Back; 
-      // }
-      anasen.CalTrack(sx3.hitPos, wireID.first, wireID.second, false);
+      pw->CalTrack(sx3->GetHitPos(), wireID.first, wireID.second, false);
   
-      reTheta = anasen.GetTrackTheta() * TMath::RadToDeg();
-      rePhi = anasen.GetTrackPhi() * TMath::RadToDeg();
+      reTheta = pw->GetTrackTheta() * TMath::RadToDeg();
+      rePhi = pw->GetTrackPhi() * TMath::RadToDeg();
 
     }else{
       sx3Up = -1;
-      sx3Down = -1;
-      sx3Back = -1;
+      sx3Dn = -1;
+      sx3Bk = -1;
       sx3ZFrac = TMath::QuietNaN();
       
       sx3X = TMath::QuietNaN();
@@ -195,8 +194,6 @@ int main(int argc, char **argv){
       reTheta = TMath::QuietNaN();
       rePhi = TMath::QuietNaN();
     }
-
-
 
     tree->Fill();
 
@@ -223,6 +220,8 @@ int main(int argc, char **argv){
   saveFile->Close();
 
   printf("=============== done. saved as %s. count(hit==1) : %d\n", saveFileName.Data(), count);
+
+  delete anasen;
 
   return 0;
 
