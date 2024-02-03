@@ -16,6 +16,7 @@ public:
   short GetChBk() const {return chBk;}
 
   TVector3 GetHitPos() const {return hitPos;}
+  TVector3 GetHitPosWithSigma(double sigmaY_mm, double sigmaZ_mm);
 
   double GetZFrac() const {return zFrac;} // range from -0.5 to 0.5
 
@@ -185,6 +186,23 @@ inline void SX3::FindSX3Pos(TVector3 pos, TVector3 direction, bool verbose){
   }
 
   if( verbose) Print();
+}
+
+inline TVector3 SX3::GetHitPosWithSigma(double sigmaY_mm, double sigmaZ_mm){
+
+  double phi = SNorml[id].Phi();
+
+  TVector3 haha = hitPos;
+  haha.RotateZ(-phi);
+  double y = haha.Y() + gRandom->Gaus(0, sigmaY_mm);
+  double z = haha.Z() + gRandom->Gaus(0, sigmaZ_mm);
+
+  haha.SetY(y);
+  haha.SetZ(z);
+  haha.RotateZ(phi);
+
+  return haha;
+
 }
 
 

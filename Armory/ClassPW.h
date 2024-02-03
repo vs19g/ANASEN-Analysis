@@ -27,7 +27,7 @@ struct PWHitInfo{
 //!########################################################
 class PW{ // proportional wire
 public: 
-  PW(){ ClearHitInfo(); };
+  PW(){ ClearHitInfo();};
   ~PW(){};
 
   PWHitInfo GetHitInfo() const {return hitInfo;}
@@ -62,7 +62,7 @@ public:
   void ConstructGeo();
   void FindWireID(TVector3 pos, TVector3 direction, bool verbose = false);
   void CalTrack(TVector3 sx3Pos, int anodeID, int cathodeID, bool verbose = false);
-  void CalTrack2(TVector3 sx3Pos, PWHitInfo hitInfo, bool verbose = false);
+  void CalTrack2(TVector3 sx3Pos, PWHitInfo hitInfo, double sigmaA = 0, double sigmaC = 0, bool verbose = false);
 
   void Print(){
     printf("     The nearest | Anode: %2d(%5.2f) Cathode: %2d(%5.2f)\n", hitInfo.nearestWire.first, 
@@ -232,20 +232,21 @@ inline void PW::CalTrack(TVector3 sx3Pos, int anodeID, int cathodeID, bool verbo
 
 }
 
-inline void PW::CalTrack2(TVector3 sx3Pos, PWHitInfo hitInfo, bool verbose){
+inline void PW::CalTrack2(TVector3 sx3Pos, PWHitInfo hitInfo, double sigmaA, double sigmaC, bool verbose){
 
   trackPos = sx3Pos;
 
-  // fraction between the nearest wire and and the 2nd nearest wire by distance
-  double totDistA = hitInfo.nearestDist.first + hitInfo.nextNearestDist.first;
-  double fracA = hitInfo.nearestDist.first / totDistA;
+  double p1 = TMath::Abs(hitInfo.nearestDist.first + gRandom->Gaus(0, sigmaA));
+  double p2 = TMath::Abs(hitInfo.nextNearestDist.first + gRandom->Gaus(0, sigmaA));
+  double fracA = p1 / (p1 + p2);
   short anodeID1 = hitInfo.nearestWire.first;
   short anodeID2 = hitInfo.nextNearestWire.first;
   TVector3 shiftA1 = (An[anodeID2].first - An[anodeID1].first) * fracA;
   TVector3 shiftA2 = (An[anodeID2].second - An[anodeID1].second) * fracA;
 
-  double totDistC = hitInfo.nearestDist.second + hitInfo.nextNearestDist.second;
-  double fracC = hitInfo.nearestDist.second / totDistC;
+  double q1 = TMath::Abs(hitInfo.nearestDist.second + gRandom->Gaus(0, sigmaC));
+  double q2 = TMath::Abs(hitInfo.nextNearestDist.second + gRandom->Gaus(0, sigmaC));
+  double fracC = q1 / (q1 + q2);
   short cathodeID1 = hitInfo.nearestWire.second;
   short cathodeID2 = hitInfo.nextNearestWire.second;
   TVector3 shiftC1 = (Ca[cathodeID2].first - Ca[cathodeID1].first) * fracC;

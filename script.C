@@ -246,7 +246,14 @@ void script(TString fileName = "", int maxEvent = -1){
 
   TCanvas * c2 = new TCanvas("c2", "ANASEN Simulation", 800, 800);
   c2->cd();
+
+
   ANASEN * haha = new ANASEN();
+
+  haha->SetUncertainties(10, 10, 1, 1);
+
+  PW * pw = haha->GetPW();
+  SX3 * sx3 = haha->GetSX3();
 
   // haha->DrawAnasen(0, 1, 0, 1, -1, false);
 
@@ -273,13 +280,9 @@ void script(TString fileName = "", int maxEvent = -1){
 
   haha->DrawTrack(pos, dir, true);
 
-  PW pc;
-  pc.ConstructGeo();
-  pc.FindWireID(pos, dir, true);
-  
-  SX3 sx3;
-  sx3.ConstructGeo();
-  sx3.FindSX3Pos(pos, dir, true);
+  pw->FindWireID(pos, dir, true);
+  sx3->FindSX3Pos(pos, dir, true);
+
 
   // haha->CalTrack(sx3.hitPos, wireID.first, wireID.second, true);
 

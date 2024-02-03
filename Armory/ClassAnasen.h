@@ -21,6 +21,13 @@ public:
   ANASEN();
   ~ANASEN();
 
+  void SetUncertainties(double sx3W, double sx3L, double anode, double cathode){
+    sigmaA = anode;
+    sigmaC = cathode;
+    sigmaW = sx3W;
+    sigmaL = sx3L;
+  }
+
   void DrawTrack(TVector3 pos, TVector3 direction, bool drawEstimatedTrack = false);
   void DrawDeducedTrack(TVector3 sx3Pos, int anodeID, int cathodeID);
   void DrawAnasen(int anodeID1 = -1, 
@@ -39,6 +46,9 @@ private:
 
   PW * pw;
   SX3 * sx3;
+
+  double sigmaA, sigmaC; // pw
+  double sigmaW, sigmaL; // sx3
 
   const float qqqR1 = 50;
   const float qqqR2 = 100;
@@ -113,11 +123,9 @@ inline void ANASEN::Construct3DModel(int anodeID1, int anodeID2, int cathodeID1,
   TGeoVolume *axisX = geom->MakeTube("axisX", Al, 0, 0.1, 5.);
   axisX->SetLineColor(1);
   worldBox->AddNode(axisX, 1, new TGeoCombiTrans(5, 0, 0., new TGeoRotation("rotA", 90., 90., 0.)));
-
   TGeoVolume *axisY = geom->MakeTube("axisY", Al, 0, 0.1, 5.);
   axisY->SetLineColor(1);
   worldBox->AddNode(axisY, 1, new TGeoCombiTrans(0, 5, 0., new TGeoRotation("rotB", 0., 90., 0.)));
-
   TGeoVolume *axisZ = geom->MakeTube("axisZ", Al, 0, 0.1, 5.);
   axisZ->SetLineColor(1);
   worldBox->AddNode(axisZ, 1, new TGeoTranslation(0, 0,  5));
@@ -238,7 +246,8 @@ inline  void ANASEN::DrawTrack(TVector3 pos, TVector3 direction, bool drawEstima
   worldBox->AddNode(startPos, 3, new TGeoCombiTrans( pos.X(), pos.Y(), pos.Z(), new TGeoRotation("rotA", 0, 0, 0.)));
 
   if( sx3->GetID() >= 0 ){
-    TVector3 hitPos = sx3->GetHitPos();
+    //TVector3 hitPos = sx3->GetHitPos();
+    TVector3 hitPos = sx3->GetHitPosWithSigma(sigmaW, sigmaL);
 
     TGeoVolume * hit = geom->MakeSphere("hitpos", 0, 0, 3);
     hit->SetLineColor(kRed);
@@ -259,7 +268,7 @@ inline  void ANASEN::DrawTrack(TVector3 pos, TVector3 direction, bool drawEstima
 
       {//===== complicated 
         PWHitInfo hitInfo = pw->GetHitInfo();
-        pw->CalTrack2(hitPos, hitInfo, true);
+        pw->CalTrack2(hitPos, hitInfo, sigmaA, sigmaC, true);
 
         double thetaDeduce = pw->GetTrackTheta() * TMath::RadToDeg();
         double phiDeduce = pw->GetTrackPhi()  * TMath::RadToDeg();

@@ -35,9 +35,14 @@ int main(int argc, char **argv){
   std::vector<float> ExAList = {0};
   std::vector<float> ExList = {0, 1, 2};
 
-  double vertexXRange[2] = { 0, 0}; 
-  double vertexYRange[2] = { 0, 0}; 
-  double vertexZRange[2] = { 0, 0}; 
+  double vertexXRange[2] = { -10, 10}; // mm
+  double vertexYRange[2] = { -10, 10}; 
+  double vertexZRange[2] = { -70, 70}; 
+
+  double sigmaSX3_W = 10; // mm
+  double sigmaSX3_L = 0; // mm
+  double sigmaPW_A  = 0; // from 0 to 1.
+  double sigmaPW_C  = 0; // from 0 to 1.
 
   //###################################################
   transfer.CalReactionConstant();
@@ -183,15 +188,19 @@ int main(int argc, char **argv){
       sx3Bk    = sx3->GetChBk();
       sx3ZFrac = sx3->GetZFrac();
 
-      sx3X = sx3->GetHitPos().X();
-      sx3Y = sx3->GetHitPos().Y();
-      sx3Z = sx3->GetHitPos().Z();
+      //Introduce uncertaity
+      // TVector3 hitPos = sx3->GetHitPos();
+      TVector3 hitPos = sx3->GetHitPosWithSigma(sigmaSX3_W, sigmaSX3_L);
+
+      sx3X = hitPos.X();
+      sx3Y = hitPos.Y();
+      sx3Z = hitPos.Z();
       
-      pw->CalTrack(sx3->GetHitPos(), anodeID[0], cathodeID[0], false);
+      pw->CalTrack(hitPos, anodeID[0], cathodeID[0], false);
       reTheta = pw->GetTrackTheta() * TMath::RadToDeg();
       rePhi = pw->GetTrackPhi() * TMath::RadToDeg();
 
-      pw->CalTrack2(sx3->GetHitPos(), hitInfo, false);
+      pw->CalTrack2(hitPos, hitInfo, sigmaPW_A, sigmaPW_C, false);
       reTheta1 = pw->GetTrackTheta() * TMath::RadToDeg();
       rePhi1 = pw->GetTrackPhi() * TMath::RadToDeg();
 
