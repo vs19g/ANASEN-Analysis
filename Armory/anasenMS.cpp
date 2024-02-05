@@ -35,16 +35,27 @@ int main(int argc, char **argv){
   std::vector<float> ExAList = {0};
   std::vector<float> ExList = {0, 1, 2};
 
-  double vertexXRange[2] = { -10, 10}; // mm
-  double vertexYRange[2] = { -10, 10}; 
-  double vertexZRange[2] = { -70, 70}; 
+  double vertexXRange[2] = { -5,  5}; // mm
+  double vertexYRange[2] = { -5,  5}; 
+  double vertexZRange[2] = {-70, 70}; 
 
-  double sigmaSX3_W = 10; // mm
-  double sigmaSX3_L = 0; // mm
-  double sigmaPW_A  = 0; // from 0 to 1.
-  double sigmaPW_C  = 0; // from 0 to 1.
+  double sigmaSX3_W = -1; // mm, < 0 use mid-point
+  double sigmaSX3_L = 5; // mm, < 0 use mid-point
+  double sigmaPW_A  = 3; // from 0 to 1.
+  double sigmaPW_C  = 3; // from 0 to 1.
 
   //###################################################
+
+  printf("------------ Vertex :\n");
+  printf("X : %7.2f - %7.2f mm\n", vertexXRange[0], vertexXRange[1]);
+  printf("Y : %7.2f - %7.2f mm\n", vertexYRange[0], vertexYRange[1]);
+  printf("Z : %7.2f - %7.2f mm\n", vertexZRange[0], vertexZRange[1]);
+  printf("------------ Uncertainty :\n");
+  printf(" SX3 horizontal : %.1f\n", sigmaSX3_W);
+  printf(" SX3   vertical : %.1f\n", sigmaSX3_L);
+  printf("          Anode : %.1f mm\n", sigmaPW_A);
+  printf("        Cathode : %.1f mm\n", sigmaPW_C);
+
   transfer.CalReactionConstant();
 
   int nExA = ExAList.size();
@@ -137,6 +148,8 @@ int main(int argc, char **argv){
     ExID = gRandom->Integer(nEx);
     Ex = ExList[ExID];
     transfer.SetExB(Ex);
+
+    transfer.CalReactionConstant();
 
     thetaCM = TMath::ACos(2 * gRandom->Rndm() - 1) ; 
     phiCM   = (gRandom->Rndm() - 0.5) * TMath::TwoPi();

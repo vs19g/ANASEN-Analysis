@@ -190,12 +190,27 @@ inline void SX3::FindSX3Pos(TVector3 pos, TVector3 direction, bool verbose){
 
 inline TVector3 SX3::GetHitPosWithSigma(double sigmaY_mm, double sigmaZ_mm){
 
-  double phi = SNorml[id].Phi();
+  double phi = SNorml[id%numDet].Phi();
 
   TVector3 haha = hitPos;
   haha.RotateZ(-phi);
+
   double y = haha.Y() + gRandom->Gaus(0, sigmaY_mm);
+  if( sigmaY_mm < 0 ){
+    double deltaW = width/4;
+    y = TMath::Floor((haha.Y()-deltaW)/deltaW)*deltaW + deltaW*1.5; // when ever land on each strip, set the position to be center of the strip.
+    if( y >= 25 ) y = 15;
+  }
+
   double z = haha.Z() + gRandom->Gaus(0, sigmaZ_mm);
+  if( sigmaZ_mm < 0 ){
+    haha.Z();
+    double delta = length/4;
+    int sign = z > 0 ? 1 : -1;
+    z = TMath::Floor( (abs(z)-gap/2)/delta )*delta + 0.5 * delta + gap/2;
+    if( z >= 107.375 ) z = 88.625;
+    z = sign * z;
+  }
 
   haha.SetY(y);
   haha.SetZ(z);

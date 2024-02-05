@@ -250,7 +250,7 @@ void script(TString fileName = "", int maxEvent = -1){
 
   ANASEN * haha = new ANASEN();
 
-  haha->SetUncertainties(10, 10, 1, 1);
+  haha->SetUncertainties(0, 0, 0, 0);
 
   PW * pw = haha->GetPW();
   SX3 * sx3 = haha->GetSX3();
