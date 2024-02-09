@@ -121,7 +121,7 @@ inline void SX3::ConstructGeo(){
     sa.SetXYZ( radius, -width/2, gap/2 + length/2 );
     sb.SetXYZ( radius,  width/2, gap/2 + length/2 );
 
-    double rot = TMath::TwoPi() / numDet * (-i - 0.5) - TMath::PiOver2();
+    double rot = TMath::TwoPi() / numDet * (i - 0.5) - TMath::PiOver2();
 
     sa.RotateZ( rot );
     sb.RotateZ( rot );

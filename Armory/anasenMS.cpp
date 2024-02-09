@@ -26,18 +26,18 @@ int main(int argc, char **argv){
   //Reaction
   TransferReaction transfer;
 
-  transfer.SetA(12, 6, 0);
+  transfer.SetA(24,12, 0);
   transfer.SetIncidentEnergyAngle(10, 0, 0);
 
-  transfer.Seta( 2, 1);
+  transfer.Seta( 4, 2);
   transfer.Setb( 1, 1);
 
   std::vector<float> ExAList = {0};
   std::vector<float> ExList = {0, 1, 2};
 
-  double vertexXRange[2] = { -5,  5}; // mm
-  double vertexYRange[2] = { -5,  5}; 
-  double vertexZRange[2] = {-70, 70}; 
+  double vertexXRange[2] = { -5,5}; // mm
+  double vertexYRange[2] = { -5,5}; 
+  double vertexZRange[2] = {-100,100}; 
 
   double sigmaSX3_W = -1; // mm, < 0 use mid-point
   double sigmaSX3_L = 5; // mm, < 0 use mid-point
@@ -55,7 +55,7 @@ int main(int argc, char **argv){
   printf(" SX3   vertical : %.1f\n", sigmaSX3_L);
   printf("          Anode : %.1f mm\n", sigmaPW_A);
   printf("        Cathode : %.1f mm\n", sigmaPW_C);
-
+  printf("        num_eve : %.1d  ",numEvent);
   transfer.CalReactionConstant();
 
   int nExA = ExAList.size();
@@ -65,7 +65,7 @@ int main(int argc, char **argv){
   SX3 * sx3 = anasen->GetSX3();    
   PW * pw = anasen->GetPW(); 
 
-  TString saveFileName = "SimAnasen.root";
+  TString saveFileName = "SimAnasen1.root";
   printf("\e[32m#################################### building Tree in %s\e[0m\n", saveFileName.Data());
   TFile * saveFile = new TFile(saveFileName, "recreate");
   TTree * tree = new TTree("tree", "tree");

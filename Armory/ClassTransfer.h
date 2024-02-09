@@ -243,11 +243,11 @@ TransferReaction::TransferReaction(){
   
    thetaIN = 0.;
    phiIN = 0.;
-   SetA(12, 6, 0);
-   Seta(2,1);
+   SetA(24, 12, 0);
+   Seta(4,2);
    Setb(1,1);
-   SetB(13,6);
-   TA = 6;
+   SetB(27,13);
+   TA = 2.5;
    T = TA * reaction.beamA;
    
    ExA = 0;

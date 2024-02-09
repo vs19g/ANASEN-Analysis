@@ -123,20 +123,20 @@ inline void PW::ConstructGeo(){
 
   for(int i = 0; i < nWire; i++ ){
     // Anode rotate right-hand
-    p1.first.SetXYZ( radiusA * TMath::Cos( TMath::TwoPi() / nWire * (-i)  + TMath::PiOver2()),
-                    radiusA * TMath::Sin( TMath::TwoPi() / nWire * (-i)  + TMath::PiOver2()),
+    p1.first.SetXYZ( radiusA * TMath::Cos( TMath::TwoPi() / nWire * (i)  + TMath::PiOver2()),
+                    radiusA * TMath::Sin( TMath::TwoPi() / nWire * (i)  + TMath::PiOver2()),
                     zLen/2);
-    p1.second.SetXYZ( radiusA * TMath::Cos( TMath::TwoPi() / nWire * (-i + wireShift) + TMath::PiOver2()),
-                      radiusA * TMath::Sin( TMath::TwoPi() / nWire * (-i + wireShift) + TMath::PiOver2()),
+    p1.second.SetXYZ( radiusA * TMath::Cos( TMath::TwoPi() / nWire * (i + wireShift) + TMath::PiOver2()),
+                      radiusA * TMath::Sin( TMath::TwoPi() / nWire * (i + wireShift) + TMath::PiOver2()),
                     -zLen/2);
     An.push_back(p1);
 
     // Cathod rotate left-hand
-    q1.first.SetXYZ( radiusC * TMath::Cos( TMath::TwoPi() / nWire * (-i)  + TMath::PiOver2()),
-                    radiusC * TMath::Sin( TMath::TwoPi() / nWire * (-i)  + TMath::PiOver2()),
+    q1.first.SetXYZ( radiusC * TMath::Cos( TMath::TwoPi() / nWire * (i)  + TMath::PiOver2()),
+                    radiusC * TMath::Sin( TMath::TwoPi() / nWire * (i)  + TMath::PiOver2()),
                     zLen/2);
-    q1.second.SetXYZ( radiusC * TMath::Cos( TMath::TwoPi() / nWire * (- i - wireShift) + TMath::PiOver2()),
-                      radiusC * TMath::Sin( TMath::TwoPi() / nWire * (- i - wireShift) + TMath::PiOver2()),
+    q1.second.SetXYZ( radiusC * TMath::Cos( TMath::TwoPi() / nWire * (i - wireShift) + TMath::PiOver2()),
+                      radiusC * TMath::Sin( TMath::TwoPi() / nWire * (i - wireShift) + TMath::PiOver2()),
                       -zLen/2);
     Ca.push_back(q1);
   }
