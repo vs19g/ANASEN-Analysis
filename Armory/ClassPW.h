@@ -40,6 +40,7 @@ public:
   TVector3 GetTrackVec() const {return trackVec;}
   double GetTrackTheta() const {return trackVec.Theta();}
   double GetTrackPhi()   const {return trackVec.Phi();}
+  double GetZ0();
 
   int GetNumWire() const {return nWire;}
   double GetDeltaAngle() const {return dAngle;}
@@ -117,7 +118,7 @@ inline void PW::ConstructGeo(){
   std::pair<TVector3, TVector3> p1; // anode
   std::pair<TVector3, TVector3> q1; // cathode
 
-  //anode and cathode start at pos-Y axis and count in left-Hand
+  //anode and cathode start at pos-Y axis and count in right-Hand
   //anode wire shift is right-hand.
   //cathode wire shift is left-hand.
 
@@ -267,4 +268,16 @@ inline void PW::CalTrack2(TVector3 sx3Pos, PWHitInfo hitInfo, double sigmaA, dou
   if( verbose ) printf("Theta, Phi = %f, %f \n", trackVec.Theta() *TMath::RadToDeg(), trackVec.Phi()*TMath::RadToDeg()); 
 
 }
+
+inline double PW::GetZ0(){
+
+  double x = trackPos.X();
+  double y = trackPos.Y();
+  double rho = TMath::Sqrt(x*x + y*y);
+  double theta = trackVec.Theta();
+  
+  return trackPos.Z() - rho / TMath::Tan(theta);
+
+}
+
 #endif 

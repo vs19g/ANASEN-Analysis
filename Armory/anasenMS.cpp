@@ -28,21 +28,22 @@ int main(int argc, char **argv){
 
   transfer.SetA(24,12, 0);
   transfer.SetIncidentEnergyAngle(10, 0, 0);
-
   transfer.Seta( 4, 2);
   transfer.Setb( 1, 1);
+
+  //TODO add alpha source
 
   std::vector<float> ExAList = {0};
   std::vector<float> ExList = {0, 1, 2};
 
-  double vertexXRange[2] = { -5,5}; // mm
-  double vertexYRange[2] = { -5,5}; 
-  double vertexZRange[2] = {-100,100}; 
+  double vertexXRange[2] = {   -5,    5}; // mm
+  double vertexYRange[2] = {   -5,    5}; 
+  double vertexZRange[2] = { -100,  100}; 
 
   double sigmaSX3_W = -1; // mm, < 0 use mid-point
-  double sigmaSX3_L = 5; // mm, < 0 use mid-point
-  double sigmaPW_A  = 3; // from 0 to 1.
-  double sigmaPW_C  = 3; // from 0 to 1.
+  double sigmaSX3_L = 3; // mm, < 0 use mid-point
+  double sigmaPW_A  = 0; // from 0 to 1.
+  double sigmaPW_C  = 0; // from 0 to 1.
 
   //###################################################
 
@@ -55,7 +56,7 @@ int main(int argc, char **argv){
   printf(" SX3   vertical : %.1f\n", sigmaSX3_L);
   printf("          Anode : %.1f mm\n", sigmaPW_A);
   printf("        Cathode : %.1f mm\n", sigmaPW_C);
-  printf("        num_eve : %.1d  ",numEvent);
+  printf("        num_eve : %d \n",numEvent);
   transfer.CalReactionConstant();
 
   int nExA = ExAList.size();
@@ -129,6 +130,9 @@ int main(int argc, char **argv){
   double reTheta1, rePhi1;
   tree->Branch("reTheta1", &reTheta1, "reconstucted_theta1/D");
   tree->Branch("rePhi1",     &rePhi1, "reconstucted_phi1/D");
+
+  double z0;
+  tree->Branch("z0",     &z0, "reconstucted_Z/D");
 
 
   //========timer
@@ -217,6 +221,8 @@ int main(int argc, char **argv){
       reTheta1 = pw->GetTrackTheta() * TMath::RadToDeg();
       rePhi1 = pw->GetTrackPhi() * TMath::RadToDeg();
 
+      z0 = pw->GetZ0();
+
     }else{
       sx3Up = -1;
       sx3Dn = -1;
@@ -236,6 +242,8 @@ int main(int argc, char **argv){
 
       reTheta1 = TMath::QuietNaN();
       rePhi1 = TMath::QuietNaN();
+
+      z0 = TMath::QuietNaN();
 
     }
 

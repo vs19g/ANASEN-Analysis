@@ -9,15 +9,15 @@ fi
 runID=$1
 timeWindow=$2
 
-rawFolder=/media/nvmeData/ANASEN_test
+rawFolder=/media/nvmeData/ANASEN_test/analysis/data
 rootFolder=/media/nvmeData/ANASEN_test/root_data
 
 fileList=`\ls -1 ${rawFolder}/*${runID}*.fsu`
 
-./EventBuilderNoTrace ${timeWindow} 0 ${fileList}
+./EventBuilder ${timeWindow} 0 0 500000 ${fileList}
 
-outFile=${rawFolder}/*${runID}*${timeWindow}_noTrace.root
+outFile=${rawFolder}/*${runID}*${timeWindow}.root
 
 mv -vf ${outFile} ${rootFolder}/.
 
-./Mapper ${rootFolder}/*${runID}*${timeWindow}_noTrace.root
+./Mapper ${rootFolder}/*${runID}*${timeWindow}.root

@@ -24,7 +24,7 @@ void PreAnalysis::Begin(TTree * /*tree*/){
   for( int i = 0; i < nBd; i++){
     if( board.at(i) > 1000) {
       hRate[i] = new TH2F(Form("hRate%d", board.at(i)), Form("Digi-%d; ch; sec", board.at(i)), 64, 0, 64, 100, 0, 100);
-      hEnergy[i] = new TH2F(Form("hEnergy%d", board.at(i)), Form("Digi-%d; ch; raw E", board.at(i)), 64, 0, 64, 400, 0, 500);
+      hEnergy[i] = new TH2F(Form("hEnergy%d", board.at(i)), Form("Digi-%d; ch; raw E", board.at(i)), 64, 0, 64, 400, 0, 5000);
     }else{
       hRate[i] = new TH2F(Form("hRate%d", board.at(i)), Form("Digi-%d; ch; sec", board.at(i)), 16, 0, 16, 100, 0, 100);
       hEnergy[i] = new TH2F(Form("hEnergy%d", board.at(i)), Form("Digi-%d; ch; raw E", board.at(i)), 16, 0, 16, 400, 0, 5000);

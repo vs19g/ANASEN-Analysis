@@ -15,6 +15,9 @@ public:
   unsigned short       e[MAXMULTI];
   unsigned long long   t[MAXMULTI];
 
+  unsigned short         sn[MAXMULTI];
+  unsigned short     digiCh[MAXMULTI];
+
   unsigned short  index[MAXMULTI]; // id * nCh + ch;
   bool  used[MAXMULTI];
 
@@ -26,6 +29,8 @@ public:
        e[i] = 0;
        t[i] = 0;
        index[i] = 0;
+       sn[i] = 0;
+       digiCh[i] = 0;
        used[i] = false;
     }
   }

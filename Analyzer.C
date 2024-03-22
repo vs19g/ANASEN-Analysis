@@ -23,8 +23,8 @@ int padID = 0;
 void Analyzer::Begin(TTree * /*tree*/){
   TString option = GetOption();
 
-  hsx3IndexVE = new TH2F("hsx3IndexVE", "SX3 index vs Energy; sx3 index ; Energy",  24*12, 0,  24*12, 400, 0, 500); hsx3IndexVE->SetNdivisions( -612, "x");
-  hqqqIndexVE = new TH2F("hqqqIndexVE", "QQQ index vs Energy; QQQ index ; Energy", 4*2*16, 0, 4*2*16, 400, 0, 500); hqqqIndexVE->SetNdivisions( -1204, "x");
+  hsx3IndexVE = new TH2F("hsx3IndexVE", "SX3 index vs Energy; sx3 index ; Energy",  24*12, 0,  24*12, 400, 0, 5000); hsx3IndexVE->SetNdivisions( -612, "x");
+  hqqqIndexVE = new TH2F("hqqqIndexVE", "QQQ index vs Energy; QQQ index ; Energy", 4*2*16, 0, 4*2*16, 400, 0, 5000); hqqqIndexVE->SetNdivisions( -1204, "x");
   hpcIndexVE = new TH2F("hpcIndexVE",   "PC index vs Energy; PC index ; Energy",     2*24, 0,   2*24, 400, 0, 4000); hpcIndexVE->SetNdivisions( -1204, "x");
 
 
@@ -173,7 +173,7 @@ void Analyzer::Terminate(){
   //=============================================== pad-7
   padID ++; canvas->cd(padID); canvas->cd(padID)->SetGrid(1);
 
-  canvas->cd(padID)->DrawFrame(-50, -50, 50, 50);
-  hqqqPolar->Draw("same colz pol");  
+  hsx3VpcIndex ->Draw("colz");  
+
 
 }

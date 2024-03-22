@@ -7,7 +7,7 @@
 #include <TMath.h>
 #include <TBenchmark.h>
 
-#include "../mapping.h"
+#include "../mapping_alpha.h"
 #include "ClassDet.h"
 
 //===============================
@@ -112,15 +112,24 @@ int main(int argc, char **argv){
     qqq.multi = 0;
     pc.multi = 0;
 
+    qqq.Clear();
+
     for( unsigned int i = 0; i < multi; i++){
 
       //printf("%10u/%10u| %5d, %2u, %6u, %14llu\n", i, multi, sn[i], ch[i], e[i], e_t[i] );
-      int globalCh = ch[i];
+      
+      //globalCh = digi-ID * nCh(digi-iD) + ch
+      int globalCh = -1;
+
       for( int j = 0; j < nBd; j++){
         if( board.at(j) == sn[i]){
-          globalCh += sn[i] > 1000 ? j * 64 :  7*64 + (j-7) * 16;
+          globalCh = (sn[i] > 1000 ? j * 64 :  7*64 + (j-7) * 16) + ch[i]; //& = number V1740
+          break;
         }
       }
+      
+      if( globalCh == -1) printf("ev %llu\n", ev);
+
       unsigned short ID = mapping[globalCh];
 
       //=================================== sx3
