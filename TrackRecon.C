@@ -10,7 +10,7 @@
 #include <algorithm>
 
 #include "Armory/ClassSX3.h"
-#include "Armory/ClassPW.h"
+#include "Armory/ClassPC1An.h"
 
 #include "TVector3.h"
 
@@ -31,7 +31,7 @@ TH2F * hanVScatsum;
 int padID = 0;
 
 SX3 sx3_contr;
-PW pw_contr;
+PC pw_contr;
 TVector3 hitPos;
 bool HitNonZero;
 
@@ -40,35 +40,7 @@ TH1F * hZProj;
 void Analyzer::Begin(TTree * /*tree*/){
   TString option = GetOption();
 
-  hsx3IndexVE = new TH2F("hsx3IndexVE", "SX3 index vs Energy; sx3 index ; Energy",  24*12, 0,  24*12, 400, 0, 5000); hsx3IndexVE->SetNdivisions( -612, "x");
-  hqqqIndexVE = new TH2F("hqqqIndexVE", "QQQ index vs Energy; QQQ index ; Energy", 4*2*16, 0, 4*2*16, 400, 0, 5000); hqqqIndexVE->SetNdivisions( -1204, "x");
-  hpcIndexVE = new TH2F("hpcIndexVE",   "PC index vs Energy; PC index ; Energy",     2*24, 0,   2*24, 400, 0, 4000); hpcIndexVE->SetNdivisions( -1204, "x");
-
-
-  hsx3Coin = new TH2F("hsx3Coin", "SX3 Coincident",  24*12, 0,  24*12,  24*12, 0, 24*12);
-  hqqqCoin = new TH2F("hqqqCoin", "QQQ Coincident", 4*2*16, 0, 4*2*16, 4*2*16, 0, 4*2*16);
-  hpcCoin  = new TH2F("hpcCoin",  "PC Coincident",    2*24, 0,   2*24,   2*24, 0, 2*24);
-
-  hqqqPolar = new TH2F("hqqqPolar", "QQQ Polar ID", 16*4, -TMath::Pi(), TMath::Pi(),16, 10, 50);
-
-  hsx3VpcIndex = new TH2F("hsx3Vpcindex", "sx3 vs pc; sx3 index; pc index",  24*12, 0, 24*12, 48, 0, 48);
-  hsx3VpcIndex->SetNdivisions( -612, "x");
-  hsx3VpcIndex->SetNdivisions( -12, "y");
-  hqqqVpcIndex = new TH2F("hqqqVpcindex", "qqq vs pc; qqq index; pc index",  4*2*16, 0, 4*2*16, 48, 0, 48);
-  hqqqVpcIndex->SetNdivisions( -612, "x");
-  hqqqVpcIndex->SetNdivisions( -12, "y");
-
-  hqqqVpcE = new TH2F("hqqqVpcEnergy", "qqq vs pc; qqq energy; pc energy", 400, 0, 5000, 400, 0, 5000);
-  hqqqVpcE->SetNdivisions( -612, "x");
-  hqqqVpcE->SetNdivisions( -12, "y");
-  
-  hsx3VpcE = new TH2F("hsx3VpcEnergy", "sx3 vs pc; sx3 energy; pc energy", 400, 0, 5000, 400, 0, 5000);
-  hsx3VpcE->SetNdivisions( -612, "x");
-  hsx3VpcE->SetNdivisions( -12, "y");
-
   hZProj = new TH1F("hZProj", "Z Projection", 200, -600, 600);
-
-  hanVScatsum = new TH2F("hanVScatsum", "Anode vs Cathode Sum; Anode E; Cathode E", 400,0 , 10000, 400, 0 , 16000);
 
   sx3_contr.ConstructGeo();
   pw_contr.ConstructGeo();
@@ -114,23 +86,6 @@ Bool_t Analyzer::Process(Long64_t entry){
   // //======================= SX3
 
   std::vector<std::pair<int, int>> ID; // first = id, 2nd = index
-  for( int i = 0; i < sx3.multi; i ++){
-    ID.push_back(std::pair<int, int>(sx3.id[i], i));
-
-    hsx3IndexVE->Fill( sx3.index[i], sx3.e[i] );
-
-    for( int j = i+1; j < sx3.multi; j++){
-      hsx3Coin->Fill( sx3.index[i], sx3.index[j]);
-    }
-
-    for( int j = 0; j < pc.multi; j++){
-      hsx3VpcIndex->Fill( sx3.index[i], pc.index[j] );
-      //  if( sx3.ch[index] > 8 ){
-      //    hsx3VpcE->Fill( sx3.e[i], pc.e[j] );
-      //   }
-    }
-  }
-
 
   if( ID.size() > 0 ){
     std::sort(ID.begin(), ID.end(),  [](const std::pair<int, int> & a, const std::pair<int, int> & b) {
@@ -198,32 +153,8 @@ Bool_t Analyzer::Process(Long64_t entry){
 
   // //======================= QQQ
   for( int i = 0; i < qqq.multi; i ++){
-    // for( int j = 0; j < pc.multi; j++){
-        // if(pc.index[j]==4){
-          hqqqIndexVE->Fill( qqq.index[i], qqq.e[i] );
-        // }
-    // }
-    for( int j = 0; j < qqq.multi; j++){
-      if ( j == i ) continue;
-      hqqqCoin->Fill( qqq.index[i], qqq.index[j]);
-    }
-
-
     for( int j = i + 1; j < qqq.multi; j++){
-      for( int k = 0; k < pc.multi; k++){
-        if(pc.index[k]<24 && pc.e[k]>50 ){
-          hqqqVpcE->Fill( qqq.e[i], pc.e[k] );
-          //  hpcIndexVE->Fill( pc.index[i], pc.e[i] );
-                hqqqVpcIndex->Fill( qqq.index[i], pc.index[j] );
-
-        }
-      // }
-      }
-      // if( qqq.used[i] == true ) continue;
-      
-      //if( qqq.id[i] == qqq.id[j] && (16 - qqq.ch[i]) * (16 - qqq.ch[j]) < 0  ){ // must be same detector and wedge and ring
       if( qqq.id[i] == qqq.id[j]  ){ // must be same detector 
-        
         int chWedge = -1;
         int chRing  =  -1;
         if( qqq.ch[i] < qqq.ch[j]){
@@ -256,45 +187,17 @@ Bool_t Analyzer::Process(Long64_t entry){
    
   }
   // //======================= PC
+ PCHit_1An hitInfo;
 
   ID.clear();
   int counter=0;
   std::vector<std::pair<int, double>> E; 
   E.clear();
-  for( int i = 0; i < pc.multi; i ++){
 
-    if( pc.e[i] > 100 ) ID.push_back(std::pair<int, int>(pc.id[i], i));
-    if( pc.e[i] > 100 ) E.push_back(std::pair<int, double>(pc.index[i], pc.e[i]));
-
-    hpcIndexVE->Fill( pc.index[i], pc.e[i] );
-
-    for( int j = i+1; j < pc.multi; j++){
-      hpcCoin->Fill( pc.index[i], pc.index[j]);
-    
-    }
-
-  }
-  //  for( size_t i = 0; i < E.size(); i++) printf("%zu | %d %d \n", i, E[i].first, E[i].second ); 
-
-  if( E.size()>=3 ){
-
-    int aID = 0;
-    int cID = 0;
-
+  if( E.size()==3 ){
     float aE = 0;
     float cE = 0;
     bool multi_an =false;
-    // if( ID[0].first < 1 ) {
-    //   aID = pc.ch[ID[0].second];
-    //   cID = pc.ch[ID[1].second];
-    // }else{
-    //   cID = pc.ch[ID[0].second];
-    //   aID = pc.ch[ID[1].second];
-    // }
-    // printf("anode= %d, cathode = %d\n", aID, cID);
-
-  // for( int k = 0; k < qqq.multi; k++){
-  //   if(qqq.index[k]==75 && pc.index[k]==2 && pc.e[k]>100){
       for(int l=0;l<E.size();l++){
         if(E[l].first<24 && E[l].first!=20 && E[l].first!=12){
           if(!multi_an){
@@ -306,10 +209,8 @@ Bool_t Analyzer::Process(Long64_t entry){
           cE = E[l].second + cE;
         }
       }
-    // }
+    // printf("anode= %d, cathode = %d\n", aID, cID);
   // }
-    hanVScatsum->Fill(aE,cE);
-      
     if( ID[0].first < 1 ) {
       aID = pc.ch[ID[0].second];
       cID = pc.ch[ID[1].second];
@@ -318,12 +219,14 @@ Bool_t Analyzer::Process(Long64_t entry){
       aID = pc.ch[ID[1].second];
     }
 
+    hanVScatsum->Fill(aE,cE);
+      
     if( HitNonZero){
-      pw_contr.CalTrack( hitPos, aID, cID);
+      pw_contr.CalTrack3( hitPos, hitinfo, cID);
       hZProj->Fill(pw_contr.GetZ0());
     }
 
-  
+  // }
   }
   
 
@@ -368,8 +271,6 @@ void Analyzer::Terminate(){
   //=============================================== pad-5
   padID ++; canvas->cd(padID); canvas->cd(padID)->SetGrid(1);
 
-  canvas->cd(padID)->SetLogz(true);
-
   hqqqCoin->Draw("colz");
 
   //=============================================== pad-6
@@ -380,15 +281,15 @@ void Analyzer::Terminate(){
   //=============================================== pad-7
   padID ++; canvas->cd(padID); canvas->cd(padID)->SetGrid(1);
 
-  // hsx3VpcIndex ->Draw("colz"); 
-  hsx3VpcE->Draw("colz") ;
+  hsx3VpcIndex ->Draw("colz"); 
+  // hsx3VpcE->Draw("colz") ;
 
   //=============================================== pad-8
   padID ++; canvas->cd(padID); canvas->cd(padID)->SetGrid(1);
 
-  // hqqqVpcIndex ->Draw("colz");  
+  hqqqVpcIndex ->Draw("colz");  
 
-  hqqqVpcE ->Draw("colz");
+  // hqqqVpcE ->Draw("colz");
   //=============================================== pad-9
   padID ++; 
 
@@ -396,7 +297,7 @@ void Analyzer::Terminate(){
   // hqqqPolar->Draw("same colz pol");
 
  canvas->cd(padID); canvas->cd(padID)->SetGrid(1);
-//  hZProj->Draw();
-  hanVScatsum->Draw("colz");
+ hZProj->Draw();
+  // hanVScatsum->Draw("colz");
 
 }

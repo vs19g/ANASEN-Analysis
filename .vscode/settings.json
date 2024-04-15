@@ -86,6 +86,10 @@
     "regex": "cpp",
     "scoped_allocator": "cpp",
     "shared_mutex": "cpp",
-    "valarray": "cpp"
+    "valarray": "cpp",
+    "processRun.C": "cpp",
+    "TrackRecon.C": "cpp",
+    "processRuns.C": "cpp",
+    "Analysis.C": "cpp"
   }
 }

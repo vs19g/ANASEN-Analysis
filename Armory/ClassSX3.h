@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <TMath.h>
 #include <TVector3.h>
+#include <TRandom.h>
 
 class SX3{
 public:
@@ -94,7 +95,7 @@ private:
 
     if( verbose ) printf(" ----h, k : %f, %f\n", h, k);
 
-    return std::pair(h,k);
+    return std::pair<double,double>(h,k);
   } 
 
 };
@@ -125,7 +126,7 @@ inline void SX3::ConstructGeo(){
 
     sa.RotateZ( rot );
     sb.RotateZ( rot );
-    SDn.push_back(std::pair(sa,sb));
+    SDn.push_back(std::pair<TVector3,TVector3>(sa,sb));
 
     sc.SetXYZ( radius, -width/2, gap/2 );
     sc.RotateZ( rot );
@@ -138,7 +139,7 @@ inline void SX3::ConstructGeo(){
 
     sa.RotateZ( rot );
     sb.RotateZ( rot );
-    SUp.push_back(std::pair(sa,sb));
+    SUp.push_back(std::pair<TVector3,TVector3>(sa,sb));
   }
 }
 
@@ -224,6 +225,7 @@ inline TVector3 SX3::GetHitPosWithSigma(double sigmaY_mm, double sigmaZ_mm){
 inline void SX3::CalSX3Pos(unsigned short ID, unsigned short chUp, unsigned short chDown, unsigned short chBack, float eUp, float eDown){
 
   hitPos.Clear();
+
 
   if( (chUp - chDown) != 1 || (chDown % 2) != 0) return ;
 

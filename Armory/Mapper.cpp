@@ -7,7 +7,7 @@
 #include <TMath.h>
 #include <TBenchmark.h>
 
-#include "../mapping_alpha.h"
+#include "../mapping.h"
 #include "ClassDet.h"
 
 //===============================
@@ -91,6 +91,7 @@ int main(int argc, char **argv){
   newTree->Branch("qqqCh",    &qqq.ch,    "qqqCh[qqqMulti]/s");
   newTree->Branch("qqqE",     &qqq.e,     "qqqEnergy[qqqMulti]/s");
   newTree->Branch("qqqT",     &qqq.t,     "qqqTime[qqqMulti]/l");
+  newTree->Branch("qqqSN",    &qqq.sn,     "qqqSN[qqqMulti]/s");
 
   newTree->Branch("pcMulti", &pc.multi, "pcMulti/s");
   newTree->Branch("pcID",    &pc.id,    "pcID[pcMulti]/s");
@@ -116,7 +117,7 @@ int main(int argc, char **argv){
 
     for( unsigned int i = 0; i < multi; i++){
 
-      //printf("%10u/%10u| %5d, %2u, %6u, %14llu\n", i, multi, sn[i], ch[i], e[i], e_t[i] );
+      // printf("%10u/%10u| %5d, %2u, %6u, %14llu\n", i, multi, sn[i], ch[i], e[i], e_t[i] );
       
       //globalCh = digi-ID * nCh(digi-iD) + ch
       int globalCh = -1;
@@ -147,6 +148,7 @@ int main(int argc, char **argv){
         qqq.ch[qqq.multi] = (ID - 10000) % 100;
         qqq.e[qqq.multi] = e[i];
         qqq.t[qqq.multi] = e_t[i];
+        qqq.sn[qqq.multi] = sn[i];
         qqq.multi ++;
       }
 

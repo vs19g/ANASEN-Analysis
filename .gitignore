@@ -3,6 +3,10 @@ EventBuilder*
 *.so
 *.pcm
 *.root
+*.exe
 
 Mapper
 AnasenMS
+
+data/
+data_proton/
