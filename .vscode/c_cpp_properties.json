@@ -38,6 +38,18 @@
             "intelliSenseMode": "linux-gcc-x64"
         },
         {
+            "name": "RyanHome",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "/home/ryan/root_v6.30.06/**"
+            ],
+            "defines": [],
+            "compilerPath": "/usr/bin/gcc",
+            "cStandard": "c17",
+            "cppStandard": "gnu++17",
+            "intelliSenseMode": "linux-gcc-x64"
+        },
+        {
             "name": "Dirac",
             "includePath": [
                 "${workspaceFolder}/**",
