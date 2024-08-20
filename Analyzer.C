@@ -28,6 +28,8 @@ TH2F * hqqqVpcIndex;
 TH2F * hqqqVpcE;
 TH2F * hsx3VpcE;
 TH2F * hanVScatsum;
+TH1F * hAnodeHits;
+
 int padID = 0;
 
 SX3 sx3_contr;
@@ -67,6 +69,7 @@ void Analyzer::Begin(TTree * /*tree*/){
   hsx3VpcE->SetNdivisions( -12, "y");
 
   hZProj = new TH1F("hZProj", "Z Projection", 200, -600, 600);
+  hAnodeHits = new TH1F("hAnodeHits", "Anode Hits", 24, 0, 23);
 
   hanVScatsum = new TH2F("hanVScatsum", "Anode vs Cathode Sum; Anode E; Cathode E", 400,0 , 10000, 400, 0 , 16000);
 
@@ -260,11 +263,16 @@ Bool_t Analyzer::Process(Long64_t entry){
   ID.clear();
   int counter=0;
   std::vector<std::pair<int, double>> E; 
+
+  std::vector<std::pair<int, double>> anodeHits;
+  std::vector<std::pair<int, double>> cathodeHits;  
+
   E.clear();
   for( int i = 0; i < pc.multi; i ++){
 
     if( pc.e[i] > 100 ) ID.push_back(std::pair<int, int>(pc.id[i], i));
     if( pc.e[i] > 100 ) E.push_back(std::pair<int, double>(pc.index[i], pc.e[i]));
+
 
     hpcIndexVE->Fill( pc.index[i], pc.e[i] );
 
@@ -283,40 +291,39 @@ Bool_t Analyzer::Process(Long64_t entry){
 
     float aE = 0;
     float cE = 0;
-    bool multi_an =false;
-    // if( ID[0].first < 1 ) {
-    //   aID = pc.ch[ID[0].second];
-    //   cID = pc.ch[ID[1].second];
-    // }else{
-    //   cID = pc.ch[ID[0].second];
-    //   aID = pc.ch[ID[1].second];
-    // }
-    // printf("anode= %d, cathode = %d\n", aID, cID);
+    for( int i = 0; i < pc.multi; i ++){
 
-  // for( int k = 0; k < qqq.multi; k++){
-  //   if(qqq.index[k]==75 && pc.index[k]==2 && pc.e[k]>100){
-      for(int l=0;l<E.size();l++){
-        if(E[l].first<24 && E[l].first!=20 && E[l].first!=12){
-          if(!multi_an){
-            aE = E[l].second;
-          }
-          multi_an=true;
-        }
-        else {
-          cE = E[l].second + cE;
+      for (int j=0;j<sx3.multi;j++){
+        if(sx3.index[j]==50/*excludeSX3.find(sx3.index[i]) == excludeSX3.end() && excludeQQQ.find(qqq.index[i]) == excludeQQQ.end()*/){
+          if (pc.index[i] < 24 ){
+                anodeHits.push_back(std::pair<int, double>(pc.index[i], pc.e[i]));
+            } else if (pc.index[i] >= 24){
+                cathodeHits.push_back(std::pair<int, double>(pc.index[i], pc.e[i]));
+            }
         }
       }
-    // }
-  // }
+    // hpcIndexVE->Fill( pc.index[i], pc.e[i] );
+
+
+      if (anodeHits.size()>=1 && cathodeHits.size() >= 1){
+        for (const auto& anode : anodeHits) {
+          for (const auto& cathode : cathodeHits) {
+            int aID = anode.first;
+            int cID = cathode.first;
+            float aE = anode.second;
+            float cE = cathode.second;
+              // signed int aT = 0, cT = 0;
+              
+              // aT = pc.t[i];
+                  // signed int psiT = aT - qqqT;
+                  // signed int pT = aT - cT;
+            hAnodeHits->Fill(aID);
+          }
+        }
+      }    
+  }
     hanVScatsum->Fill(aE,cE);
-      
-    if( ID[0].first < 1 ) {
-      aID = pc.ch[ID[0].second];
-      cID = pc.ch[ID[1].second];
-    }else{
-      cID = pc.ch[ID[0].second];
-      aID = pc.ch[ID[1].second];
-    }
+    
 
     if( HitNonZero){
       pw_contr.CalTrack( hitPos, aID, cID);
@@ -398,5 +405,6 @@ void Analyzer::Terminate(){
  canvas->cd(padID); canvas->cd(padID)->SetGrid(1);
 //  hZProj->Draw();
   hanVScatsum->Draw("colz");
+  // hAnodeHits->Draw();
 
 }
