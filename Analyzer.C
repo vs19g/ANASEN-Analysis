@@ -28,7 +28,7 @@ TH2F * hqqqVpcIndex;
 TH2F * hqqqVpcE;
 TH2F * hsx3VpcE;
 TH2F * hanVScatsum;
-TH1F * hAnodeHits;
+TH2F * hAnodeHits;
 
 int padID = 0;
 
@@ -69,7 +69,7 @@ void Analyzer::Begin(TTree * /*tree*/){
   hsx3VpcE->SetNdivisions( -12, "y");
 
   hZProj = new TH1F("hZProj", "Z Projection", 200, -600, 600);
-  hAnodeHits = new TH1F("hAnodeHits", "Anode Hits", 24, 0, 23);
+  hAnodeHits = new TH2F("hAnodeHits", "Anode vs Anode Energy, Anode ID; Anode E", 24,0 , 23, 400, 0 , 16000);
 
   hanVScatsum = new TH2F("hanVScatsum", "Anode vs Cathode Sum; Anode E; Cathode E", 400,0 , 10000, 400, 0 , 16000);
 
@@ -260,69 +260,65 @@ Bool_t Analyzer::Process(Long64_t entry){
   }
   // //======================= PC
 
-  ID.clear();
-  int counter=0;
-  std::vector<std::pair<int, double>> E; 
-
   std::vector<std::pair<int, double>> anodeHits;
   std::vector<std::pair<int, double>> cathodeHits;  
+  int aID = 0;
+  int cID = 0;
 
-  E.clear();
-  for( int i = 0; i < pc.multi; i ++){
+  float aE = 0;
+  float cE = 0;
 
-    if( pc.e[i] > 100 ) ID.push_back(std::pair<int, int>(pc.id[i], i));
-    if( pc.e[i] > 100 ) E.push_back(std::pair<int, double>(pc.index[i], pc.e[i]));
+// Define the excluded SX3 and QQQ channels
+  std::unordered_set<int> excludeSX3 = {34, 35, 36, 37, 61, 62, 67, 73, 74, 75, 76, 77, 78, 79, 80, 93, 97, 100, 103, 108, 109, 110, 111, 112};
+  std::unordered_set<int> excludeQQQ = {0, 17, 109, 110, 111, 112, 113, 119, 127, 128};
 
+for (int i = 0; i < pc.multi; i++) {
+    if (pc.e[i] > 20) {  // Reduced threshold for debugging
 
-    hpcIndexVE->Fill( pc.index[i], pc.e[i] );
+        for (int j = 0; j < sx3.multi; j++) {
+            if (excludeSX3.find(sx3.index[j]) == excludeSX3.end()) {
 
-    for( int j = i+1; j < pc.multi; j++){
-      hpcCoin->Fill( pc.index[i], pc.index[j]);
-    
-    }
+                hpcIndexVE->Fill(pc.index[i], pc.e[i]);
 
-  }
-  //  for( size_t i = 0; i < E.size(); i++) printf("%zu | %d %d \n", i, E[i].first, E[i].second ); 
+                if (pc.e[i] > 20) {
+                    if (pc.index[i] < 24) {
+                        anodeHits.push_back(std::make_pair(pc.index[i], pc.e[i]));
+                    } else if (pc.index[i] >= 24) {
+                        cathodeHits.push_back(std::make_pair(pc.index[i], pc.e[i]));
+                    }
+                }
 
-  if( E.size()>=3 ){
-
-    int aID = 0;
-    int cID = 0;
-
-    float aE = 0;
-    float cE = 0;
-    for( int i = 0; i < pc.multi; i ++){
-
-      for (int j=0;j<sx3.multi;j++){
-        if(sx3.index[j]==50/*excludeSX3.find(sx3.index[i]) == excludeSX3.end() && excludeQQQ.find(qqq.index[i]) == excludeQQQ.end()*/){
-          if (pc.index[i] < 24 ){
-                anodeHits.push_back(std::pair<int, double>(pc.index[i], pc.e[i]));
-            } else if (pc.index[i] >= 24){
-                cathodeHits.push_back(std::pair<int, double>(pc.index[i], pc.e[i]));
+                for (int k = i + 1; k < pc.multi; k++) {
+                    hpcCoin->Fill(pc.index[i], pc.index[k]);
+                }
             }
         }
-      }
-    // hpcIndexVE->Fill( pc.index[i], pc.e[i] );
 
+        if (!anodeHits.empty() && !cathodeHits.empty()) {
+            float aESum = 0;
+            float cESum = 0;
 
-      if (anodeHits.size()>=1 && cathodeHits.size() >= 1){
-        for (const auto& anode : anodeHits) {
-          for (const auto& cathode : cathodeHits) {
-            int aID = anode.first;
-            int cID = cathode.first;
-            float aE = anode.second;
-            float cE = cathode.second;
-              // signed int aT = 0, cT = 0;
-              
-              // aT = pc.t[i];
-                  // signed int psiT = aT - qqqT;
-                  // signed int pT = aT - cT;
-            hAnodeHits->Fill(aID);
-          }
+            for (const auto& anode : anodeHits) {
+                aESum += anode.second;
+                hAnodeHits->Fill(anode.first, anode.second);
+            }
+
+            for (const auto& cathode : cathodeHits) {
+                cESum += cathode.second;
+            }
+
+            // Debugging output
+            printf("Filling histogram: aESum = %f, cESum = %f\n", aESum, cESum);
+
+            hanVScatsum->Fill(aESum, cESum);
         }
-      }    
-  }
-    hanVScatsum->Fill(aE,cE);
+
+        anodeHits.clear();
+        cathodeHits.clear();
+    }
+}
+
+    // hanVScatsum->Fill(aE,cE);
     
 
     if( HitNonZero){
@@ -331,7 +327,7 @@ Bool_t Analyzer::Process(Long64_t entry){
     }
 
   
-  }
+  
   
 
 
@@ -404,7 +400,7 @@ void Analyzer::Terminate(){
 
  canvas->cd(padID); canvas->cd(padID)->SetGrid(1);
 //  hZProj->Draw();
-  hanVScatsum->Draw("colz");
-  // hAnodeHits->Draw();
+  // hanVScatsum->Draw("colz");
+  hAnodeHits->Draw("colz");
 
 }
