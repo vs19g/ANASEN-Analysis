@@ -5,7 +5,7 @@
 #include <TStyle.h>
 #include <TCanvas.h>
 #include <TMath.h>
-
+#include <TCutG.h>
 #include <utility>
 #include <algorithm>
 
@@ -29,6 +29,8 @@ TH2F * hqqqVpcE;
 TH2F * hsx3VpcE;
 TH2F * hanVScatsum;
 TH2F * hAnodeHits;
+TH1F * hAnodeMultiplicity;
+
 
 int padID = 0;
 
@@ -38,6 +40,8 @@ TVector3 hitPos;
 bool HitNonZero;
 
 TH1F * hZProj;
+TCutG *AnCatSum;
+bool inCut;
 
 void Analyzer::Begin(TTree * /*tree*/){
   TString option = GetOption();
@@ -68,14 +72,15 @@ void Analyzer::Begin(TTree * /*tree*/){
   hsx3VpcE->SetNdivisions( -612, "x");
   hsx3VpcE->SetNdivisions( -12, "y");
 
-  hZProj = new TH1F("hZProj", "Z Projection", 200, -600, 600);
-  hAnodeHits = new TH2F("hAnodeHits", "Anode vs Anode Energy, Anode ID; Anode E", 24,0 , 23, 400, 0 , 16000);
-
+  hZProj = new TH1F("hZProj", "Nos of anodes", 20, 0, 19);
+  hAnodeHits = new TH2F("hAnodeHits", "Anode vs Anode Energy, Anode ID; Anode E", 24,0 , 23, 400, 0 , 20000);
+  hAnodeMultiplicity = new TH1F("hAnodeMultiplicity", "Number of Anodes/Event", 40, 0, 40); 
   hanVScatsum = new TH2F("hanVScatsum", "Anode vs Cathode Sum; Anode E; Cathode E", 400,0 , 10000, 400, 0 , 16000);
 
   sx3_contr.ConstructGeo();
   pw_contr.ConstructGeo();
-
+  TFile *f1 = new TFile("AnCatSum.root");
+  AnCatSum= (TCutG*)f1->Get("AnCatSum");
 }
 
 
@@ -264,6 +269,7 @@ Bool_t Analyzer::Process(Long64_t entry){
   std::vector<std::pair<int, double>> cathodeHits;  
   int aID = 0;
   int cID = 0;
+  int anodeCount = 0;
 
   float aE = 0;
   float cE = 0;
@@ -271,9 +277,9 @@ Bool_t Analyzer::Process(Long64_t entry){
 // Define the excluded SX3 and QQQ channels
   std::unordered_set<int> excludeSX3 = {34, 35, 36, 37, 61, 62, 67, 73, 74, 75, 76, 77, 78, 79, 80, 93, 97, 100, 103, 108, 109, 110, 111, 112};
   std::unordered_set<int> excludeQQQ = {0, 17, 109, 110, 111, 112, 113, 119, 127, 128};
-
+  inCut=false;
   for( int i = 0; i < pc.multi; i ++){
-    if(pc.e[i]>50){
+    if(pc.e[i]>50 && pc.multi<10){
       // hpcIndexVE->Fill( pc.index[i], pc.e[i] );
       // for( int j = i+1; j < pc.multi; j++){
       //   hpcCoin->Fill( pc.index[i], pc.index[j]);
@@ -286,23 +292,27 @@ Bool_t Analyzer::Process(Long64_t entry){
         for( int j = i+1; j < pc.multi; j++){
           hpcCoin->Fill( pc.index[i], pc.index[j]);
         }
-          if(pc.e[i]>100){
+          // if(pc.e[i]>100){
             if (pc.index[i] < 24 ){
                 anodeHits.push_back(std::pair<int, double>(pc.index[i], pc.e[i]));
+                // anodeCount++;
             } else if (pc.index[i] >= 24){
                 cathodeHits.push_back(std::pair<int, double>(pc.index[i], pc.e[i]));
             }
-          }  
+          // }  
         }
       }
     // hpcIndexVE->Fill( pc.index[i], pc.e[i] );
+    anodeCount=pc.multi;
+      hAnodeMultiplicity->Fill(anodeCount);
 
       float aESum = 0;
-      if (anodeHits.size()>=1 && cathodeHits.size() >= 1 && pc.e[i]>100){
+      if (anodeHits.size()>=1 && cathodeHits.size() >= 1){
         for (const auto& anode : anodeHits) {
           float cESum = 0;
           // for(int l=0; l<sx3.multi; l++){
           //   if (sx3.index[l]==80){
+
               int aID = anode.first;
               float aE = anode.second;
               aESum += aE;
@@ -313,8 +323,13 @@ Bool_t Analyzer::Process(Long64_t entry){
                 cESum += cE;
               }
 
-              hanVScatsum->Fill(aESum,cESum);
+           if( AnCatSum->IsInside(aE, cESum)){
+              inCut=true;
+            }
+              if(inCut){
+              hanVScatsum->Fill(aE,cESum);
               hAnodeHits->Fill(aID, aE);
+               }
           //   }
           // }
         }
@@ -403,7 +418,7 @@ void Analyzer::Terminate(){
 
  canvas->cd(padID); canvas->cd(padID)->SetGrid(1);
 //  hZProj->Draw();
-  // hanVScatsum->Draw("colz");
-  hAnodeHits->Draw("colz");
-
+  hanVScatsum->Draw("colz");
+  // hAnodeHits->Draw("colz");
+// hAnodeMultiplicity->Draw();?
 }
