@@ -1,6 +1,6 @@
-#define Analyzer_cxx
+#define PCGainMatch_cxx
 
-#include "Analyzer.h"
+#include "PCGainMatch.h"
 #include <TH2.h>
 #include <TStyle.h>
 #include <TCanvas.h>
@@ -28,6 +28,8 @@ TH2F * hqqqVpcIndex;
 TH2F * hqqqVpcE;
 TH2F * hsx3VpcE;
 TH2F * hanVScatsum;
+TH2F * hanVScatsum_hcut;
+TH2F * hanVScatsum_lcut;
 TH2F * hAnodeHits;
 TH1F * hAnodeMultiplicity;
 
@@ -40,10 +42,12 @@ TVector3 hitPos;
 bool HitNonZero;
 
 TH1F * hZProj;
-TCutG *AnCatSum;
+TCutG *AnCatSum_high;
+TCutG *AnCatSum_low;
+bool inCuth;
 bool inCut;
 
-void Analyzer::Begin(TTree * /*tree*/){
+void PCGainMatch::Begin(TTree * /*tree*/){
   TString option = GetOption();
 
   hsx3IndexVE = new TH2F("hsx3IndexVE", "SX3 index vs Energy; sx3 index ; Energy",  24*12, 0,  24*12, 400, 0, 5000); hsx3IndexVE->SetNdivisions( -612, "x");
@@ -76,17 +80,21 @@ void Analyzer::Begin(TTree * /*tree*/){
   hAnodeHits = new TH2F("hAnodeHits", "Anode vs Anode Energy, Anode ID; Anode E", 24,0 , 23, 400, 0 , 20000);
   hAnodeMultiplicity = new TH1F("hAnodeMultiplicity", "Number of Anodes/Event", 40, 0, 40); 
   hanVScatsum = new TH2F("hanVScatsum", "Anode vs Cathode Sum; Anode E; Cathode E", 400,0 , 10000, 400, 0 , 16000);
+  hanVScatsum_lcut = new TH2F("hanVScatsum_LCUT", "Anode vs Cathode Sum; Anode E; Cathode E", 400,0 , 10000, 400, 0 , 16000);
+  hanVScatsum_hcut = new TH2F("hanVScatsum_HCUT", "Anode vs Cathode Sum; Anode E; Cathode E", 400,0 , 10000, 400, 0 , 16000);
 
   sx3_contr.ConstructGeo();
   pw_contr.ConstructGeo();
-  TFile *f1 = new TFile("AnCatSum.root");
-  AnCatSum= (TCutG*)f1->Get("AnCatSum");
+  TFile *f1 = new TFile("AnCatSum_high.root");
+  TFile *f2 = new TFile("AnCatSum_low.root");
+  AnCatSum_high= (TCutG*)f1->Get("AnCatSum_high");
+  AnCatSum_low= (TCutG*)f1->Get("AnCatSum_low");
 }
 
 
 
 
-Bool_t Analyzer::Process(Long64_t entry){
+Bool_t PCGainMatch::Process(Long64_t entry){
 
   // if ( entry > 100 ) return kTRUE;
 
@@ -124,19 +132,6 @@ Bool_t Analyzer::Process(Long64_t entry){
   std::vector<std::pair<int, int>> ID; // first = id, 2nd = index
   for( int i = 0; i < sx3.multi; i ++){
     ID.push_back(std::pair<int, int>(sx3.id[i], i));
-
-    hsx3IndexVE->Fill( sx3.index[i], sx3.e[i] );
-
-    for( int j = i+1; j < sx3.multi; j++){
-      hsx3Coin->Fill( sx3.index[i], sx3.index[j]);
-    }
-
-    for( int j = 0; j < pc.multi; j++){
-      hsx3VpcIndex->Fill( sx3.index[i], pc.index[j] );
-      //  if( sx3.ch[index] > 8 ){
-      //    hsx3VpcE->Fill( sx3.e[i], pc.e[j] );
-      //   }
-    }
   }
 
 
@@ -187,8 +182,9 @@ Bool_t Analyzer::Process(Long64_t entry){
           sx3ChBk = sx3.ch[index];
         }
          for( int j = 0; j < pc.multi; j++){
+
       // hsx3VpcIndex->Fill( sx3.index[i], pc.index[j] );
-            if( sx3.ch[index] > 8 ){
+            if( sx3.ch[index] > 8 && pc.index[j]<24 && pc.e[j]>50 ){
               hsx3VpcE->Fill( sx3.e[i], pc.e[j] );
           //  hpcIndexVE->Fill( pc.index[i], pc.e[i] );
             }
@@ -206,63 +202,18 @@ Bool_t Analyzer::Process(Long64_t entry){
 
   // //======================= QQQ
   for( int i = 0; i < qqq.multi; i ++){
-    // for( int j = 0; j < pc.multi; j++){
-        // if(pc.index[j]==4){
-          hqqqIndexVE->Fill( qqq.index[i], qqq.e[i] );
-        // }
-    // }
-    for( int j = 0; j < qqq.multi; j++){
-      if ( j == i ) continue;
-      hqqqCoin->Fill( qqq.index[i], qqq.index[j]);
-    }
 
-
-    for( int j = i + 1; j < qqq.multi; j++){
-      for( int k = 0; k < pc.multi; k++){
-        if(pc.index[k]<24 && pc.e[k]>50 ){
-          hqqqVpcE->Fill( qqq.e[i], pc.e[k] );
+      for( int j = 0; j < pc.multi; j++){
+        if(pc.index[j]<24 && pc.e[j]>50 ){
+          hqqqVpcE->Fill( qqq.e[i], pc.e[j] );
           //  hpcIndexVE->Fill( pc.index[i], pc.e[i] );
                 hqqqVpcIndex->Fill( qqq.index[i], pc.index[j] );
-
         }
       // }
       }
-      // if( qqq.used[i] == true ) continue;
-      
-      //if( qqq.id[i] == qqq.id[j] && (16 - qqq.ch[i]) * (16 - qqq.ch[j]) < 0  ){ // must be same detector and wedge and ring
-      if( qqq.id[i] == qqq.id[j]  ){ // must be same detector 
         
-        int chWedge = -1;
-        int chRing  =  -1;
-        if( qqq.ch[i] < qqq.ch[j]){
-          chRing = qqq.ch[j] - 16;
-          chWedge = qqq.ch[i];
-        }else{
-          chRing = qqq.ch[i];
-          chWedge = qqq.ch[j] - 16;
-        }
-
-        // printf(" ID : %d , chWedge : %d, chRing : %d \n", qqq.id[i], chWedge, chRing);
-
-        double theta = -TMath::Pi()/2 + 2*TMath::Pi()/16/4.*(qqq.id[i]*16 + chWedge +0.5);
-        double rho   = 10.+40./16.*(chRing+0.5);
-        // if(qqq.e[i]>50){
-        hqqqPolar->Fill( theta, rho);
-        // }
-        // qqq.used[i] = true;
-        // qqq.used[j] = true;
-
-        if( !HitNonZero ){
-        double x = rho * TMath::Cos(theta);
-        double y = rho * TMath::Sin(theta);
-        hitPos.SetXYZ(x, y, 23 + 75 + 30);
-        HitNonZero = true;
-        }
       }
-    }
-  
-   
-  }
+    
   // //======================= PC
 
   std::vector<std::pair<int, double>> anodeHits;
@@ -277,6 +228,7 @@ Bool_t Analyzer::Process(Long64_t entry){
 // Define the excluded SX3 and QQQ channels
   std::unordered_set<int> excludeSX3 = {34, 35, 36, 37, 61, 62, 67, 73, 74, 75, 76, 77, 78, 79, 80, 93, 97, 100, 103, 108, 109, 110, 111, 112};
   std::unordered_set<int> excludeQQQ = {0, 17, 109, 110, 111, 112, 113, 119, 127, 128};
+  inCuth=false;
   inCut=false;
   for( int i = 0; i < pc.multi; i ++){
     for(int j=0; j<pc.multi;j++){
@@ -285,34 +237,36 @@ Bool_t Analyzer::Process(Long64_t entry){
         }
       }
     
-    if(pc.e[i]>50 && anodeCount==1){
+    if(pc.e[i]>50){
+  
       // hpcIndexVE->Fill( pc.index[i], pc.e[i] );
       // for( int j = i+1; j < pc.multi; j++){
       //   hpcCoin->Fill( pc.index[i], pc.index[j]);
       // }
 
-      for (int j=0;j<sx3.multi;j++){
-        if(excludeSX3.find(sx3.index[j]) == excludeSX3.end()){
+      // for (int j=0;j<sx3.multi;j++){
+        // if(excludeSX3.find(sx3.index[j]) == excludeSX3.end()){
 
-        hpcIndexVE->Fill( pc.index[i], pc.e[i] );
-        for( int j = i+1; j < pc.multi; j++){
-          hpcCoin->Fill( pc.index[i], pc.index[j]);
-        }
           // if(pc.e[i]>100){
-            if (pc.index[i] < 24 ){
-                anodeHits.push_back(std::pair<int, double>(pc.index[i], pc.e[i]));
-                // anodeCount++;
-            } else if (pc.index[i] >= 24){
-                cathodeHits.push_back(std::pair<int, double>(pc.index[i], pc.e[i]));
-            }
+          if (pc.index[i] < 24 ){
+              anodeHits.push_back(std::pair<int, double>(pc.index[i], pc.e[i]));
+              // anodeCount++;
+          } else if (pc.index[i] >= 24){
+              cathodeHits.push_back(std::pair<int, double>(pc.index[i], pc.e[i]));
+          }
           // }  
-        }
-      }
+        // }
+      // }
     // hpcIndexVE->Fill( pc.index[i], pc.e[i] );
-      hAnodeMultiplicity->Fill(pc.multi);
 
       float aESum = 0;
-      if (anodeHits.size()>=1 && cathodeHits.size() >= 1){
+      if (anodeHits.size()==1 && cathodeHits.size() >= 1){//gain matching for anodes using simple single anode events
+        
+        //   hpcIndexVE->Fill( pc.index[i], pc.e[i] );
+        //   for( int j = i+1; j < pc.multi; j++){
+        //   hpcCoin->Fill( pc.index[i], pc.index[j]);
+        // }
+
         for (const auto& anode : anodeHits) {
           float cESum = 0;
           // for(int l=0; l<sx3.multi; l++){
@@ -327,16 +281,30 @@ Bool_t Analyzer::Process(Long64_t entry){
                 float cE = cathode.second;
                 cESum += cE;
               }
+        
 
-           if( AnCatSum->IsInside(aE, cESum)){
-              inCut=true;
+           if( AnCatSum_high->IsInside(aE, cESum)){
+              inCuth = true;
             }
-              if(inCut){
+            // if( AnCatSum_low->IsInside(aE, cESum)){
+            //   inCut = true;
+            // }
+
+              if(inCuth){
+              //   hanVScatsum_hcut->Fill(aE,cESum);
+              // }
+              // if(inCut){
+              //   hanVScatsum_lcut->Fill(aE,cESum);
+              // }
+              
+              hpcIndexVE->Fill( pc.index[i], pc.e[i] );
+              for( int j = i+1; j < pc.multi; j++){
+                hpcCoin->Fill( pc.index[i], pc.index[j]);
+              }
+              hAnodeMultiplicity->Fill(anodeHits.size());
               hanVScatsum->Fill(aE,cESum);
               hAnodeHits->Fill(aID, aE);
                }
-          //   }
-          // }
         }
       }
     }    
@@ -363,7 +331,7 @@ Bool_t Analyzer::Process(Long64_t entry){
   return kTRUE;
 }
 
-void Analyzer::Terminate(){
+void PCGainMatch::Terminate(){
 
   gStyle->SetOptStat("neiou");
   TCanvas * canvas = new TCanvas("cANASEN", "ANASEN", 2000, 2000); 
@@ -422,8 +390,7 @@ void Analyzer::Terminate(){
   // hqqqPolar->Draw("same colz pol");
 
  canvas->cd(padID); canvas->cd(padID)->SetGrid(1);
-//  hZProj->Draw();
   hanVScatsum->Draw("colz");
   // hAnodeHits->Draw("colz");
-// hAnodeMultiplicity->Draw();
+  // hAnodeMultiplicity->Draw();
 }
