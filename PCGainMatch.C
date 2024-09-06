@@ -158,9 +158,10 @@ Bool_t PCGainMatch::Process(Long64_t entry){
   std::unordered_set<int> excludeQQQ = {0, 17, 109, 110, 111, 112, 113, 119, 127, 128};
   inCuth=false;
   inCutl=false;
+  inPCCut=false;
   for( int i = 0; i < pc.multi; i ++){
     
-    if(pc.e[i]>50 && pc.multi<10){ 
+    if(pc.e[i]>50 && pc.multi<7){ 
 
       float aESum = 0;
       float cESum = 0;
@@ -179,7 +180,7 @@ Bool_t PCGainMatch::Process(Long64_t entry){
         }
         hpcCoin->Fill(pc.index[i], pc.index[j]);
       } 
-      if (anodeHits.size()>=1 && cathodeHits.size() >= 1) {
+      if (anodeHits.size()==1 && cathodeHits.size() >= 1) {
           
           // Accumulate total energy from anode hits
           for (const auto& anode : anodeHits) {
@@ -202,8 +203,7 @@ Bool_t PCGainMatch::Process(Long64_t entry){
           
           inCuth = false;
           inCutl = false;
-          inPCCut = false;    
-
+          // inPCCut = false;
           // for(int j=i+1;j<pc.multi;j++){
           //   if(PCCoinc_cut1->IsInside(pc.index[i], pc.index[j]) || PCCoinc_cut2->IsInside(pc.index[i], pc.index[j])){
           //     // hpcCoin->Fill(pc.index[i], pc.index[j]);
@@ -231,7 +231,8 @@ Bool_t PCGainMatch::Process(Long64_t entry){
          
               // float aE = anode.second;
               // aESum += aE;
-            hanVScatsum->Fill(aESum, cESum);
+              if(inPCCut){
+            hanVScatsum->Fill(aE, cESum);}
             if (pc.index[i] < 24 && pc.e[i] > 50) {
              hanVScatsum_a[pc.index[i]]->Fill(pc.e[i], cESum);
             }
@@ -349,7 +350,7 @@ Bool_t PCGainMatch::Process(Long64_t entry){
 
           for( int j = i + 1; j < qqq.multi; j++){
             for( int k = 0; k < pc.multi; k++){
-              if(pc.index[k]<24 && pc.e[k]>50 && inCuth){
+              if(pc.index[k]<24 && pc.e[k]>50 &&inPCCut){
                 hqqqVpcE->Fill( qqq.e[i], pc.e[k] );
                 hqqqVpcIndex->Fill( qqq.index[i], pc.index[j] );
               }
