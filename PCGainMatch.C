@@ -8,7 +8,6 @@
 #include <TCutG.h>
 #include <utility>
 #include <algorithm>
-#include <iostream>
 #include "Armory/ClassSX3.h"
 #include "Armory/ClassPW.h"
 
@@ -28,6 +27,7 @@ TH2F * hqqqVpcIndex;
 TH2F * hqqqVpcE;
 TH2F * hsx3VpcE;
 TH2F * hanVScatsum;
+TH2F * hanVScatsum_a[24];
 TH2F * hanVScatsum_hcut;
 TH2F * hanVScatsum_lcut;
 TH2F * hAnodeHits;
@@ -44,8 +44,11 @@ bool HitNonZero;
 TH1F * hZProj;
 TCutG *AnCatSum_high;
 TCutG *AnCatSum_low;
+TCutG *PCCoinc_cut1;
+TCutG *PCCoinc_cut2;
 bool inCuth;
-bool inCut;
+bool inCutl;
+bool inPCCut;
 
 void PCGainMatch::Begin(TTree * /*tree*/){
   TString option = GetOption();
@@ -79,16 +82,25 @@ void PCGainMatch::Begin(TTree * /*tree*/){
   hZProj = new TH1F("hZProj", "Nos of anodes", 20, 0, 19);
   hAnodeHits = new TH2F("hAnodeHits", "Anode vs Anode Energy, Anode ID; Anode E", 24,0 , 23, 400, 0 , 20000);
   hAnodeMultiplicity = new TH1F("hAnodeMultiplicity", "Number of Anodes/Event", 40, 0, 40); 
-  hanVScatsum = new TH2F("hanVScatsum", "Anode vs Cathode Sum; Anode E; Cathode E", 400,0 , 10000, 400, 0 , 16000);
-  hanVScatsum_lcut = new TH2F("hanVScatsum_LCUT", "Anode vs Cathode Sum; Anode E; Cathode E", 400,0 , 10000, 400, 0 , 16000);
-  hanVScatsum_hcut = new TH2F("hanVScatsum_HCUT", "Anode vs Cathode Sum; Anode E; Cathode E", 400,0 , 10000, 400, 0 , 16000);
+  hanVScatsum = new TH2F("hanVScatsum", "Anode vs Cathode Sum; Anode E; Cathode E", 400,0 , 10000, 800, 0 , 16000);
+  for (int i = 0; i < 24; i++) {
+        TString histName = Form("hAnodeVsCathode_%d", i);
+        TString histTitle = Form("Anode %d vs Cathode Sum; Anode E; Cathode Sum E", i);
+        hanVScatsum_a[i] = new TH2F(histName, histTitle, 400, 0, 10000, 400, 0, 16000);
+    }
+  hanVScatsum_lcut = new TH2F("hanVScatsum_LCUT", "Anode vs Cathode Sum; Anode E; Cathode E", 400,0 , 16000, 400, 0 , 16000);
+  hanVScatsum_hcut = new TH2F("hanVScatsum_HCUT", "Anode vs Cathode Sum; Anode E; Cathode E", 400,0 , 16000, 400, 0 , 16000);
 
   sx3_contr.ConstructGeo();
   pw_contr.ConstructGeo();
   TFile *f1 = new TFile("AnCatSum_high.root");
   TFile *f2 = new TFile("AnCatSum_low.root");
+  TFile *f3 = new TFile("PCCoinc_cut1.root");
+  TFile *f4 = new TFile("PCCoinc_cut2.root");
   AnCatSum_high= (TCutG*)f1->Get("AnCatSum_high");
-  AnCatSum_low= (TCutG*)f1->Get("AnCatSum_low");
+  AnCatSum_low= (TCutG*)f2->Get("AnCatSum_low");
+  PCCoinc_cut1= (TCutG*)f3->Get("PCCoinc_cut1");
+  PCCoinc_cut2= (TCutG*)f4->Get("PCCoinc_cut2");
 }
 
 
@@ -132,12 +144,12 @@ Bool_t PCGainMatch::Process(Long64_t entry){
 
   // //======================= PC
 
-  std::vector<std::pair<int, double>> anodeHits;
-  std::vector<std::pair<int, double>> cathodeHits;  
+  std::vector<std::pair<int, double>> anodeHits={};
+  std::vector<std::pair<int, double>> cathodeHits={};  
   int aID = 0;
   int cID = 0;
   int anodeCount = 0;
-
+  int cathodeCount = 0;
   float aE = 0;
   float cE = 0;
 
@@ -145,77 +157,91 @@ Bool_t PCGainMatch::Process(Long64_t entry){
   std::unordered_set<int> excludeSX3 = {34, 35, 36, 37, 61, 62, 67, 73, 74, 75, 76, 77, 78, 79, 80, 93, 97, 100, 103, 108, 109, 110, 111, 112};
   std::unordered_set<int> excludeQQQ = {0, 17, 109, 110, 111, 112, 113, 119, 127, 128};
   inCuth=false;
-  inCut=false;
+  inCutl=false;
   for( int i = 0; i < pc.multi; i ++){
-    for(int j=0; j<pc.multi;j++){
-      if(pc.id[j]==0){
-        anodeCount++;
-        }
-      }
     
-    if(pc.e[i]>50){ 
-  
-      // hpcIndexVE->Fill( pc.index[i], pc.e[i] );
-      // for( int j = i+1; j < pc.multi; j++){
-      //   hpcCoin->Fill( pc.index[i], pc.index[j]);
-      // }
+    if(pc.e[i]>50 && pc.multi<10){ 
 
-      // for (int j=0;j<sx3.multi;j++){
-        // if(excludeSX3.find(sx3.index[j]) == excludeSX3.end()){
-
-          // if(pc.e[i]>100){
-          float aESum = 0;
+      float aESum = 0;
       float cESum = 0;
+      if (pc.index[i] < 24 ) {
+            anodeHits.push_back(std::pair<int, double>(pc.index[i], pc.e[i]));
+            anodeCount++;
+        } else if (pc.index[i] >= 24) {
+            cathodeHits.push_back(std::pair<int, double>(pc.index[i], pc.e[i]));
+            cathodeCount++;
+        }
 
-      if (anodeHits.size() == 1 && cathodeHits.size() >= 1) {
+      for(int j=i+1;j<pc.multi;j++){
+        if(PCCoinc_cut1->IsInside(pc.index[i], pc.index[j]) || PCCoinc_cut2->IsInside(pc.index[i], pc.index[j])){
+          // hpcCoin->Fill(pc.index[i], pc.index[j]);
+          inPCCut = true;
+        }
+        hpcCoin->Fill(pc.index[i], pc.index[j]);
+      } 
+      if (anodeHits.size()>=1 && cathodeHits.size() >= 1) {
           
           // Accumulate total energy from anode hits
           for (const auto& anode : anodeHits) {
+            if(inPCCut){
               int aID = anode.first;
               float aE = anode.second;
               aESum += aE; // Sum the anode energy
+              hAnodeHits->Fill(aID, aE);
+            }
           }
           
           // Accumulate total energy from cathode hits
           for (const auto& cathode : cathodeHits) {
+            if(inPCCut){
               int cID = cathode.first;
               float cE = cathode.second;
               cESum += cE; // Sum the cathode energy
+            }
           }
           
           inCuth = false;
-          inCut = false;          
-          
+          inCutl = false;
+          inPCCut = false;    
+
+          // for(int j=i+1;j<pc.multi;j++){
+          //   if(PCCoinc_cut1->IsInside(pc.index[i], pc.index[j]) || PCCoinc_cut2->IsInside(pc.index[i], pc.index[j])){
+          //     // hpcCoin->Fill(pc.index[i], pc.index[j]);
+          //     inPCCut = true;
+          //   }
+          //   hpcCoin->Fill(pc.index[i], pc.index[j]);
+          // } 
+
           // Check if the accumulated energies are within the defined ranges
           if (AnCatSum_high && AnCatSum_high->IsInside(aESum, cESum)) {
               inCuth = true;
           }
           if (AnCatSum_low && AnCatSum_low->IsInside(aESum, cESum)) {
-              inCut = true;
+              inCutl = true;
           }
           
           // Fill histograms based on the cut conditions
-          if (inCuth) {
+          if (inCuth && inPCCut) {
               hanVScatsum_hcut->Fill(aESum, cESum);
           }
-          if (inCut) {
+          if (inCutl && inPCCut) {
               hanVScatsum_lcut->Fill(aESum, cESum);
-          }
-          
-          // Fill additional histograms
-          hAnodeMultiplicity->Fill(anodeHits.size());
-          hanVScatsum->Fill(aESum, cESum);
+          }               
+            // for(auto anode : anodeHits){
+         
+              // float aE = anode.second;
+              // aESum += aE;
+            hanVScatsum->Fill(aESum, cESum);
+            if (pc.index[i] < 24 && pc.e[i] > 50) {
+             hanVScatsum_a[pc.index[i]]->Fill(pc.e[i], cESum);
+            }
 
-          for (const auto& anode : anodeHits) {
-              int aID = anode.first;
-              float aE = anode.second;
-              hAnodeHits->Fill(aID, aE);
-          }
           
+            // }
           // Fill histograms for the `pc` data
           hpcIndexVE->Fill(pc.index[i], pc.e[i]);
-          for (int j = i + 1; j < pc.multi; j++) {
-              hpcCoin->Fill(pc.index[i], pc.index[j]);
+          if(inPCCut){
+            hAnodeMultiplicity->Fill(anodeHits.size());
           }
       }
 
@@ -229,6 +255,18 @@ Bool_t PCGainMatch::Process(Long64_t entry){
   std::vector<std::pair<int, int>> ID; // first = id, 2nd = index
   for( int i = 0; i < sx3.multi; i ++){
     ID.push_back(std::pair<int, int>(sx3.id[i], i));
+    hsx3IndexVE->Fill( sx3.index[i], sx3.e[i] );
+
+    for( int j = i+1; j < sx3.multi; j++){
+      hsx3Coin->Fill( sx3.index[i], sx3.index[j]);
+    }
+
+    for( int j = 0; j < pc.multi; j++){
+      hsx3VpcIndex->Fill( sx3.index[i], pc.index[j] );
+      //  if( sx3.ch[index] > 8 ){
+      //    hsx3VpcE->Fill( sx3.e[i], pc.e[j] );
+      //   }
+    }
   }
 
 
@@ -281,7 +319,7 @@ Bool_t PCGainMatch::Process(Long64_t entry){
          for( int j = 0; j < pc.multi; j++){
 
       // hsx3VpcIndex->Fill( sx3.index[i], pc.index[j] );
-            if( sx3.ch[index] > 8 && pc.index[j]<24 && pc.e[j]>50 && inCuth){
+            if( sx3.ch[index] > 8 && pc.index[j]<24 && pc.e[j]>50 && inCuth ){
               hsx3VpcE->Fill( sx3.e[i], pc.e[j] );
           //  hpcIndexVE->Fill( pc.index[i], pc.e[i] );
             }
@@ -302,15 +340,24 @@ Bool_t PCGainMatch::Process(Long64_t entry){
 
       for( int j = 0; j < pc.multi; j++){
         if(pc.index[j]<24 && pc.e[j]>50 ){
-          hqqqVpcE->Fill( qqq.e[i], pc.e[j] );
-          //  hpcIndexVE->Fill( pc.index[i], pc.e[i] );
+          hqqqIndexVE->Fill( qqq.index[i], qqq.e[i] );
+          for( int j = 0; j < qqq.multi; j++){
+            if ( j == i ) continue;
+            hqqqCoin->Fill( qqq.index[i], qqq.index[j]);
+          }
+
+
+          for( int j = i + 1; j < qqq.multi; j++){
+            for( int k = 0; k < pc.multi; k++){
+              if(pc.index[k]<24 && pc.e[k]>50 && inCuth){
+                hqqqVpcE->Fill( qqq.e[i], pc.e[k] );
                 hqqqVpcIndex->Fill( qqq.index[i], pc.index[j] );
-        }
-      // }
+              }
+            }
+          }
+        }  
       }
-        
-      }
-    
+  }
 
     // hanVScatsum->Fill(aE,cE);
     

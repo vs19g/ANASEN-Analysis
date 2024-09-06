@@ -331,10 +331,10 @@ Bool_t Analyzer::Process(Long64_t entry){
            if( AnCatSum->IsInside(aE, cESum)){
               inCut=true;
             }
-              if(inCut){
+              // if(inCut){
               hanVScatsum->Fill(aE,cESum);
               hAnodeHits->Fill(aID, aE);
-               }
+              //  }
           //   }
           // }
         }
