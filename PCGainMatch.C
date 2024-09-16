@@ -233,8 +233,8 @@ Bool_t PCGainMatch::Process(Long64_t entry){
               // aESum += aE;
               if(inPCCut){
             hanVScatsum->Fill(aE, cESum);}
-            if (pc.index[i] < 24 && pc.e[i] > 50) {
-             hanVScatsum_a[pc.index[i]]->Fill(pc.e[i], cESum);
+            if (aID < 24 && aE > 50) {
+             hanVScatsum_a[aID]->Fill(aE, cESum);
             }
 
           
@@ -320,7 +320,7 @@ Bool_t PCGainMatch::Process(Long64_t entry){
          for( int j = 0; j < pc.multi; j++){
 
       // hsx3VpcIndex->Fill( sx3.index[i], pc.index[j] );
-            if( sx3.ch[index] > 8 && pc.index[j]<24 && pc.e[j]>50 && inCuth ){
+            if( sx3.ch[index] > 8 && pc.index[j]<24 && pc.e[j]>50 ){
               hsx3VpcE->Fill( sx3.e[i], pc.e[j] );
           //  hpcIndexVE->Fill( pc.index[i], pc.e[i] );
             }
