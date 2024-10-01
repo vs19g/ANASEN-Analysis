@@ -63,6 +63,7 @@ public:
   void ConstructGeo();
   void FindWireID(TVector3 pos, TVector3 direction, bool verbose = false);
   void CalTrack(TVector3 sx3Pos, int anodeID, int cathodeID, bool verbose = false);
+  void CalTrack1(TVector3 sx3Pos, int anodeID, int cathodeID1, int cathodeID2, float cathodeE1, float cathodeE2, bool verbose);
   void CalTrack2(TVector3 sx3Pos, PWHitInfo hitInfo, double sigmaA = 0, double sigmaC = 0, bool verbose = false);
 
   double CircularMean(std::vector<std::pair<int, double>> wireList);
@@ -232,6 +233,27 @@ inline void PW::CalTrack(TVector3 sx3Pos, int anodeID, int cathodeID, bool verbo
   trackVec = (n2.Cross(n1)).Unit();
 
   if( verbose ) printf("Theta, Phi = %f, %f \n", trackVec.Theta() *TMath::RadToDeg(), trackVec.Phi()*TMath::RadToDeg()); 
+
+}
+
+inline void PW::CalTrack1(TVector3 sx3Pos, int anodeID, int cathodeID1, int cathodeID2, float cathodeE1, float cathodeE2, bool verbose){
+
+  trackPos = sx3Pos;
+
+  double q1 = cathodeE1;
+  double q2 = cathodeE2;
+  double fracC = (q1) / (q1 + q2);
+  TVector3 shiftC1 = (Ca[cathodeID2].first - Ca[cathodeID1].first) * fracC;
+  TVector3 shiftC2 = (Ca[cathodeID2].second - Ca[cathodeID1].second) * fracC;
+  TVector3 c1 = Ca[cathodeID1].first + shiftC1;
+  TVector3 c2 = Ca[cathodeID1].second + shiftC2;
+
+  TVector3 n1 = (An[anodeID].first).Cross((sx3Pos).Unit());
+  TVector3 n2 = (c1 - c2).Cross((sx3Pos - c2)).Unit();
+  // if the handiness of anode and cathode revered, it should be n2 cross n1
+  trackVec = (n2.Cross(n1)).Unit();
+
+  // if( verbose ) printf("Theta, Phi = %f, %f \n", trackVec.Theta() *TMath::RadToDeg(), trackVec.Phi()*TMath::RadToDeg()); 
 
 }
 

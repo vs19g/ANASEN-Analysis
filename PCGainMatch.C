@@ -148,8 +148,6 @@ Bool_t PCGainMatch::Process(Long64_t entry){
   std::vector<std::pair<int, double>> cathodeHits={};  
   int aID = 0;
   int cID = 0;
-  int anodeCount = 0;
-  int cathodeCount = 0;
   float aE = 0;
   float cE = 0;
 
@@ -167,10 +165,8 @@ Bool_t PCGainMatch::Process(Long64_t entry){
       float cESum = 0;
       if (pc.index[i] < 24 ) {
             anodeHits.push_back(std::pair<int, double>(pc.index[i], pc.e[i]));
-            anodeCount++;
         } else if (pc.index[i] >= 24) {
             cathodeHits.push_back(std::pair<int, double>(pc.index[i], pc.e[i]));
-            cathodeCount++;
         }
 
       for(int j=i+1;j<pc.multi;j++){
@@ -182,23 +178,29 @@ Bool_t PCGainMatch::Process(Long64_t entry){
       } 
       if (anodeHits.size()==1 && cathodeHits.size() >= 1) {
           
-          // Accumulate total energy from anode hits
           for (const auto& anode : anodeHits) {
-            if(inPCCut){
+          float cESum = 0;
+          // for(int l=0; l<sx3.multi; l++){
+          //   if (sx3.index[l]==80){
+
               int aID = anode.first;
               float aE = anode.second;
-              aESum += aE; // Sum the anode energy
-              hAnodeHits->Fill(aID, aE);
-            }
-          }
-          
-          // Accumulate total energy from cathode hits
-          for (const auto& cathode : cathodeHits) {
-            if(inPCCut){
-              int cID = cathode.first;
-              float cE = cathode.second;
-              cESum += cE; // Sum the cathode energy
-            }
+              aESum += aE;
+
+              for (const auto& cathode : cathodeHits) {
+                int cID = cathode.first;
+                float cE = cathode.second;
+                // if(cE>cEMax){
+                //   cEMax = cE;
+                //   cIDMax = cID;
+                // }
+                // if(cE>cEnextMax && cE<cEMax){
+                //   cEnextMax = cE;
+                //   cIDnextMax = cID;
+                // }
+
+                cESum += cE;
+              }
           }
           
           inCuth = false;

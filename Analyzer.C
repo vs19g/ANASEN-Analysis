@@ -72,7 +72,7 @@ void Analyzer::Begin(TTree * /*tree*/){
   hsx3VpcE->SetNdivisions( -612, "x");
   hsx3VpcE->SetNdivisions( -12, "y");
 
-  hZProj = new TH1F("hZProj", "Nos of anodes", 20, 0, 19);
+  hZProj = new TH1F("hZProj", "ZProjection", 600,-600, 600);
   hAnodeHits = new TH2F("hAnodeHits", "Anode vs Anode Energy, Anode ID; Anode E", 24,0 , 23, 400, 0 , 20000);
   hAnodeMultiplicity = new TH1F("hAnodeMultiplicity", "Number of Anodes/Event", 40, 0, 40); 
   hanVScatsum = new TH2F("hanVScatsum", "Anode vs Cathode Sum; Anode E; Cathode E", 400,0 , 10000, 400, 0 , 16000);
@@ -270,7 +270,10 @@ Bool_t Analyzer::Process(Long64_t entry){
   int aID = 0;
   int cID = 0;
   int anodeCount = 0;
-
+  float cEMax = 0;
+  int cIDMax = 0;
+  float cEnextMax = 0;
+  int cIDnextMax = 0;
   float aE = 0;
   float cE = 0;
 
@@ -291,8 +294,8 @@ Bool_t Analyzer::Process(Long64_t entry){
       //   hpcCoin->Fill( pc.index[i], pc.index[j]);
       // }
 
-      for (int j=0;j<sx3.multi;j++){
-        if(excludeSX3.find(sx3.index[j]) == excludeSX3.end()){
+      // for (int j=0;j<sx3.multi;j++){
+      //   if(excludeSX3.find(sx3.index[j]) == excludeSX3.end()){
 
         hpcIndexVE->Fill( pc.index[i], pc.e[i] );
         for( int j = i+1; j < pc.multi; j++){
@@ -306,8 +309,8 @@ Bool_t Analyzer::Process(Long64_t entry){
                 cathodeHits.push_back(std::pair<int, double>(pc.index[i], pc.e[i]));
             }
           // }  
-        }
-      }
+      //   }
+      // }
     // hpcIndexVE->Fill( pc.index[i], pc.e[i] );
       hAnodeMultiplicity->Fill(pc.multi);
 
@@ -325,6 +328,15 @@ Bool_t Analyzer::Process(Long64_t entry){
               for (const auto& cathode : cathodeHits) {
                 int cID = cathode.first;
                 float cE = cathode.second;
+                if(cE>cEMax){
+                  cEMax = cE;
+                  cIDMax = cID;
+                }
+                if(cE>cEnextMax && cE<cEMax){
+                  cEnextMax = cE;
+                  cIDnextMax = cID;
+                }
+
                 cESum += cE;
               }
 
@@ -345,12 +357,12 @@ Bool_t Analyzer::Process(Long64_t entry){
     
 
     if( HitNonZero){
-      pw_contr.CalTrack( hitPos, aID, cID);
+      pw_contr.CalTrack1( hitPos, aID, cIDMax, cIDnextMax, cEMax, cEnextMax,1);
       hZProj->Fill(pw_contr.GetZ0());
     }
 
   
-  
+
   
 
 
