@@ -243,6 +243,7 @@ inline void PW::CalTrack1(TVector3 sx3Pos, int anodeID, int cathodeID1, int cath
   double q1 = cathodeE1;
   double q2 = cathodeE2;
   double fracC = (q1) / (q1 + q2);
+  // shifting the coordinates of the cathode wire along 2 axes c1 and c2
   TVector3 shiftC1 = (Ca[cathodeID2].first - Ca[cathodeID1].first) * fracC;
   TVector3 shiftC2 = (Ca[cathodeID2].second - Ca[cathodeID1].second) * fracC;
   TVector3 c1 = Ca[cathodeID1].first + shiftC1;
