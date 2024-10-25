@@ -14,7 +14,7 @@ public:
   unsigned short       ch[MAXMULTI];
   unsigned short       e[MAXMULTI];
   unsigned long long   t[MAXMULTI];
-
+  unsigned long long tf[MAXMULTI];
   unsigned short         sn[MAXMULTI];
   unsigned short     digiCh[MAXMULTI];
 
@@ -28,6 +28,7 @@ public:
       ch[i] = 0;
        e[i] = 0;
        t[i] = 0;
+       tf[i] = 0;
        index[i] = 0;
        sn[i] = 0;
        digiCh[i] = 0;

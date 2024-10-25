@@ -67,6 +67,7 @@ int main(int argc, char **argv){
   Det sx3;
   Det qqq;
   Det pc ;
+  Det misc;
 
   printf(" Raw root file : %s\n", inFileName.c_str());
   printf("           Run : %03d\n", run);
@@ -99,6 +100,14 @@ int main(int argc, char **argv){
   newTree->Branch("pcE",     &pc.e,     "pcEnergy[pcMulti]/s");
   newTree->Branch("pcT",     &pc.t,     "pcTime[pcMulti]/l");
 
+  newTree->Branch("miscMulti", &misc.multi, "miscMulti/s");
+  newTree->Branch("miscID",    &misc.id,    "miscID[miscMulti]/s");
+  newTree->Branch("miscCh",    &misc.ch,    "miscCh[miscMulti]/s");
+  newTree->Branch("miscE",     &misc.e,     "miscEnergy[miscMulti]/s");
+  newTree->Branch("miscT",     &misc.t,     "miscTime[miscMulti]/l");
+  newTree->Branch("miscF",     &misc.tf,     "miscFineTime[miscMulti]/l");
+
+
   ///================== looping old tree and apply mapping
 
   //clock   
@@ -112,8 +121,12 @@ int main(int argc, char **argv){
     sx3.multi = 0;
     qqq.multi = 0;
     pc.multi = 0;
+    misc.multi=0;
 
+    sx3.Clear();
     qqq.Clear();
+    pc.Clear();
+    misc.Clear();
 
     for( unsigned int i = 0; i < multi; i++){
 
@@ -159,6 +172,17 @@ int main(int argc, char **argv){
         pc.e[pc.multi] = e[i];
         pc.t[pc.multi] = e_t[i];
         pc.multi ++;
+      }
+
+      //=================================== misc
+      if( 30000 <= ID && ID < 40000 ) {
+        misc.id[misc.multi] = (ID - 30000) / 100;
+        misc.ch[misc.multi] = (ID - 30000) % 100;
+        misc.e[misc.multi] = e[i];
+        misc.t[misc.multi] = e_t[i];
+        misc.tf[misc.multi] = e_f[i];
+        // if( ID == 30002 || ID == 30004 ) printf("sn : %d ch: %2d | gID %3d | ID %6d | e_f : %d\n", sn[i], ch[i], globalCh, ID, e_f[i]);
+        misc.multi ++;
       }
     }
     

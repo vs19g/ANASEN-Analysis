@@ -1,7 +1,7 @@
 #!/bin/bash
 
-if [ "$#" -ne 2 ]; then
-    echo "Usage: $0 runID timeWindow_ns"
+if [ "$#" -ne 3 ]; then
+    echo "Usage: $0 runID timeWindow_ns option"
     echo "Exiting..."
     exit 1
 fi
@@ -9,19 +9,24 @@ fi
 runID=$1
 timeWindow=$2
 
-rawFolder=/home/tandem/Desktop/analysis/data
-rootFolder=/home/tandem/Desktop/analysis/data/root_data
+option=$3
 
-rsync -a splitpole@128.186.111.223:/media/nvmeData/ANASEN27Alap/*.fsu /home/tandem/Desktop/analysis/data
+rawFolder=/home/tandem/data1/2024_09_17Fap/data
+rootFolder=/home/tandem/data1/2024_09_17Fap/data/root_data
 
-fileList=`\ls -1 ${rawFolder}/Run_${runID}_*.fsu`
+if [ $option -eq 0 ]; then
 
-./EventBuilder ${timeWindow} 0 0 10000000 ${fileList}
+    rsync -auh --info=progress2 splitpole@128.186.111.223:/media/nvmeData/2024_09_17Fap/*.fsu /home/tandem/data1/2024_09_17Fap/data
 
-outFile=${rawFolder}/*${runID}*${timeWindow}.root
+    fileList=`\ls -1 ${rawFolder}/*Run_${runID}_*.fsu`
 
-mv -vf ${outFile} ${rootFolder}/.
+    ./EventBuilder ${timeWindow} 0 0 10000000 ${fileList}
 
-./Mapper ${rootFolder}/*${runID}*${timeWindow}.root
+    outFile=${rawFolder}/*${runID}*${timeWindow}.root
+
+    mv -vf ${outFile} ${rootFolder}/.
+
+    ./Mapper ${rootFolder}/*${runID}*${timeWindow}.root
+fi
 
 root "processRun.C(\"${rootFolder}/Run_${runID}_mapped.root\")"

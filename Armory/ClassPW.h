@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <TMath.h>
 #include <TVector3.h>
+#include <TRandom.h>
 
 struct PWHitInfo{
   std::pair<short, short>   nearestWire; // anode, cathode
@@ -63,10 +64,7 @@ public:
   void ConstructGeo();
   void FindWireID(TVector3 pos, TVector3 direction, bool verbose = false);
   void CalTrack(TVector3 sx3Pos, int anodeID, int cathodeID, bool verbose = false);
-  void CalTrack1(TVector3 sx3Pos, int anodeID, int cathodeID1, int cathodeID2, float cathodeE1, float cathodeE2, bool verbose);
   void CalTrack2(TVector3 sx3Pos, PWHitInfo hitInfo, double sigmaA = 0, double sigmaC = 0, bool verbose = false);
-
-  double CircularMean(std::vector<std::pair<int, double>> wireList);
 
   void Print(){
     printf("     The nearest | Anode: %2d(%5.2f) Cathode: %2d(%5.2f)\n", hitInfo.nearestWire.first, 
@@ -236,28 +234,6 @@ inline void PW::CalTrack(TVector3 sx3Pos, int anodeID, int cathodeID, bool verbo
 
 }
 
-inline void PW::CalTrack1(TVector3 sx3Pos, int anodeID, int cathodeID1, int cathodeID2, float cathodeE1, float cathodeE2, bool verbose){
-
-  trackPos = sx3Pos;
-
-  double q1 = cathodeE1;
-  double q2 = cathodeE2;
-  double fracC = (q1) / (q1 + q2);
-  // shifting the coordinates of the cathode wire along 2 axes c1 and c2
-  TVector3 shiftC1 = (Ca[cathodeID2].first - Ca[cathodeID1].first) * fracC;
-  TVector3 shiftC2 = (Ca[cathodeID2].second - Ca[cathodeID1].second) * fracC;
-  TVector3 c1 = Ca[cathodeID1].first + shiftC1;
-  TVector3 c2 = Ca[cathodeID1].second + shiftC2;
-
-  TVector3 n1 = (An[anodeID].first).Cross((sx3Pos).Unit());
-  TVector3 n2 = (c1 - c2).Cross((sx3Pos - c2)).Unit();
-  // if the handiness of anode and cathode revered, it should be n2 cross n1
-  trackVec = (n2.Cross(n1)).Unit();
-
-  // if( verbose ) printf("Theta, Phi = %f, %f \n", trackVec.Theta() *TMath::RadToDeg(), trackVec.Phi()*TMath::RadToDeg()); 
-
-}
-
 inline void PW::CalTrack2(TVector3 sx3Pos, PWHitInfo hitInfo, double sigmaA, double sigmaC, bool verbose){
 
   trackPos = sx3Pos;
@@ -302,23 +278,6 @@ inline double PW::GetZ0(){
   double theta = trackVec.Theta();
   
   return trackPos.Z() - rho / TMath::Tan(theta);
-
-}
-
-inline double PW::CircularMean(std::vector<std::pair<int, double>> wireList){
-
-  //use unit vector, wireID start from Zero
-  double xCom = 0, yCom = 0;
-  for( size_t i = 0; i < wireList.size() ; i++){
-    xCom += TMath::Cos(TMath::TwoPi() * wireList[i].first / nWire) * wireList[i].second;
-    yCom += TMath::Sin(TMath::TwoPi() * wireList[i].first / nWire) * wireList[i].second;
-  }
-
-  //calculate the angle of the summed unit vectors
-  double angle = TMath::ATan2(yCom, xCom);
-  if( angle < 0 ) angle += TMath::TwoPi(); // convert the angle from 0 to 2 pi
-
-  return angle/ TMath::TwoPi() * nWire;
 
 }
 

@@ -1,5 +1,7 @@
 {
   "files.associations": {
+    "NiceMatStyle.C": "cpp",
+    "*.rmd": "markdown",
     "ryanScript.C": "cpp",
     "ryanSelector.C": "cpp",
     "array": "cpp",
@@ -90,6 +92,9 @@
     "processRun.C": "cpp",
     "TrackRecon.C": "cpp",
     "processRuns.C": "cpp",
-    "Analysis.C": "cpp"
-  }
+    "Analysis.C": "cpp",
+    "Analyzer1.C": "cpp",
+    "PCGainMatch.C": "cpp"
+  },
+  "C_Cpp.clang_format_fallbackStyle": "{BasedonStyle: Google, IndentWidth: 2, ColumnLimit: 0}"
 }

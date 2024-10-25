@@ -18,6 +18,7 @@ public :
    Det sx3;
    Det qqq;
    Det pc ;
+   Det misc;
 
    ULong64_t       evID;
    UInt_t          run;
@@ -40,6 +41,13 @@ public :
    TBranch        *b_pcCh;   //!
    TBranch        *b_pcE;   //!
    TBranch        *b_pcT;   //!
+   TBranch        *b_miscMulti;   //!
+   TBranch        *b_miscID;   //!
+   TBranch        *b_miscCh;   //!
+   TBranch        *b_miscE;   //!
+   TBranch        *b_miscT;   //!
+   TBranch       *b_miscTf;   //!
+
 
    Analyzer(TTree * /*tree*/ =0) : fChain(0) { }
    virtual ~Analyzer() { }
@@ -92,6 +100,13 @@ void Analyzer::Init(TTree *tree){
    fChain->SetBranchAddress("pcCh",     &pc.ch, &b_pcCh);
    fChain->SetBranchAddress("pcE",      &pc.e, &b_pcE);
    fChain->SetBranchAddress("pcT",      &pc.t, &b_pcT);
+   fChain->SetBranchAddress("miscMulti", &misc.multi, &b_miscMulti);
+   fChain->SetBranchAddress("miscID",    &misc.id, &b_miscID);
+   fChain->SetBranchAddress("miscCh",    &misc.ch, &b_miscCh);
+   fChain->SetBranchAddress("miscE",     &misc.e, &b_miscE);
+   fChain->SetBranchAddress("miscT",     &misc.t, &b_miscT);
+   fChain->SetBranchAddress("miscF",     &misc.tf, &b_miscTf);
+
 
 }
 
