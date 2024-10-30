@@ -33,6 +33,7 @@ TH2F *hAnodeHits;
 TH1F *hAnodeHits1d;
 TH1F *hPCMultiplicity;
 TH1F *hRFtime;
+TH1F *hSi;
 
 int padID = 0;
 
@@ -46,9 +47,11 @@ TCutG *PCCoinc;
 
 TCutG *alpha_cut_up;
 TCutG *alpha_cut_down;
+TCutG *cutg;
 bool inCut;
 bool inCutUp;
 bool inCutDown;
+bool inCutG;
 
 void Analyzer::Begin(TTree * /*tree*/) {
   TString option = GetOption();
@@ -87,7 +90,8 @@ void Analyzer::Begin(TTree * /*tree*/) {
   hPCMultiplicity = new TH1F("hPCMultiplicity", "Number of PC/Event", 40, 0, 40);
   hanVScatsum = new TH2F("hanVScatsum", "Anode vs Cathode Sum; Anode E; Cathode E", 6400, 0, 20000, 6400, 0, 20000);
   hICvsSi = new TH2F("hICvsSi", "IC vs Si; Si E; IC E", 800, 0, 20000, 400, 0, 8000);
-  hRFtime = new TH1F("hRFtime", "RF time", 1000, 0, 200000);
+  hSi = new TH1F("hSi", "Si E", 800, 0, 20000);
+  hRFtime = new TH1F("hRFtime", "RF time (ns)", 500, 0, 3000);
 
   sx3_contr.ConstructGeo();
   pw_contr.ConstructGeo();
@@ -97,6 +101,8 @@ void Analyzer::Begin(TTree * /*tree*/) {
   alpha_cut_up = (TCutG *)f2->Get("alpha_cut_up");
   TFile *f3 = new TFile("alpha_cut_down.root");
   alpha_cut_down = (TCutG *)f3->Get("alpha_cut_down");
+  TFile *f4 = new TFile("CUTG.root");
+  cutg = (TCutG *)f4->Get("CUTG");
 
   // TFile *f1 = new TFile("AnCatSum.root");
   // AnCatSum= (TCutG*)f1->Get("AnCatSum");
@@ -395,22 +401,34 @@ Bool_t Analyzer::Process(Long64_t entry) {
   }
 
   // Miscellaneous channels including the Lollipop IC and Si detectors and hot needle IC
-
+  bool timing = false;
+  inCutG = false;
   for (int i = 0; i < misc.multi; i++) {
+    if (misc.ch[i] == 1) {
+      if(misc.e[i] > 7500 && misc.e[i]<15000) hSi->Fill(misc.e[i]);
+              inCutG = true;
 
+    }
     for (int j = i + 1; j < misc.multi; j++) {
-      // if (misc.ch[i] == 0 || misc.ch[j] == 1) {
-        hICvsSi->Fill(misc.e[i], misc.e[j]);
-      // }
+      if (cutg->IsInside(misc.e[i], misc.e[j])) {
+        inCutG = true;
+      }
+      if (misc.ch[j] == 2 && inCutG ) {
+        hRFtime->Fill(misc.t[j] + misc.tf[j] * 4 / 1000 - (misc.t[i] + misc.tf[i] * 4 / 1000));
+        // if (misc.t[j] + misc.tf[j] * 4 / 1000 - (misc.t[i] + misc.tf[i] * 4 / 1000) > 1000 && misc.t[j] + misc.tf[j] * 4 / 1000 - (misc.t[i] + misc.tf[i] * 4 / 1000) < 1100) {
+          timing = true;
+        // }
+        // printf("RF time : %lld %lld %lld %lld %lld\n", misc.t[i], misc.t[j], misc.tf[i], misc.tf[j], (misc.t[j]*1000 + misc.tf[j]*4 - (misc.t[i]*1000 + misc.tf[i]*4)));
+      }
     }
   }
 
   for (int i = 0; i < misc.multi; i++) {
+    if(misc.ch[i] == 1) hSi->Fill(misc.e[i]);
     for (int j = i + 1; j < misc.multi; j++) {
-      // if (misc.ch[i] == 2 || misc.ch[j] == 4) {
-        hRFtime->Fill(misc.t[j]*1000 + misc.tf[j]*4 - (misc.t[i]*1000 + misc.tf[i]*4));
-        // printf("RF time : %lld %lld %lld %lld %lld\n", misc.t[i], misc.t[j], misc.tf[i], misc.tf[j], (misc.t[j]*1000 + misc.tf[j]*4 - (misc.t[i]*1000 + misc.tf[i]*4)));
-      // }
+      if (timing == true) {
+        hICvsSi->Fill(misc.e[i], misc.e[j]);
+      }
     }
   }
 
@@ -431,84 +449,84 @@ Bool_t Analyzer::Process(Long64_t entry) {
 void Analyzer::Terminate() {
 
   gStyle->SetOptStat("neiou");
-  TCanvas *a = new TCanvas("cANASEN", "ANASEN", 800, 600);
-  // canvas->Divide(3, 3);
-  hRFtime->Draw();
-  TCanvas *b = new TCanvas("ANASEN", "ANASEN", 800, 600);
-  hICvsSi->Draw("colz");
+  TCanvas *canvas = new TCanvas("cANASEN", "ANASEN", 2000, 2000);
+  canvas->Divide(3, 3);
+  // hRFtime->Draw();
+  // TCanvas *b = new TCanvas("ANASEN", "ANASEN", 800, 600);
+  // hICvsSi->Draw("colz");
 
   // hsx3VpcIndex->Draw("colz");
 
-  //=============================================== pad-1
-  // padID++;
-  // canvas->cd(padID);
-  // canvas->cd(padID)->SetGrid(1);
+  // =============================================== pad-1
+  padID++;
+  canvas->cd(padID);
+  canvas->cd(padID)->SetGrid(1);
 
-  // hsx3IndexVE->Draw("colz");
+  hsx3IndexVE->Draw("colz");
 
-  // //=============================================== pad-2
-  // padID++;
-  // canvas->cd(padID);
-  // canvas->cd(padID)->SetGrid(1);
+  //=============================================== pad-2
+  padID++;
+  canvas->cd(padID);
+  canvas->cd(padID)->SetGrid(1);
 
-  // hqqqIndexVE->Draw("colz");
+  hqqqIndexVE->Draw("colz");
 
-  // //=============================================== pad-3
-  // padID++;
-  // canvas->cd(padID);
-  // canvas->cd(padID)->SetGrid(1);
+  //=============================================== pad-3
+  padID++;
+  canvas->cd(padID);
+  canvas->cd(padID)->SetGrid(1);
 
-  // hpcIndexVE->Draw("colz");
+  hpcIndexVE->Draw("colz");
 
-  // //=============================================== pad-4
-  // padID++;
-  // canvas->cd(padID);
-  // canvas->cd(padID)->SetGrid(1);
+  //=============================================== pad-4
+  padID++;
+  canvas->cd(padID);
+  canvas->cd(padID)->SetGrid(1);
 
-  // hsx3Coin->Draw("colz");
+  hsx3Coin->Draw("colz");
 
-  // //=============================================== pad-5
-  // padID++;
-  // canvas->cd(padID);
-  // canvas->cd(padID)->SetGrid(1);
+  //=============================================== pad-5
+  padID++;
+  canvas->cd(padID);
+  canvas->cd(padID)->SetGrid(1);
 
-  // canvas->cd(padID)->SetLogz(true);
+  canvas->cd(padID)->SetLogz(true);
 
-  // hqqqCoin->Draw("colz");
+  hqqqCoin->Draw("colz");
 
-  // //=============================================== pad-6
-  // padID++;
-  // canvas->cd(padID);
-  // canvas->cd(padID)->SetGrid(1);
+  //=============================================== pad-6
+  padID++;
+  canvas->cd(padID);
+  canvas->cd(padID)->SetGrid(1);
 
-  // hpcCoin->Draw("colz");
+  hpcCoin->Draw("colz");
 
-  // //=============================================== pad-7
-  // padID++;
-  // canvas->cd(padID);
-  // canvas->cd(padID)->SetGrid(1);
+  //=============================================== pad-7
+  padID++;
+  canvas->cd(padID);
+  canvas->cd(padID)->SetGrid(1);
 
-  // // hsx3VpcIndex ->Draw("colz");
-  // hsx3VpcE->Draw("colz");
+  // hsx3VpcIndex ->Draw("colz");
+  hsx3VpcE->Draw("colz");
 
-  // //=============================================== pad-8
-  // padID++;
-  // canvas->cd(padID);
-  // canvas->cd(padID)->SetGrid(1);
+  //=============================================== pad-8
+  padID++;
+  canvas->cd(padID);
+  canvas->cd(padID)->SetGrid(1);
 
-  // // hqqqVpcIndex ->Draw("colz");
+  // hqqqVpcIndex ->Draw("colz");
 
-  // hqqqVpcE->Draw("colz");
-  // //=============================================== pad-9
-  // padID++;
+  hqqqVpcE->Draw("colz");
+  //=============================================== pad-9
+  padID++;
 
-  // // canvas->cd(padID)->DrawFrame(-50, -50, 50, 50);
-  // // hqqqPolar->Draw("same colz pol");
+  // canvas->cd(padID)->DrawFrame(-50, -50, 50, 50);
+  // hqqqPolar->Draw("same colz pol");
 
-  // canvas->cd(padID);
-  // canvas->cd(padID)->SetGrid(1);
-  // //  hZProj->Draw();
-  // hanVScatsum->Draw("colz");
+  canvas->cd(padID);
+  canvas->cd(padID)->SetGrid(1);
+  //  hZProj->Draw();
+  hanVScatsum->Draw("colz");
   // hAnodeHits->Draw("colz");
   // hAnodeMultiplicity->Draw();
 }
