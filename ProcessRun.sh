@@ -2,6 +2,7 @@
 
 if [ "$#" -ne 3 ]; then
     echo "Usage: $0 runID timeWindow_ns option"
+    echo "option: 0 - process raw data, 1 - process mapped data"
     echo "Exiting..."
     exit 1
 fi
@@ -20,7 +21,7 @@ if [ $option -eq 0 ]; then
 
     fileList=`\ls -1 ${rawFolder}/*Run_${runID}_*.fsu`
 
-    ./EventBuilder ${timeWindow} 0 0 10000000 ${fileList}
+    ./EventBuilder ${timeWindow} 0 0 100000000 ${fileList}
 
     outFile=${rawFolder}/*${runID}*${timeWindow}.root
 

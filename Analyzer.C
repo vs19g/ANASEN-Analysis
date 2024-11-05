@@ -30,10 +30,14 @@ TH2F *hsx3VpcE;
 TH2F *hanVScatsum;
 TH2F *hICvsSi;
 TH2F *hAnodeHits;
+TH2F *hSiEvsMCPt;
+TH2F *hRfvsMCPt;
 TH1F *hAnodeHits1d;
 TH1F *hPCMultiplicity;
 TH1F *hRFtime;
 TH1F *hSi;
+TH1F *hSi_gated;
+TH1F *hSiMCPt;
 
 int padID = 0;
 
@@ -60,7 +64,7 @@ void Analyzer::Begin(TTree * /*tree*/) {
   hsx3IndexVE->SetNdivisions(-612, "x");
   hqqqIndexVE = new TH2F("hqqqIndexVE", "QQQ index vs Energy; QQQ index ; Energy", 4 * 2 * 16, 0, 4 * 2 * 16, 400, 0, 5000);
   hqqqIndexVE->SetNdivisions(-1204, "x");
-  hpcIndexVE = new TH2F("hpcIndexVE", "PC index vs Energy; PC index ; Energy", 2 * 24, 0, 2 * 24, 6400, 0, 20000);
+  hpcIndexVE = new TH2F("hpcIndexVE", "PC index vs Energy; PC index ; Energy", 2 * 24, 0, 2 * 24, 6400, 0, 30000);
   hpcIndexVE->SetNdivisions(-1204, "x");
 
   hsx3Coin = new TH2F("hsx3Coin", "SX3 Coincident", 24 * 12, 0, 24 * 12, 24 * 12, 0, 24 * 12);
@@ -76,22 +80,26 @@ void Analyzer::Begin(TTree * /*tree*/) {
   hqqqVpcIndex->SetNdivisions(-612, "x");
   hqqqVpcIndex->SetNdivisions(-12, "y");
 
-  hqqqVpcE = new TH2F("hqqqVpcEnergy", "qqq vs pc; qqq energy; pc energy", 400, 0, 5000, 6400, 0, 20000);
+  hqqqVpcE = new TH2F("hqqqVpcEnergy", "qqq vs pc; qqq energy; pc energy", 400, 0, 5000, 6400, 0, 30000);
   hqqqVpcE->SetNdivisions(-612, "x");
   hqqqVpcE->SetNdivisions(-12, "y");
 
-  hsx3VpcE = new TH2F("hsx3VpcEnergy", "sx3 vs pc; sx3 energy; pc energy", 400, 0, 5000, 6400, 0, 20000);
+  hsx3VpcE = new TH2F("hsx3VpcEnergy", "sx3 vs pc; sx3 energy; pc energy", 400, 0, 5000, 6400, 0, 30000);
   hsx3VpcE->SetNdivisions(-612, "x");
   hsx3VpcE->SetNdivisions(-12, "y");
 
   hZProj = new TH1F("hZProj", "ZProjection", 600, -600, 600);
   hAnodeHits1d = new TH1F("hAnodeHits1d", "Anode Hits", 24, 0, 24);
-  hAnodeHits = new TH2F("hAnodeHits", "Anode vs Anode Energy, Anode ID; Anode E", 24, 0, 23, 400, 0, 20000);
+  hAnodeHits = new TH2F("hAnodeHits", "Anode vs Anode Energy, Anode ID; Anode E", 24, 0, 23, 400, 0, 30000);
   hPCMultiplicity = new TH1F("hPCMultiplicity", "Number of PC/Event", 40, 0, 40);
-  hanVScatsum = new TH2F("hanVScatsum", "Anode vs Cathode Sum; Anode E; Cathode E", 6400, 0, 20000, 6400, 0, 20000);
+  hanVScatsum = new TH2F("hanVScatsum", "Anode vs Cathode Sum; Anode E; Cathode E", 6400, 0, 30000, 6400, 0, 30000);
   hICvsSi = new TH2F("hICvsSi", "IC vs Si; Si E; IC E", 800, 0, 20000, 400, 0, 8000);
   hSi = new TH1F("hSi", "Si E", 800, 0, 20000);
-  hRFtime = new TH1F("hRFtime", "RF time (ns)", 500, 0, 3000);
+  hSi_gated = new TH1F("hSi_gated", "Si E", 800, 0, 20000);
+  hRFtime = new TH1F("hRFtime", "Rf-MCP time(ns)", 3000, -3000, 3000);
+  hSiEvsMCPt = new TH2F("hSiEsMCPt", "Si E vs MCP time; SI E; MCP time", 800, 0, 20000, 3000, -3000, 3000);
+  hSiMCPt = new TH1F("hSiMCPt", "Si vs MCP time", 1500, -3000, 3000);
+  hRfvsMCPt = new TH2F("hRfvsMCPt", "RF vs MCP time; RF(ns) ; MCP time(ns)", 1000, -2000, 2000, 1000, -2000, 2000);
 
   sx3_contr.ConstructGeo();
   pw_contr.ConstructGeo();
@@ -214,8 +222,9 @@ Bool_t Analyzer::Process(Long64_t entry) {
         }
         for (int j = 0; j < pc.multi; j++) {
           // hsx3VpcIndex->Fill( sx3.index[i], pc.index[j] );
-          if (sx3.ch[index] > 8) {
+          if (sx3.ch[i] > 8 && pc.index[j] < 24 && pc.e[j] > 50) {
             hsx3VpcE->Fill(sx3.e[i], pc.e[j]);
+            // printf(" sx3 Ch: %d, pc Ch: %d , : %d\n", sx3.index[i], pc.index[j], sx3.t[i] - pc.t[j]);
             //  hpcIndexVE->Fill( pc.index[i], pc.e[i] );
           }
         }
@@ -243,16 +252,16 @@ Bool_t Analyzer::Process(Long64_t entry) {
         hqqqCoin->Fill(qqq.index[i], qqq.index[j]);
       }
 
-      for (int j = i + 1; j < qqq.multi; j++) {
-        for (int k = 0; k < pc.multi; k++) {
-          if (pc.index[k] < 24 && pc.e[k] > 50) {
-            hqqqVpcE->Fill(qqq.e[i], pc.e[k]);
-            //  hpcIndexVE->Fill( pc.index[i], pc.e[i] );
-            hqqqVpcIndex->Fill(qqq.index[i], pc.index[j]);
-          }
-          // }
+      for (int j = 0; j < pc.multi; j++) {
+        if (pc.index[j] < 24 && pc.e[j] > 50) {
+          hqqqVpcE->Fill(qqq.e[i], pc.e[j]);
+          //  hpcIndexVE->Fill( pc.index[i], pc.e[i] );
+          hqqqVpcIndex->Fill(qqq.index[i], pc.index[j]);
         }
-        // if( qqq.used[i] == true ) continue;
+      }
+      // }
+      // if( qqq.used[i] == true ) continue;
+      for (int j = i + 1; j < qqq.multi; j++) {
 
         // if( qqq.id[i] == qqq.id[j] && (16 - qqq.ch[i]) * (16 - qqq.ch[j]) < 0  ){ // must be same detector and wedge and ring
         if (qqq.id[i] == qqq.id[j]) { // must be same detector
@@ -392,43 +401,105 @@ Bool_t Analyzer::Process(Long64_t entry) {
       }
     }
     // }
-    if (inCut) {
-      hanVScatsum->Fill(aE, cESum);
-      hAnodeHits->Fill(aID, aE);
-      hAnodeHits1d->Fill(anodeHits.size());
-    }
+    // if (inCut) {
+    hanVScatsum->Fill(aE, cESum);
+    hAnodeHits->Fill(aID, aE);
+    hAnodeHits1d->Fill(anodeHits.size());
+    // }
     // }
   }
 
   // Miscellaneous channels including the Lollipop IC and Si detectors and hot needle IC
+  // Misc ch 0,1, 2, 3, 4 in order are the LIC, LSi, HNIC-difference, MCP, and Rf
   bool timing = false;
   inCutG = false;
+  double SiE = 0;
+  double SiT = 0;
+  double MCPt = 0;
+  double MCPE = 0;
+  double Rft = 0;
+  double ICt = 0;
+  double ICe = 0;
+  double SiCFDt = 0;
   for (int i = 0; i < misc.multi; i++) {
-    if (misc.ch[i] == 1) {
-      if(misc.e[i] > 7500 && misc.e[i]<15000) hSi->Fill(misc.e[i]);
-              inCutG = true;
+    // if (misc.ch[i] == 1 && misc.e[i] > 10000 && misc.e[i] < 15000) {
+    // if(misc.e[i] > 7500 && misc.e[i]<15000) hSi->Fill(misc.e[i]);
 
+    if (misc.ch[i] == 1) {
+      // hSi->Fill(misc.e[i]);
+      SiE = misc.e[i];
+      SiT = misc.t[i] + misc.tf[i] * 4. / 1000;
+      // hSi->Fill(misc.e[i]);
     }
-    for (int j = i + 1; j < misc.multi; j++) {
-      if (cutg->IsInside(misc.e[i], misc.e[j])) {
-        inCutG = true;
+    if (misc.ch[i] == 2) {
+      ICt = misc.t[i] + misc.tf[i] * 4. / 1000;
+      ICe = misc.e[i];
+      hSi->Fill(misc.e[i]);
+    }
+    if (misc.ch[i] == 3) {
+      // only analyze the first MCP in any event
+      if (MCPt == 0) {
+        MCPt = misc.t[i] + misc.tf[i] * 4. / 1000;
+        MCPE = misc.e[i];
       }
-      if (misc.ch[j] == 2 && inCutG ) {
-        hRFtime->Fill(misc.t[j] + misc.tf[j] * 4 / 1000 - (misc.t[i] + misc.tf[i] * 4 / 1000));
-        // if (misc.t[j] + misc.tf[j] * 4 / 1000 - (misc.t[i] + misc.tf[i] * 4 / 1000) > 1000 && misc.t[j] + misc.tf[j] * 4 / 1000 - (misc.t[i] + misc.tf[i] * 4 / 1000) < 1100) {
+    }
+    if (misc.ch[i] == 4) {
+      // only analyze the first RF in any event
+      if (Rft == 0) {
+        Rft = misc.t[i] + misc.tf[i] * 4. / 1000;
+      }
+    }
+    if (misc.ch[i] == 5) {
+      if (SiCFDt == 0) {
+        SiCFDt = misc.t[i] + misc.tf[i] * 4. / 1000;
+      }
+    }
+
+    // hSiEvsMCPt1->Fill(SiE, Rft-MCPt);
+    // hSiEvsMCPt->Fill(ICe, MCPt - Rft);
+    if (MCPt != 0 && Rft != 0) {
+      // if (SiE > 10200 && SiE < 12200) {
+      // hRfvsMCPt->Fill(Rft - ICt, MCPt - ICt);
+
+      hSiMCPt->Fill(MCPt - ICt);
+      // if(misc.ch[i] == 2 && misc.e[i] > 1000 && misc.e[i]<2000)
+      hRFtime->Fill(Rft - ICt);
+      // }
+      // printf("RF time : %lld %lld %lld\n", Rft, MCPt, (MCPt - Rft));
+      // }
+    }
+    // inCutG = true;
+    // if (misc.ch[i] == 1) hSi->Fill(misc.e[i]);
+
+    // for (int j = 0; j < qqq.multi; j++) {
+      // if (pc.id[j] == 0) {
+        hRfvsMCPt->Fill(Rft-ICt, MCPt -ICt);
+        hSiEvsMCPt->Fill(ICe, MCPt - ICt);
+      // }
+    // }
+    for (int j = i + 1; j < misc.multi; j++) {
+      //   if (cutg->IsInside(misc.e[i], misc.e[j])) {
+      //     inCutG = true;
+      //   })
+
+      if (misc.ch[j] == 4 && misc.ch[i] == 3) {
+        // hRFtime->Fill(misc.t[j]*1. + misc.tf[j] * 4. / 1000 - (misc.t[i]*1. + misc.tf[i] * 4. / 1000));
+
+        if (misc.t[j] + misc.tf[j] * 4. / 1000 - (misc.t[i] + misc.tf[i] * 4. / 1000) > 20 && misc.t[j] + misc.tf[j] * 4. / 1000 - (misc.t[i] + misc.tf[i] * 4. / 1000) < 100) {
           timing = true;
-        // }
+        }
         // printf("RF time : %lld %lld %lld %lld %lld\n", misc.t[i], misc.t[j], misc.tf[i], misc.tf[j], (misc.t[j]*1000 + misc.tf[j]*4 - (misc.t[i]*1000 + misc.tf[i]*4)));
       }
     }
-  }
 
-  for (int i = 0; i < misc.multi; i++) {
-    if(misc.ch[i] == 1) hSi->Fill(misc.e[i]);
-    for (int j = i + 1; j < misc.multi; j++) {
-      if (timing == true) {
-        hICvsSi->Fill(misc.e[i], misc.e[j]);
+    // for (int j = i + 1; j < misc.multi; j++) {
+    if (timing == true) {
+      // hICvsSi->Fill(misc.e[i], misc.e[j]);
+      if (misc.ch[i] == 1) {
+        hSi_gated->Fill(misc.e[i]);
+        // }
       }
+      // }
     }
   }
 
@@ -450,12 +521,12 @@ void Analyzer::Terminate() {
 
   gStyle->SetOptStat("neiou");
   TCanvas *canvas = new TCanvas("cANASEN", "ANASEN", 2000, 2000);
+  // TCanvas *a = new TCanvas("aANASEN", "ANASEN", 800, 600);
   canvas->Divide(3, 3);
   // hRFtime->Draw();
-  // TCanvas *b = new TCanvas("ANASEN", "ANASEN", 800, 600);
-  // hICvsSi->Draw("colz");
-
-  // hsx3VpcIndex->Draw("colz");
+  // TCanvas *b = new TCanvas("bANASEN", "ANASEN", 800, 600);
+  // // hICvsSi->Draw("colz");
+  // hSi->Draw();
 
   // =============================================== pad-1
   padID++;
@@ -528,5 +599,5 @@ void Analyzer::Terminate() {
   //  hZProj->Draw();
   hanVScatsum->Draw("colz");
   // hAnodeHits->Draw("colz");
-  // hAnodeMultiplicity->Draw();
+  // // hAnodeMultiplicity->Draw();
 }
