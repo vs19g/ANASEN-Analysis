@@ -1,7 +1,5 @@
 {
   "files.associations": {
-    "NiceMatStyle.C": "cpp",
-    "*.rmd": "markdown",
     "ryanScript.C": "cpp",
     "ryanSelector.C": "cpp",
     "array": "cpp",
@@ -93,8 +91,16 @@
     "TrackRecon.C": "cpp",
     "processRuns.C": "cpp",
     "Analysis.C": "cpp",
-    "Analyzer1.C": "cpp",
-    "PCGainMatch.C": "cpp"
+    "datastructs.h": "c",
+    "ANASENPlotEdit.C": "cpp",
+    "GetMean_Q3_new.C": "cpp",
+    "AlphaCal_new.C": "cpp",
+    "f1.C": "cpp",
+    "GeoCal_Maria_new.C": "cpp",
+    "PCPulser_All_new.C": "cpp",
+    "PosCal_2.C": "cpp",
+    "AutoFit.C": "cpp",
+    "Fitting.C": "cpp"
   },
-  "C_Cpp.clang_format_fallbackStyle": "{BasedonStyle: Google, IndentWidth: 2, ColumnLimit: 0}"
+  "github-enterprise.uri": "https://fsunuc.physics.fsu.edu"
 }

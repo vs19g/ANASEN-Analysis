@@ -1,23 +1,11 @@
 {
     "configurations": [
         {
-            "name": "splitpole",
+            "name": "Hades",
             "includePath": [
                 "${workspaceFolder}/**",
-                "/home/splitpole/cern/root/**"
-            ],
-            "defines": [],
-            "compilerPath": "/usr/bin/gcc",
-            "cStandard": "c17",
-            "cppStandard": "gnu++17",
-            "intelliSenseMode": "linux-gcc-x64"
-        },
-        {
-            "name": "Ryan",
-            "includePath": [
-                "${workspaceFolder}/**",
-                "/home/ryan/Downloads/root_build/**",
-                "/home/ryan/Downloads/root_build/include"
+                "/usr/include/x86_64-linux-gnu/qt6/**",
+                "/usr/local/cern/root_v6.26.06/include/**"
             ],
             "defines": [],
             "compilerPath": "/usr/bin/gcc",
@@ -29,7 +17,8 @@
             "name": "RyanUbuntu",
             "includePath": [
                 "${workspaceFolder}/**",
-                "/opt/root/**"
+                "/usr/include/x86_64-linux-gnu/qt6/**",
+                "/opt/root/include/**"
             ],
             "defines": [],
             "compilerPath": "/usr/bin/gcc",
@@ -38,10 +27,11 @@
             "intelliSenseMode": "linux-gcc-x64"
         },
         {
-            "name": "RyanHome",
+            "name": "Anasen",
             "includePath": [
                 "${workspaceFolder}/**",
-                "/home/ryan/root_v6.30.06/**"
+                "/usr/include/x86_64-linux-gnu/qt6/**",
+                "/opt/root/include/**"
             ],
             "defines": [],
             "compilerPath": "/usr/bin/gcc",
@@ -50,10 +40,26 @@
             "intelliSenseMode": "linux-gcc-x64"
         },
         {
-            "name": "Dirac",
+            "name": "Splitpole",
             "includePath": [
                 "${workspaceFolder}/**",
-                "/usr/opt/root/**"
+                "/usr/include/x86_64-linux-gnu/qt6/**",
+                "/home/splitpole/cern/root/include/**",
+                "/usr/include/x86_64-linux-gnu/qt6/QtWidgets",
+                "/usr/include/x86_64-linux-gnu/qt6/QtCore"
+            ],
+            "defines": [],
+            "compilerPath": "/usr/bin/gcc",
+            "cStandard": "c17",
+            "cppStandard": "gnu++17",
+            "intelliSenseMode": "linux-gcc-x64"
+        },
+        {
+            "name": "Penguin",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "/usr/include/x86_64-linux-gnu/qt6/**",
+                "/usr/local/cern/root/include/**",
             ],
             "defines": [],
             "compilerPath": "/usr/bin/gcc",
