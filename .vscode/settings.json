@@ -100,7 +100,8 @@
     "PCPulser_All_new.C": "cpp",
     "PosCal_2.C": "cpp",
     "AutoFit.C": "cpp",
-    "Fitting.C": "cpp"
+    "Fitting.C": "cpp",
+    "PCGainMatch.C": "cpp"
   },
   "github-enterprise.uri": "https://fsunuc.physics.fsu.edu"
 }

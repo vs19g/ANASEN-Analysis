@@ -28,6 +28,9 @@ TH2F *hqqqVpcIndex;
 TH2F *hqqqVpcE;
 TH2F *hsx3VpcE;
 TH2F *hanVScatsum;
+TH2F *hanVScatsum_a[24];
+TH1F *hAnodeMultiplicity;
+
 int padID = 0;
 
 SX3 sx3_contr;
@@ -73,6 +76,14 @@ void Analyzer::Begin(TTree * /*tree*/)
   hZProj = new TH1F("hZProj", "Z Projection", 200, -600, 600);
 
   hanVScatsum = new TH2F("hanVScatsum", "Anode vs Cathode Sum; Anode E; Cathode E", 400, 0, 10000, 400, 0, 16000);
+  hAnodeMultiplicity = new TH1F("hAnodeMultiplicity", "Number of Anodes/Event", 40, 0, 40);
+  hanVScatsum = new TH2F("hanVScatsum", "Anode vs Cathode Sum; Anode E; Cathode E", 400, 0, 10000, 800, 0, 16000);
+  for (int i = 0; i < 24; i++)
+  {
+    TString histName = Form("hAnodeVsCathode_%d", i);
+    TString histTitle = Form("Anode %d vs Cathode Sum; Anode E; Cathode Sum E", i);
+    hanVScatsum_a[i] = new TH2F(histName, histTitle, 400, 0, 10000, 400, 0, 16000);
+  }
   sx3_contr.ConstructGeo();
   pw_contr.ConstructGeo();
 }
@@ -298,10 +309,11 @@ Bool_t Analyzer::Process(Long64_t entry)
       hpcCoin->Fill(pc.index[i], pc.index[j]);
     }
   }
-  //  for( size_t i = 0; i < E.size(); i++) printf("%zu | %d %d \n", i, E[i].first, E[i].second );
+
+  // Calculate the crossover points and put them into an array
 
   pwinstance.ConstructGeo();
-  Coord Crossover[24][24];
+  Coord Crossover[24][24][2];
   TVector3 a, c, diff;
   double a2, ac, c2, adiff, cdiff, denom, alpha, beta;
   int index = 0;
@@ -310,6 +322,11 @@ Bool_t Analyzer::Process(Long64_t entry)
     a = pwinstance.An[i].first - pwinstance.An[i].second;
     for (int j = 0; j < pwinstance.Ca.size(); j++)
     {
+      // Ok so this method uses what is essentially th solution of 2 equations to find the point of intersection between the anode and cathode wires
+      // here a and c are the vectors of the anode and cathode wires respectively
+      // diff is the perpendicular vector between the anode and cathode wires
+      // The idea behind this is to then find the scalars alpha and beta that give a ratio between 0 and -1,
+
       c = pwinstance.Ca[j].first - pwinstance.Ca[j].second;
       diff = pwinstance.An[i].first - pwinstance.Ca[j].first;
       a2 = a.Dot(a);
@@ -320,19 +337,163 @@ Bool_t Analyzer::Process(Long64_t entry)
       denom = a2 * c2 - ac * ac;
       alpha = (ac * cdiff - c2 * adiff) / denom;
       beta = (a2 * cdiff - ac * adiff) / denom;
-      Crossover[i][j].x = pwinstance.An[i].first.X() + alpha * a.X();
-      Crossover[i][j].y = pwinstance.An[i].first.Y() + alpha * a.Y();
-      Crossover[i][j].z = pwinstance.An[i].first.Z() + alpha * a.Z();
-      if (i == 23)
+      Crossover[i][j][1].x = pwinstance.An[i].first.X() + alpha * a.X();
+      Crossover[i][j][1].y = pwinstance.An[i].first.Y() + alpha * a.Y();
+      Crossover[i][j][1].z = pwinstance.An[i].first.Z() + alpha * a.Z();
+      //placeholder variable Crossover[i][j][2].x has nothing to do with the geometry of the crossover and is being used to store the alpha value, 
+      //so that it can be used to sort "good" hits later
+      Crossover[i][j][2].x = alpha;
+      // if (i == 23)
+      // {
+      //   if (abs(i - j) < 7 || abs(i - j) > 17)
+      //   {
+      //     if (alpha < 0 && alpha > -1)
+      //     {
+      //       printf("Anode and cathode indices and coord : %d %d %f %f %f %f\n", i, j, pwinstance.Ca[j].first.X(), pwinstance.Ca[j].first.Y(), pwinstance.Ca[j].first.Z(), alpha);
+      //       printf("Crossover wires, points and alpha are : %f %f %f %f \n", Crossover[i][j].x, Crossover[i][j].y, Crossover[i][j].z, alpha);
+      //     }
+      //   }
+      // }
+    }
+  }
+
+  std::vector<std::pair<int, double>> anodeHits = {};
+  std::vector<std::pair<int, double>> cathodeHits = {};
+  int aID = 0;
+  int cID = 0;
+  float aE = 0;
+  float cE = 0;
+
+  // Define the excluded SX3 and QQQ channels
+  // std::unordered_set<int> excludeSX3 = {34, 35, 36, 37, 61, 62, 67, 73, 74, 75, 76, 77, 78, 79, 80, 93, 97, 100, 103, 108, 109, 110, 111, 112};
+  // std::unordered_set<int> excludeQQQ = {0, 17, 109, 110, 111, 112, 113, 119, 127, 128};
+  // inCuth=false;
+  // inCutl=false;
+  // inPCCut=false;
+  for (int i = 0; i < pc.multi; i++)
+  {
+
+    if (pc.e[i] > 50 && pc.multi < 7)
+    {
+
+      float aESum = 0;
+      float cESum = 0;
+      float aEMax = 0;
+      float cEMax = 0;
+      float aEnextMax = 0;
+      float cEnextMax = 0;
+      int aIDMax = 0;
+      int cIDMax = 0;
+      int aIDnextMax = 0;
+      int cIDnextMax = 0;
+
+      //creating a vector of pairs of anode and cathode hits that is sorted in order of decreasing energy
+      if (pc.index[i] < 24)
       {
-        if (abs(i - j) < 7 || abs(i - j) > 17)
+        anodeHits.push_back(std::pair<int, double>(pc.index[i], pc.e[i]));
+        std::sort(anodeHits.begin(), anodeHits.end(), [](const std::pair<int, double> &a, const std::pair<int, double> &b)
+                  { return a.second > b.second; });
+      }
+      else if (pc.index[i] >= 24)
+      {
+        cathodeHits.push_back(std::pair<int, double>(pc.index[i], pc.e[i]));
+        std::sort(cathodeHits.begin(), cathodeHits.end(),[](const std::pair<int, double> &a, const std::pair<int, double> &b)
+                  { return a.second > b.second; });
+      }
+
+      for (int j = i + 1; j < pc.multi; j++)
+      {
+        // if(PCCoinc_cut1->IsInside(pc.index[i], pc.index[j]) || PCCoinc_cut2->IsInside(pc.index[i], pc.index[j])){
+        //   // hpcCoin->Fill(pc.index[i], pc.index[j]);
+        //   inPCCut = true;
+        // }
+        hpcCoin->Fill(pc.index[i], pc.index[j]);
+      }
+      if (anodeHits.size() >= 1 && cathodeHits.size() >= 1)
+      {
+
+        for (const auto &anode : anodeHits)
         {
-          if (alpha < 0 && alpha > -1)
+          aID = anode.first;
+          aE = anode.second;
+          aESum += aE;
+          if (aE > aEMax)
           {
-            printf("Anode and cathode indices and coord : %d %d %f %f %f %f\n", i, j, pwinstance.Ca[j].first.X(), pwinstance.Ca[j].first.Y(), pwinstance.Ca[j].first.Z(), alpha);
-            printf("Crossover wires, points and alpha are : %f %f %f %f \n", Crossover[i][j].x, Crossover[i][j].y, Crossover[i][j].z, alpha);
+            aEMax = aE;
+            aIDMax = aID;
           }
+          if (aE > aEnextMax && aE < aEMax)
+          {
+            aEnextMax = aE;
+            aIDnextMax = aID;
+          }
+          // printf("aID : %d, aE : %f\n", aID, aE);
         }
+
+        // printf("aID : %d, aE : %f, cE : %f\n", aID, aE, cE);
+        for (const auto &cathode : cathodeHits)
+        {
+          cID = cathode.first;
+          cE = cathode.second;
+          if (cE > cEMax)
+          {
+            cEMax = cE;
+            cIDMax = cID;
+          }
+          if (cE > cEnextMax && cE < cEMax)
+          {
+            cEnextMax = cE;
+            cIDnextMax = cID;
+          }
+
+          cESum += cE;
+        }
+        // }
+
+        // inCuth = false;
+        // inCutl = false;
+        // inPCCut = false;
+        // for(int j=i+1;j<pc.multi;j++){
+        //   if(PCCoinc_cut1->IsInside(pc.index[i], pc.index[j]) || PCCoinc_cut2->IsInside(pc.index[i], pc.index[j])){
+        //     // hpcCoin->Fill(pc.index[i], pc.index[j]);
+        //     inPCCut = true;
+        //   }
+        //   hpcCoin->Fill(pc.index[i], pc.index[j]);
+        // }
+
+        // Check if the accumulated energies are within the defined ranges
+        // if (AnCatSum_high && AnCatSum_high->IsInside(aESum, cESum)) {
+        //     inCuth = true;
+        // }
+        // if (AnCatSum_low && AnCatSum_low->IsInside(aESum, cESum)) {
+        //     inCutl = true;
+        // }
+
+        // Fill histograms based on the cut conditions
+        // if (inCuth && inPCCut) {
+        //     hanVScatsum_hcut->Fill(aESum, cESum);
+        // }
+        // if (inCutl && inPCCut) {
+        //     hanVScatsum_lcut->Fill(aESum, cESum);
+        // }
+        // for(auto anode : anodeHits){
+
+        // float aE = anode.second;
+        // aESum += aE;
+        // if(inPCCut){
+        hanVScatsum->Fill(aESum, cESum);
+        // }
+        if (aID < 24 && aE > 50)
+        {
+          hanVScatsum_a[aID]->Fill(aE, cESum);
+        }
+
+        // }
+        // Fill histograms for the `pc` data
+        hpcIndexVE->Fill(pc.index[i], pc.e[i]);
+        // if(inPCCut){
+        hAnodeMultiplicity->Fill(anodeHits.size());
+        // }
       }
     }
   }
