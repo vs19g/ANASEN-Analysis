@@ -13,7 +13,7 @@ timeWindow=$2
 option=$3
 
 rawFolder=/home/tandem/data1/2024_09_17Fap/data
-rootFolder=/home/tandem/data1/2024_09_17Fap/data/root_data
+rootFolder=../root_data
 
 if [ $option -eq 0 ]; then
 

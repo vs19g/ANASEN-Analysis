@@ -105,7 +105,7 @@ void Analyzer::Init(TTree *tree){
    fChain->SetBranchAddress("miscCh",    &misc.ch, &b_miscCh);
    fChain->SetBranchAddress("miscE",     &misc.e, &b_miscE);
    fChain->SetBranchAddress("miscT",     &misc.t, &b_miscT);
-   fChain->SetBranchAddress("miscF",     &misc.tf, &b_miscTf);
+   // fChain->SetBranchAddress("miscF",     &misc.tf, &b_miscTf);
 
 
 }

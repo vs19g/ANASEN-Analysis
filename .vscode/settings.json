@@ -101,7 +101,8 @@
     "PosCal_2.C": "cpp",
     "AutoFit.C": "cpp",
     "Fitting.C": "cpp",
-    "PCGainMatch.C": "cpp"
+    "PCGainMatch.C": "cpp",
+    "Analyzer1.C": "cpp"
   },
   "github-enterprise.uri": "https://fsunuc.physics.fsu.edu"
 }

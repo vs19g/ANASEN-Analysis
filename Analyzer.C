@@ -337,25 +337,30 @@ Bool_t Analyzer::Process(Long64_t entry)
       denom = a2 * c2 - ac * ac;
       alpha = (ac * cdiff - c2 * adiff) / denom;
       beta = (a2 * cdiff - ac * adiff) / denom;
-      Crossover[i][j][1].x = pwinstance.An[i].first.X() + alpha * a.X();
-      Crossover[i][j][1].y = pwinstance.An[i].first.Y() + alpha * a.Y();
-      Crossover[i][j][1].z = pwinstance.An[i].first.Z() + alpha * a.Z();
-      //placeholder variable Crossover[i][j][2].x has nothing to do with the geometry of the crossover and is being used to store the alpha value, 
-      //so that it can be used to sort "good" hits later
-      Crossover[i][j][2].x = alpha;
-      // if (i == 23)
-      // {
-      //   if (abs(i - j) < 7 || abs(i - j) > 17)
-      //   {
-      //     if (alpha < 0 && alpha > -1)
-      //     {
-      //       printf("Anode and cathode indices and coord : %d %d %f %f %f %f\n", i, j, pwinstance.Ca[j].first.X(), pwinstance.Ca[j].first.Y(), pwinstance.Ca[j].first.Z(), alpha);
-      //       printf("Crossover wires, points and alpha are : %f %f %f %f \n", Crossover[i][j].x, Crossover[i][j].y, Crossover[i][j].z, alpha);
-      //     }
-      //   }
-      // }
+      Crossover[i][j][0].x = pwinstance.An[i].first.X() + alpha * a.X();
+      Crossover[i][j][0].y = pwinstance.An[i].first.Y() + alpha * a.Y();
+      Crossover[i][j][0].z = pwinstance.An[i].first.Z() + alpha * a.Z();
+
+      // placeholder variable Crossover[i][j][2].x has nothing to do with the geometry of the crossover and is being used to store the alpha value-
+      //-so that it can be used to sort "good" hits later
+      Crossover[i][j][1].x = alpha;
+
+      if (i == 16)
+      {
+        for(int k=0;k<5;k++){
+        if ((i+24+k)%24==j)
+        {
+          // if (alpha < 0 && alpha >= -1)
+          // {
+            printf("Anode and cathode indices and coord : %d %d %f %f %f %f\n", i, j, pwinstance.Ca[j].first.X(), pwinstance.Ca[j].first.Y(), pwinstance.Ca[j].first.Z(), alpha);
+            printf("Crossover wires, points and alpha are : %f %f %f %f \n", Crossover[i][j][1].x, Crossover[i][j][1].y, Crossover[i][j][1].z, Crossover[i][j][2].x /*this is alpha*/);
+          // }
+        }
+      }
+      }
     }
   }
+      
 
   std::vector<std::pair<int, double>> anodeHits = {};
   std::vector<std::pair<int, double>> cathodeHits = {};
@@ -387,7 +392,7 @@ Bool_t Analyzer::Process(Long64_t entry)
       int aIDnextMax = 0;
       int cIDnextMax = 0;
 
-      //creating a vector of pairs of anode and cathode hits that is sorted in order of decreasing energy
+      // creating a vector of pairs of anode and cathode hits that is sorted in order of decreasing energy
       if (pc.index[i] < 24)
       {
         anodeHits.push_back(std::pair<int, double>(pc.index[i], pc.e[i]));
@@ -397,7 +402,7 @@ Bool_t Analyzer::Process(Long64_t entry)
       else if (pc.index[i] >= 24)
       {
         cathodeHits.push_back(std::pair<int, double>(pc.index[i], pc.e[i]));
-        std::sort(cathodeHits.begin(), cathodeHits.end(),[](const std::pair<int, double> &a, const std::pair<int, double> &b)
+        std::sort(cathodeHits.begin(), cathodeHits.end(), [](const std::pair<int, double> &a, const std::pair<int, double> &b)
                   { return a.second > b.second; });
       }
 
@@ -419,6 +424,8 @@ Bool_t Analyzer::Process(Long64_t entry)
           aESum += aE;
           if (aE > aEMax)
           {
+            aIDnextMax = aIDMax;
+            aEnextMax = aEMax;
             aEMax = aE;
             aIDMax = aID;
           }
@@ -437,6 +444,8 @@ Bool_t Analyzer::Process(Long64_t entry)
           cE = cathode.second;
           if (cE > cEMax)
           {
+            cIDnextMax = cIDMax;
+            cEnextMax = cEMax;
             cEMax = cE;
             cIDMax = cID;
           }
@@ -481,7 +490,7 @@ Bool_t Analyzer::Process(Long64_t entry)
         // float aE = anode.second;
         // aESum += aE;
         // if(inPCCut){
-        hanVScatsum->Fill(aESum, cESum);
+        hanVScatsum->Fill(aEMax, cESum);
         // }
         if (aID < 24 && aE > 50)
         {
