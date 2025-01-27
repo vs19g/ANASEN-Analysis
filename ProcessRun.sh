@@ -30,4 +30,4 @@ if [ $option -eq 0 ]; then
     ./Mapper ${rootFolder}/*${runID}*${timeWindow}.root
 fi
 
-root "processRun.C(\"${rootFolder}/Run_${runID}_mapped.root\")"
+root "processRun.C(\"${rootFolder}/PulserRun_${runID}_mapped.root\")"

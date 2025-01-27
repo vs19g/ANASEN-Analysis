@@ -1,23 +1,27 @@
 #define Analyzer_cxx
 
 #include "Analyzer.h"
+#include "Armory/ClassSX3.h"
+#include "Armory/ClassPW.h"
+
 #include <TH2.h>
 #include <TStyle.h>
 #include <TCanvas.h>
 #include <TMath.h>
+#include "TVector3.h"
 
+#include <fstream>
+#include <iostream>
+#include <sstream>
+#include <map>
 #include <utility>
 #include <algorithm>
-
-#include "Armory/ClassSX3.h"
-#include "Armory/ClassPW.h"
-
-#include "TVector3.h"
 
 TH2F *hsx3IndexVE;
 TH2F *hqqqIndexVE;
 TH2F *hpcIndexVE;
 
+TH2F *hpcIndexVE_GM;
 TH2F *hsx3Coin;
 TH2F *hqqqCoin;
 TH2F *hpcCoin;
@@ -37,6 +41,8 @@ SX3 sx3_contr;
 PW pw_contr;
 PW pwinstance;
 TVector3 hitPos;
+std::map<int, std::pair<double, double>> slopeInterceptMap;
+
 bool HitNonZero;
 
 TH1F *hZProj;
@@ -49,8 +55,10 @@ void Analyzer::Begin(TTree * /*tree*/)
   hsx3IndexVE->SetNdivisions(-612, "x");
   hqqqIndexVE = new TH2F("hqqqIndexVE", "QQQ index vs Energy; QQQ index ; Energy", 4 * 2 * 16, 0, 4 * 2 * 16, 400, 0, 5000);
   hqqqIndexVE->SetNdivisions(-1204, "x");
-  hpcIndexVE = new TH2F("hpcIndexVE", "PC index vs Energy; PC index ; Energy", 2 * 24, 0, 2 * 24, 400, 0, 4000);
+  hpcIndexVE = new TH2F("hpcIndexVE", "PC index vs Energy; PC index ; Energy", 2 * 24, 0, 2 * 24, 400, 0, 16000);
   hpcIndexVE->SetNdivisions(-1204, "x");
+  hpcIndexVE_GM = new TH2F("hpcIndexVE_GM", "PC index vs Energy; PC index ; Energy", 2 * 24, 0, 2 * 24, 400, 0, 16000);
+  hpcIndexVE_GM->SetNdivisions(-1204, "x");
 
   hsx3Coin = new TH2F("hsx3Coin", "SX3 Coincident", 24 * 12, 0, 24 * 12, 24 * 12, 0, 24 * 12);
   hqqqCoin = new TH2F("hqqqCoin", "QQQ Coincident", 4 * 2 * 16, 0, 4 * 2 * 16, 4 * 2 * 16, 0, 4 * 2 * 16);
@@ -77,7 +85,6 @@ void Analyzer::Begin(TTree * /*tree*/)
 
   hanVScatsum = new TH2F("hanVScatsum", "Anode vs Cathode Sum; Anode E; Cathode E", 400, 0, 10000, 400, 0, 16000);
   hAnodeMultiplicity = new TH1F("hAnodeMultiplicity", "Number of Anodes/Event", 40, 0, 40);
-  hanVScatsum = new TH2F("hanVScatsum", "Anode vs Cathode Sum; Anode E; Cathode E", 400, 0, 10000, 800, 0, 16000);
   for (int i = 0; i < 24; i++)
   {
     TString histName = Form("hAnodeVsCathode_%d", i);
@@ -86,6 +93,29 @@ void Analyzer::Begin(TTree * /*tree*/)
   }
   sx3_contr.ConstructGeo();
   pw_contr.ConstructGeo();
+
+  std::ifstream inputFile("slope_intercept_results.txt");
+
+  if (inputFile.is_open())
+  {
+    std::string line;
+    int index;
+    double slope, intercept;
+    while (std::getline(inputFile, line))
+    {
+      std::stringstream ss(line);
+      ss >> index >> slope >> intercept;
+      if (index >= 0 && index <= 47)
+      {
+        slopeInterceptMap[index] = std::make_pair(slope, intercept);
+      }
+    }
+    inputFile.close();
+  }
+  else
+  {
+    std::cerr << "Error opening slope_intercept.txt" << std::endl;
+  }
 }
 
 Bool_t Analyzer::Process(Long64_t entry)
@@ -308,6 +338,23 @@ Bool_t Analyzer::Process(Long64_t entry)
     {
       hpcCoin->Fill(pc.index[i], pc.index[j]);
     }
+
+    // Gain Matching of PC wires
+    if (pc.index[i] >= 0 && pc.index[i] < 48)
+    {
+      // printf("index: %d, Old cathode energy: %d \n", pc.index[i],pc.e[i]);
+      auto it = slopeInterceptMap.find(pc.index[i]);
+      if (it != slopeInterceptMap.end())
+      {
+        double slope = it->second.first;
+        double intercept = it->second.second;
+        // printf("slope: %f, intercept:%f\n" ,slope, intercept);
+        pc.e[i] = slope * pc.e[i] + intercept;
+        // printf("index: %d, New cathode energy: %d \n",pc.index[i], pc.e[i]);
+      }
+      hpcIndexVE_GM->Fill(pc.index[i], pc.e[i]);
+
+    }
   }
 
   // Calculate the crossover points and put them into an array
@@ -345,22 +392,22 @@ Bool_t Analyzer::Process(Long64_t entry)
       //-so that it can be used to sort "good" hits later
       Crossover[i][j][1].x = alpha;
 
-      if (i == 16)
-      {
-        for(int k=0;k<5;k++){
-        if ((i+24+k)%24==j)
-        {
-          // if (alpha < 0 && alpha >= -1)
-          // {
-            printf("Anode and cathode indices and coord : %d %d %f %f %f %f\n", i, j, pwinstance.Ca[j].first.X(), pwinstance.Ca[j].first.Y(), pwinstance.Ca[j].first.Z(), alpha);
-            printf("Crossover wires, points and alpha are : %f %f %f %f \n", Crossover[i][j][1].x, Crossover[i][j][1].y, Crossover[i][j][1].z, Crossover[i][j][2].x /*this is alpha*/);
-          // }
-        }
-      }
-      }
+      // if (i == 16)
+      // {
+      //   for (int k = 0; k < 5; k++)
+      //   {
+      //     if ((i + 24 + k) % 24 == j)
+      //     {
+      //       // if (alpha < 0 && alpha >= -1)
+      //       // {
+      //       printf("Anode and cathode indices and coord : %d %d %f %f %f %f\n", i, j, pwinstance.Ca[j].first.X(), pwinstance.Ca[j].first.Y(), pwinstance.Ca[j].first.Z(), alpha);
+      //       printf("Crossover wires, points and alpha are : %f %f %f %f \n", Crossover[i][j][1].x, Crossover[i][j][1].y, Crossover[i][j][1].z, Crossover[i][j][2].x /*this is alpha*/);
+      //       // }
+      //     }
+      //   }
+      // }
     }
   }
-      
 
   std::vector<std::pair<int, double>> anodeHits = {};
   std::vector<std::pair<int, double>> cathodeHits = {};
