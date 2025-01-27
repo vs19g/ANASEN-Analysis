@@ -33,6 +33,7 @@ TH2F *hqqqVpcE;
 TH2F *hsx3VpcE;
 TH2F *hanVScatsum;
 TH2F *hanVScatsum_a[24];
+TH1F *hPC_E[48];
 TH1F *hAnodeMultiplicity;
 
 int padID = 0;
@@ -91,6 +92,12 @@ void Analyzer::Begin(TTree * /*tree*/)
     TString histTitle = Form("Anode %d vs Cathode Sum; Anode E; Cathode Sum E", i);
     hanVScatsum_a[i] = new TH2F(histName, histTitle, 400, 0, 10000, 400, 0, 16000);
   }
+  for (int i = 0; i < 48; i++)
+  {
+    TString histName = Form("hCathode_%d", i);
+    TString histTitle = Form("Cathode_E_%d;", i);
+    hPC_E[i] = new TH1F(histName, histTitle, 3200, 0, 32000);
+  }
   sx3_contr.ConstructGeo();
   pw_contr.ConstructGeo();
 
@@ -105,6 +112,8 @@ void Analyzer::Begin(TTree * /*tree*/)
     {
       std::stringstream ss(line);
       ss >> index >> slope >> intercept;
+      // wires 37, 39, 44 have fit data that is incorrect or not present, they have thus been set to 1,0 (slope, intercept) for convenience
+      // wire 19 the 4th point was genereated using the slope of the line produced uising the other 3 points from the wire 1 vs wire 19 plot
       if (index >= 0 && index <= 47)
       {
         slopeInterceptMap[index] = std::make_pair(slope, intercept);
@@ -328,7 +337,20 @@ Bool_t Analyzer::Process(Long64_t entry)
   {
 
     if (pc.e[i] > 100)
+    {
       ID.push_back(std::pair<int, int>(pc.id[i], i));
+      if (pc.index[i] >= 0 && pc.index[i] < 48 && hPC_E[pc.index[i]] != nullptr)
+      {
+        //   if (pc.index[i] >= 24 && pc.index[i] < 48) {
+        hPC_E[pc.index[i]]->Fill(pc.e[i]);
+      }
+
+      // }
+      else
+      {
+        printf("Warning: Invalid index %d or null pointer detected!\n", pc.index[i]);
+      }
+    }
     if (pc.e[i] > 100)
       E.push_back(std::pair<int, double>(pc.index[i], pc.e[i]));
 
@@ -353,7 +375,6 @@ Bool_t Analyzer::Process(Long64_t entry)
         // printf("index: %d, New cathode energy: %d \n",pc.index[i], pc.e[i]);
       }
       hpcIndexVE_GM->Fill(pc.index[i], pc.e[i]);
-
     }
   }
 
@@ -707,4 +728,23 @@ void Analyzer::Terminate()
   canvas->cd(padID)->SetGrid(1);
   //  hZProj->Draw();
   hanVScatsum->Draw("colz");
+
+  TFile *outRoot = new TFile("Histograms.root", "RECREATE");
+
+  if (!outRoot->IsOpen())
+  {
+    std::cerr << "Error opening file for writing!" << std::endl;
+    return;
+  }
+
+  // Loop through histograms and write them to the ROOT file
+  for (int i = 0; i < 48; i++)
+  {
+    if (hPC_E[i] != nullptr)
+    {
+      hPC_E[i]->Write(); // Write histogram to file
+    }
+  }
+
+  outRoot->Close();
 }

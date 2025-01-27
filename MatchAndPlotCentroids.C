@@ -49,9 +49,10 @@ void MatchAndPlotCentroids() {
     }
     outputFile << "Histogram Number\tSlope\tIntercept\n";
     // Loop through histograms 25 to 47
-    for (int targetHist = 0; targetHist <= 23; ++targetHist) {
+    for (int targetHist = 0; targetHist <= 23; targetHist++) {
         // Ensure the target histogram exists and matches in peak numbers
         if (centroidData.find(targetHist) == centroidData.end() || centroidData[targetHist].size() != referenceCentroids.size()) {
+            //4th cnetroid data point for 19 was generated using the 3 datqa points for the slope of wires 0 and 19
             std::cout << "Skipping Histogram " << targetHist << " due to mismatched or missing data." << std::endl;
             continue;
         }
@@ -67,8 +68,8 @@ void MatchAndPlotCentroids() {
             }
         }
 
-        if (xValues.size() < 4) {
-            std::cout << "Skipping Histogram " << targetHist << " as it has less than 4 matching centroids." << std::endl;
+        if (xValues.size() < 3) {
+            std::cout << "Skipping Histogram " << targetHist << " as it has less than 3 matching centroids." << std::endl;
             continue;
         }
 

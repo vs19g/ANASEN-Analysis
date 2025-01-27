@@ -10,7 +10,7 @@
 #include <TText.h>
 
 void FitHistogramsWithTSpectrum_Sequential_Improved() {
-    TFile *inputFile = new TFile("../Histograms_anodes.root", "READ");
+    TFile *inputFile = new TFile("Histograms_anodes.root", "READ");
     if (!inputFile || inputFile->IsZombie()) {
         std::cerr << "Error opening the input file!" << std::endl;
         return;
