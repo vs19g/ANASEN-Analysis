@@ -84,13 +84,13 @@ void Analyzer::Begin(TTree * /*tree*/)
 
   hZProj = new TH1F("hZProj", "Z Projection", 200, -600, 600);
 
-  hanVScatsum = new TH2F("hanVScatsum", "Anode vs Cathode Sum; Anode E; Cathode E", 400, 0, 10000, 400, 0, 16000);
+  hanVScatsum = new TH2F("hanVScatsum", "Anode vs Cathode Sum; Anode E; Cathode E", 400, 0, 16000, 400, 0, 20000);
   hAnodeMultiplicity = new TH1F("hAnodeMultiplicity", "Number of Anodes/Event", 40, 0, 40);
   for (int i = 0; i < 24; i++)
   {
     TString histName = Form("hAnodeVsCathode_%d", i);
     TString histTitle = Form("Anode %d vs Cathode Sum; Anode E; Cathode Sum E", i);
-    hanVScatsum_a[i] = new TH2F(histName, histTitle, 400, 0, 10000, 400, 0, 16000);
+    hanVScatsum_a[i] = new TH2F(histName, histTitle, 400, 0, 16000, 400, 0, 20000);
   }
   for (int i = 0; i < 48; i++)
   {
@@ -432,10 +432,22 @@ Bool_t Analyzer::Process(Long64_t entry)
 
   std::vector<std::pair<int, double>> anodeHits = {};
   std::vector<std::pair<int, double>> cathodeHits = {};
+  std::vector<std::pair<int, double>> corrcatMax = {};
+  std::vector<std::pair<int, double>> corrcatnextMax = {};
   int aID = 0;
   int cID = 0;
   float aE = 0;
   float cE = 0;
+  float aESum = 0;
+  float cESum = 0;
+  float aEMax = 0;
+  float cEMax = 0;
+  float aEnextMax = 0;
+  float cEnextMax = 0;
+  int aIDMax = 0;
+  int cIDMax = 0;
+  int aIDnextMax = 0;
+  int cIDnextMax = 0;
 
   // Define the excluded SX3 and QQQ channels
   // std::unordered_set<int> excludeSX3 = {34, 35, 36, 37, 61, 62, 67, 73, 74, 75, 76, 77, 78, 79, 80, 93, 97, 100, 103, 108, 109, 110, 111, 112};
@@ -445,21 +457,8 @@ Bool_t Analyzer::Process(Long64_t entry)
   // inPCCut=false;
   for (int i = 0; i < pc.multi; i++)
   {
-
     if (pc.e[i] > 50 && pc.multi < 7)
     {
-
-      float aESum = 0;
-      float cESum = 0;
-      float aEMax = 0;
-      float cEMax = 0;
-      float aEnextMax = 0;
-      float cEnextMax = 0;
-      int aIDMax = 0;
-      int cIDMax = 0;
-      int aIDnextMax = 0;
-      int cIDnextMax = 0;
-
       // creating a vector of pairs of anode and cathode hits that is sorted in order of decreasing energy
       if (pc.index[i] < 24)
       {
@@ -524,115 +523,70 @@ Bool_t Analyzer::Process(Long64_t entry)
           }
 
           cESum += cE;
-        }
-        // }
-
-        // inCuth = false;
-        // inCutl = false;
-        // inPCCut = false;
-        // for(int j=i+1;j<pc.multi;j++){
-        //   if(PCCoinc_cut1->IsInside(pc.index[i], pc.index[j]) || PCCoinc_cut2->IsInside(pc.index[i], pc.index[j])){
-        //     // hpcCoin->Fill(pc.index[i], pc.index[j]);
-        //     inPCCut = true;
-        //   }
-        //   hpcCoin->Fill(pc.index[i], pc.index[j]);
-        // }
-
-        // Check if the accumulated energies are within the defined ranges
-        // if (AnCatSum_high && AnCatSum_high->IsInside(aESum, cESum)) {
-        //     inCuth = true;
-        // }
-        // if (AnCatSum_low && AnCatSum_low->IsInside(aESum, cESum)) {
-        //     inCutl = true;
-        // }
-
-        // Fill histograms based on the cut conditions
-        // if (inCuth && inPCCut) {
-        //     hanVScatsum_hcut->Fill(aESum, cESum);
-        // }
-        // if (inCutl && inPCCut) {
-        //     hanVScatsum_lcut->Fill(aESum, cESum);
-        // }
-        // for(auto anode : anodeHits){
-
-        // float aE = anode.second;
-        // aESum += aE;
-        // if(inPCCut){
-        hanVScatsum->Fill(aEMax, cESum);
-        // }
-        if (aID < 24 && aE > 50)
-        {
-          hanVScatsum_a[aID]->Fill(aE, cESum);
-        }
-
-        // }
-        // Fill histograms for the `pc` data
-        hpcIndexVE->Fill(pc.index[i], pc.e[i]);
-        // if(inPCCut){
-        hAnodeMultiplicity->Fill(anodeHits.size());
-        // }
-      }
-    }
-  }
-
-  if (E.size() >= 3)
-  {
-
-    int aID = 0;
-    int cID = 0;
-
-    float aE = 0;
-    float cE = 0;
-    // if( ID[0].first < 1 ) {
-    //   aID = pc.ch[ID[0].second];
-    //   cID = pc.ch[ID[1].second];
-    // }else{
-    //   cID = pc.ch[ID[0].second];
-    //   aID = pc.ch[ID[1].second];
-    // }
-    // printf("anode= %d, cathode = %d\n", aID, cID);
-
-    for (int k = 0; k < qqq.multi; k++)
-    {
-      if (qqq.index[k] == 75 && pc.index[k] == 2 && pc.e[k] > 100)
-      {
-
-        int multi_an = 0;
-        for (int l = 0; l < E.size(); l++)
-        {
-          if (E[l].first < 24)
+          for (int j = 0; j < 5; j++)
           {
-            multi_an++;
-          }
-        }
-
-        if (multi_an >= 1)
-        {
-          for (int l = 0; l < E.size(); l++)
-          {
-            if (E[l].first < 24 && E[l].first != 19 && E[l].first != 12)
+            if ((aIDMax + 24 + j) % 24 == cathode.first)
             {
-              aE = E[l].second;
+              corrcatMax.push_back(std::pair<int, double>(cathode.first, cathode.second));
             }
-            else if (E[l].first > 24)
+            if((aIDnextMax + 24 + j) % 24 == cathode.first)
             {
-              cE = E[l].second;
+              corrcatnextMax.push_back(std::pair<int, double>(cathode.first, cathode.second));
             }
           }
+          // for(int j=0;j<24;j++){
+          //   if(corrcatMax[j]==corrcatnextMax[j])
+          //   std::cout << "Common Cathode" << j;
+          // }
+
+          // }
+
+          // inCuth = false;
+          // inCutl = false;
+          // inPCCut = false;
+          // for(int j=i+1;j<pc.multi;j++){
+          //   if(PCCoinc_cut1->IsInside(pc.index[i], pc.index[j]) || PCCoinc_cut2->IsInside(pc.index[i], pc.index[j])){
+          //     // hpcCoin->Fill(pc.index[i], pc.index[j]);
+          //     inPCCut = true;
+          //   }
+          //   hpcCoin->Fill(pc.index[i], pc.index[j]);
+          // }
+
+          // Check if the accumulated energies are within the defined ranges
+          // if (AnCatSum_high && AnCatSum_high->IsInside(aESum, cESum)) {
+          //     inCuth = true;
+          // }
+          // if (AnCatSum_low && AnCatSum_low->IsInside(aESum, cESum)) {
+          //     inCutl = true;
+          // }
+
+          // Fill histograms based on the cut conditions
+          // if (inCuth && inPCCut) {
+          //     hanVScatsum_hcut->Fill(aESum, cESum);
+          // }
+          // if (inCutl && inPCCut) {
+          //     hanVScatsum_lcut->Fill(aESum, cESum);
+          // }
+          // for(auto anode : anodeHits){
+
+          // float aE = anode.second;
+          // aESum += aE;
+          // if(inPCCut){
+          hanVScatsum->Fill(aEMax, cESum);
+          // }
+          if (aID < 24 && aE > 50)
+          {
+            hanVScatsum_a[aID]->Fill(aE, cESum);
+          }
+
+          // }
+          // Fill histograms for the `pc` data
+          hpcIndexVE->Fill(pc.index[i], pc.e[i]);
+          // if(inPCCut){
+          hAnodeMultiplicity->Fill(anodeHits.size());
+          // }
         }
       }
-    }
-    hanVScatsum->Fill(aE, cE);
-
-    if (ID[0].first < 1)
-    {
-      aID = pc.ch[ID[0].second];
-      cID = pc.ch[ID[1].second];
-    }
-    else
-    {
-      cID = pc.ch[ID[0].second];
-      aID = pc.ch[ID[1].second];
     }
 
     if (HitNonZero)
