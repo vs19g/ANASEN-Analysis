@@ -47,6 +47,7 @@ std::map<int, std::pair<double, double>> slopeInterceptMap;
 bool HitNonZero;
 
 TH1F *hZProj;
+TH1F *hPCZProj;
 
 void Analyzer::Begin(TTree * /*tree*/)
 {
@@ -83,6 +84,7 @@ void Analyzer::Begin(TTree * /*tree*/)
   hsx3VpcE->SetNdivisions(-12, "y");
 
   hZProj = new TH1F("hZProj", "Z Projection", 200, -600, 600);
+  hPCZProj = new TH1F("hPCZProj", "PC Z Projection", 200, -600, 600);
 
   hanVScatsum = new TH2F("hanVScatsum", "Anode vs Cathode Sum; Anode E; Cathode E", 400, 0, 16000, 400, 0, 20000);
   hAnodeMultiplicity = new TH1F("hAnodeMultiplicity", "Number of Anodes/Event", 40, 0, 40);
@@ -434,6 +436,7 @@ Bool_t Analyzer::Process(Long64_t entry)
   std::vector<std::pair<int, double>> cathodeHits = {};
   std::vector<std::pair<int, double>> corrcatMax = {};
   std::vector<std::pair<int, double>> corrcatnextMax = {};
+  std::vector<std::pair<int, double>> commcat = {};
   int aID = 0;
   int cID = 0;
   float aE = 0;
@@ -523,69 +526,91 @@ Bool_t Analyzer::Process(Long64_t entry)
           }
 
           cESum += cE;
+          // This section of code is used to find the cathodes are correlated with the max and next max anodes, as well as to figure out if there are any common cathodes
           for (int j = 0; j < 5; j++)
           {
             if ((aIDMax + 24 + j) % 24 == cathode.first)
             {
               corrcatMax.push_back(std::pair<int, double>(cathode.first, cathode.second));
+              std::sort(corrcatMax.begin(), corrcatMax.end(), [](const std::pair<int, double> &a, const std::pair<int, double> &b)
+                        { return a.second > b.second; });
             }
-            if((aIDnextMax + 24 + j) % 24 == cathode.first)
+            if ((aIDnextMax + 24 + j) % 24 == cathode.first)
             {
               corrcatnextMax.push_back(std::pair<int, double>(cathode.first, cathode.second));
+              std::sort(corrcatMax.begin(), corrcatMax.end(), [](const std::pair<int, double> &a, const std::pair<int, double> &b)
+                        { return a.second > b.second; });
+            }
+            for (int k = 0; k < 5; k++)
+            {
+              if ((aIDMax + 24 + j) % 24 == (aIDnextMax + 24 + k) % 24)
+              {
+                commcat.push_back(std::pair<int, double>(cathode.first, cathode.second));
+              }
             }
           }
-          // for(int j=0;j<24;j++){
-          //   if(corrcatMax[j]==corrcatnextMax[j])
-          //   std::cout << "Common Cathode" << j;
-          // }
-
-          // }
-
-          // inCuth = false;
-          // inCutl = false;
-          // inPCCut = false;
-          // for(int j=i+1;j<pc.multi;j++){
-          //   if(PCCoinc_cut1->IsInside(pc.index[i], pc.index[j]) || PCCoinc_cut2->IsInside(pc.index[i], pc.index[j])){
-          //     // hpcCoin->Fill(pc.index[i], pc.index[j]);
-          //     inPCCut = true;
-          //   }
-          //   hpcCoin->Fill(pc.index[i], pc.index[j]);
-          // }
-
-          // Check if the accumulated energies are within the defined ranges
-          // if (AnCatSum_high && AnCatSum_high->IsInside(aESum, cESum)) {
-          //     inCuth = true;
-          // }
-          // if (AnCatSum_low && AnCatSum_low->IsInside(aESum, cESum)) {
-          //     inCutl = true;
-          // }
-
-          // Fill histograms based on the cut conditions
-          // if (inCuth && inPCCut) {
-          //     hanVScatsum_hcut->Fill(aESum, cESum);
-          // }
-          // if (inCutl && inPCCut) {
-          //     hanVScatsum_lcut->Fill(aESum, cESum);
-          // }
-          // for(auto anode : anodeHits){
-
-          // float aE = anode.second;
-          // aESum += aE;
-          // if(inPCCut){
-          hanVScatsum->Fill(aEMax, cESum);
-          // }
-          if (aID < 24 && aE > 50)
-          {
-            hanVScatsum_a[aID]->Fill(aE, cESum);
-          }
-
-          // }
-          // Fill histograms for the `pc` data
-          hpcIndexVE->Fill(pc.index[i], pc.e[i]);
-          // if(inPCCut){
-          hAnodeMultiplicity->Fill(anodeHits.size());
-          // }
         }
+        TVector3 anodeIntersection;
+        // Implementing a method for PC reconstruction using a single Anode event
+        if (anodeHits.size() == 1)
+        {
+          for (const auto &corr : corrcatMax)
+          {
+            anodeIntersection += TVector3((corr.second) / cESum * Crossover[aIDMax][corr.first][0].x, (corr.second) / cESum * Crossover[aIDMax][corr.first][0].y,
+                                          (corr.second) / cESum * Crossover[aIDMax][corr.first][0].z);
+          }
+        }
+
+        //Filling the PC Z projection histogram
+        hPCZProj->Fill(anodeIntersection.Z());
+
+
+        // }
+
+        // inCuth = false;
+        // inCutl = false;
+        // inPCCut = false;
+        // for(int j=i+1;j<pc.multi;j++){
+        //   if(PCCoinc_cut1->IsInside(pc.index[i], pc.index[j]) || PCCoinc_cut2->IsInside(pc.index[i], pc.index[j])){
+        //     // hpcCoin->Fill(pc.index[i], pc.index[j]);
+        //     inPCCut = true;
+        //   }
+        //   hpcCoin->Fill(pc.index[i], pc.index[j]);
+        // }
+
+        // Check if the accumulated energies are within the defined ranges
+        // if (AnCatSum_high && AnCatSum_high->IsInside(aESum, cESum)) {
+        //     inCuth = true;
+        // }
+        // if (AnCatSum_low && AnCatSum_low->IsInside(aESum, cESum)) {
+        //     inCutl = true;
+        // }
+
+        // Fill histograms based on the cut conditions
+        // if (inCuth && inPCCut) {
+        //     hanVScatsum_hcut->Fill(aESum, cESum);
+        // }
+        // if (inCutl && inPCCut) {
+        //     hanVScatsum_lcut->Fill(aESum, cESum);
+        // }
+        // for(auto anode : anodeHits){
+
+        // float aE = anode.second;
+        // aESum += aE;
+        // if(inPCCut){
+        hanVScatsum->Fill(aEMax, cESum);
+        // }
+        if (aID < 24 && aE > 50)
+        {
+          hanVScatsum_a[aID]->Fill(aE, cESum);
+        }
+
+        // }
+        // Fill histograms for the `pc` data
+        hpcIndexVE->Fill(pc.index[i], pc.e[i]);
+        // if(inPCCut){
+        hAnodeMultiplicity->Fill(anodeHits.size());
+        // }
       }
     }
 
