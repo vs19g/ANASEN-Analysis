@@ -83,8 +83,8 @@ void Analyzer::Begin(TTree * /*tree*/)
   hsx3VpcE->SetNdivisions(-612, "x");
   hsx3VpcE->SetNdivisions(-12, "y");
 
-  hZProj = new TH1F("hZProj", "Z Projection", 200, -600, 600);
-  hPCZProj = new TH1F("hPCZProj", "PC Z Projection", 200, -600, 600);
+  hZProj = new TH1F("hZProj", "Z Projection", 1200, -600, 600);
+  hPCZProj = new TH1F("hPCZProj", "PC Z Projection", 1200, -600, 600);
 
   hanVScatsum = new TH2F("hanVScatsum", "Anode vs Cathode Sum; Anode E; Cathode E", 400, 0, 16000, 400, 0, 20000);
   hAnodeMultiplicity = new TH1F("hAnodeMultiplicity", "Number of Anodes/Event", 40, 0, 40);
@@ -471,7 +471,7 @@ Bool_t Analyzer::Process(Long64_t entry)
       }
       else if (pc.index[i] >= 24)
       {
-        cathodeHits.push_back(std::pair<int, double>(pc.index[i], pc.e[i]));
+        cathodeHits.push_back(std::pair<int, double>(pc.index[i] - 23, pc.e[i]));
         std::sort(cathodeHits.begin(), cathodeHits.end(), [](const std::pair<int, double> &a, const std::pair<int, double> &b)
                   { return a.second > b.second; });
       }
@@ -504,14 +504,16 @@ Bool_t Analyzer::Process(Long64_t entry)
             aEnextMax = aE;
             aIDnextMax = aID;
           }
-          // printf("aID : %d, aE : %f\n", aID, aE);
         }
+
+        // std::cout<<" Anode iD : "<<aIDMax<<" Energy : "<<aEMax<<std::endl;
 
         // printf("aID : %d, aE : %f, cE : %f\n", aID, aE, cE);
         for (const auto &cathode : cathodeHits)
         {
           cID = cathode.first;
           cE = cathode.second;
+          // std::cout<<cID<<" "<<cE<<std::endl;
           if (cE > cEMax)
           {
             cIDnextMax = cIDMax;
@@ -529,13 +531,14 @@ Bool_t Analyzer::Process(Long64_t entry)
           // This section of code is used to find the cathodes are correlated with the max and next max anodes, as well as to figure out if there are any common cathodes
           for (int j = 0; j < 5; j++)
           {
-            if ((aIDMax + 24 + j) % 24 == cathode.first)
+            if ((aIDMax + 24 + j) % 24 == cID)
             {
-              corrcatMax.push_back(std::pair<int, double>(cathode.first, cathode.second));
+              corrcatMax.push_back(std::pair<int, double>(cID, cE));
               std::sort(corrcatMax.begin(), corrcatMax.end(), [](const std::pair<int, double> &a, const std::pair<int, double> &b)
                         { return a.second > b.second; });
+              // std::cout << " Cathode iD : " << cID<< " Energy : " << cE << std::endl;
             }
-            if ((aIDnextMax + 24 + j) % 24 == cathode.first)
+            if ((aIDnextMax + 24 + j) % 24 == cID)
             {
               corrcatnextMax.push_back(std::pair<int, double>(cathode.first, cathode.second));
               std::sort(corrcatMax.begin(), corrcatMax.end(), [](const std::pair<int, double> &a, const std::pair<int, double> &b)
@@ -558,12 +561,13 @@ Bool_t Analyzer::Process(Long64_t entry)
           {
             anodeIntersection += TVector3((corr.second) / cESum * Crossover[aIDMax][corr.first][0].x, (corr.second) / cESum * Crossover[aIDMax][corr.first][0].y,
                                           (corr.second) / cESum * Crossover[aIDMax][corr.first][0].z);
+            std::cout << anodeIntersection.Z() << std::endl;
           }
         }
 
-        //Filling the PC Z projection histogram
+        // Filling the PC Z projection histogram
+        // std::cout << anodeIntersection.Z() << std::endl;
         hPCZProj->Fill(anodeIntersection.Z());
-
 
         // }
 
