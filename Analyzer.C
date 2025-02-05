@@ -332,39 +332,6 @@ Bool_t Analyzer::Process(Long64_t entry)
   }
   // //======================= PC
 
-  std::vector<std::pair<int, double>> E;
-  E.clear();
-  // anodeIntersection.Clear();
-  for (int i = 0; i < pc.multi; i++)
-  {
-
-    if (pc.e[i] > 100 && pc.index[i] >= 0 && pc.index[i] < 48)
-    {
-      hPC_E[pc.index[i]]->Fill(pc.e[i]);
-      hpcIndexVE->Fill(pc.index[i], pc.e[i]);
-      for (int j = i + 1; j < pc.multi; j++)
-      {
-        hpcCoin->Fill(pc.index[i], pc.index[j]);
-      }
-    }
-
-    // Gain Matching of PC wires
-    if (pc.index[i] >= 0 && pc.index[i] < 48)
-    {
-      // printf("index: %d, Old cathode energy: %d \n", pc.index[i],pc.e[i]);
-      auto it = slopeInterceptMap.find(pc.index[i]);
-      if (it != slopeInterceptMap.end())
-      {
-        double slope = it->second.first;
-        double intercept = it->second.second;
-        // printf("slope: %f, intercept:%f\n" ,slope, intercept);
-        pc.e[i] = slope * pc.e[i] + intercept;
-        // printf("index: %d, New cathode energy: %d \n",pc.index[i], pc.e[i]);
-      }
-      hpcIndexVE_GM->Fill(pc.index[i], pc.e[i]);
-    }
-  }
-
   // Calculate the crossover points and put them into an array
 
   pwinstance.ConstructGeo();
@@ -377,7 +344,7 @@ Bool_t Analyzer::Process(Long64_t entry)
     a = pwinstance.An[i].first - pwinstance.An[i].second;
     for (int j = 0; j < pwinstance.Ca.size(); j++)
     {
-      // Ok so this method uses what is essentially th solution of 2 equations to find the point of intersection between the anode and cathode wires
+      // Ok so this method uses what is essentially the solution of 2 equations to find the point of intersection between the anode and cathode wires
       // here a and c are the vectors of the anode and cathode wires respectively
       // diff is the perpendicular vector between the anode and cathode wires
       // The idea behind this is to then find the scalars alpha and beta that give a ratio between 0 and -1,
@@ -401,20 +368,48 @@ Bool_t Analyzer::Process(Long64_t entry)
       //-so that it can be used to sort "good" hits later
       Crossover[i][j][1].x = alpha;
 
-      // if (i == 18)
-      // {
-      //   for (int k = -3; k < 2; k++)
-      //   {
-      //     if ((i + 24 + k) % 24 == 23 - j ) // the 23-j is used to accomodate for the fact that the order of the cathodes was reversed
-      //     {
-      //       if (alpha < 1 && alpha >= -1)
-      //       {
-      //       printf("Anode and cathode indices and coord : %d %d %f %f %f %f\n", i, j, pwinstance.Ca[j].first.X(), pwinstance.Ca[j].first.Y(), pwinstance.Ca[j].first.Z(), alpha);
-      //       printf("Crossover wires, points and alpha are : %f %f %f %f \n", Crossover[i][j][1].x, Crossover[i][j][1].y, Crossover[i][j][1].z, Crossover[i][j][2].x /*this is alpha*/);
-      //       }
-      //     }
-      //   }
-      // }
+      if (i == 4)
+      {
+        for (int k = -4; k < 3; k++)
+        {
+          if ((i + 24 + k) % 24 == 23 - j) // the 23-j is used to accomodate for the fact that the order of the cathodes was reversed
+          {
+            // if (alpha < 1 && alpha >= -1)
+            {
+              Crossover[i][j][0].z = 9999999; // this is a placeholder value to indicate that the anode and cathode wires do not intersect
+              printf("Anode and cathode indices and coord : %d %d %f %f %f %f\n", i, j, pwinstance.Ca[j].first.X(), pwinstance.Ca[j].first.Y(), pwinstance.Ca[j].first.Z(), alpha);
+              // printf("Crossover wires, points and alpha are : %f %f %f %f \n", Crossover[i][j][1].x, Crossover[i][j][1].y, Crossover[i][j][1].z, Crossover[i][j][2].x /*this is alpha*/);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // anodeIntersection.Clear();
+  for (int i = 0; i < pc.multi; i++)
+  {
+
+    if (pc.e[i] > 100)
+    {
+      hpcIndexVE->Fill(pc.index[i], pc.e[i]); // non gain matched energy
+    }
+
+    // Gain Matching of PC wires
+    if (pc.index[i] >= 0 && pc.index[i] < 48)
+    {
+      // printf("index: %d, Old cathode energy: %d \n", pc.index[i],pc.e[i]);
+      auto it = slopeInterceptMap.find(pc.index[i]);
+      if (it != slopeInterceptMap.end())
+      {
+        double slope = it->second.first;
+        double intercept = it->second.second;
+        // printf("slope: %f, intercept:%f\n" ,slope, intercept);
+        pc.e[i] = slope * pc.e[i] + intercept;
+        // printf("index: %d, New cathode energy: %d \n",pc.index[i], pc.e[i]);
+      }
+      hpcIndexVE_GM->Fill(pc.index[i], pc.e[i]);
+      // hPC_E[pc.index[i]]->Fill(pc.e[i]);
     }
   }
 
@@ -446,10 +441,9 @@ Bool_t Analyzer::Process(Long64_t entry)
   // inPCCut=false;
   for (int i = 0; i < pc.multi; i++)
   {
-    if (pc.e[i] > 50 /*&& pc.multi < 7*/)
+    if (pc.e[i] > 100 /*&& pc.multi < 7*/)
     {
-      // creating a vector of pairs of anode and cathode hits that is sorted in order of decreasing energy
-
+      // creating a vector of pairs of anode and cathode hits
       if (pc.index[i] < 24)
       {
         anodeHits.push_back(std::pair<int, double>(pc.index[i], pc.e[i]));
@@ -467,9 +461,9 @@ Bool_t Analyzer::Process(Long64_t entry)
         // }
         hpcCoin->Fill(pc.index[i], pc.index[j]);
       }
-      hpcIndexVE->Fill(pc.index[i], pc.e[i]);
     }
   }
+  // sorting the anode and cathode hits in descending order of energy
   std::sort(anodeHits.begin(), anodeHits.end(), [](const std::pair<int, double> &a, const std::pair<int, double> &b)
             { return a.second > b.second; });
   std::sort(cathodeHits.begin(), cathodeHits.end(), [](const std::pair<int, double> &a, const std::pair<int, double> &b)
@@ -516,7 +510,6 @@ Bool_t Analyzer::Process(Long64_t entry)
       //   cIDnextMax = cID;
       // }
 
-      // cESum += cE;
       cESum += cE;
       // This section of code is used to find the cathodes are correlated with the max and next max anodes, as well as to figure out if there are any common cathodes
       // the anodes are correlated with the cathodes +/-2 from the anode number in the reverse order
@@ -525,8 +518,6 @@ Bool_t Analyzer::Process(Long64_t entry)
         if ((aIDMax + 24 + j) % 24 == 23 - cID) /* the 23-cID is used to accomodate for the fact that the order of the cathodes was reversed relative top the physical geometry */
         {
           corrcatMax.push_back(std::pair<int, double>(cID, cE));
-          // std::sort(corrcatMax.begin(), corrcatMax.end(), [](const std::pair<int, double> &a, const std::pair<int, double> &b)
-          //           { return a.second > b.second; });
           // std::cout << " Cathode iD : " << cID << " Energy : " << cE << std::endl;
         }
         // if ((aIDnextMax + 24 + j) % 24 == cID)
