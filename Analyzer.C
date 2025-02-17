@@ -93,7 +93,7 @@ void Analyzer::Begin(TTree * /*tree*/)
   hsx3VpcE->SetNdivisions(-12, "y");
 
   // hZProj = new TH1F("hZProj", "Z Projection", 1200, -600, 600);
-  hPCZProj = new TH1F("hPCZProj", "PC Z Projection", 1200, -600, 10000);
+  hPCZProj = new TH1F("hPCZProj", "PC Z Projection", 600, -300, 300);
 
   hanVScatsum = new TH2F("hanVScatsum", "Anode vs Cathode Sum; Anode E; Cathode E", 400, 0, 16000, 400, 0, 20000);
   hCat4An = new TH1F("hCat4An", "Number of Cathodes/Anode", 24, 0, 24);
@@ -386,36 +386,36 @@ Bool_t Analyzer::Process(Long64_t entry)
       Crossover[i][j][0].x = pwinstance.An[i].first.X() + alpha * a.X();
       Crossover[i][j][0].y = pwinstance.An[i].first.Y() + alpha * a.Y();
       Crossover[i][j][0].z = pwinstance.An[i].first.Z() + alpha * a.Z();
+      if(Crossover[i][j][0].z <-190 || Crossover[i][j][0].z > 190) Crossover[i][j][0].z = 9999999;
 
       // placeholder variable Crossover[i][j][2].x has nothing to do with the geometry of the crossover and is being used to store the alpha value-
       //-so that it can be used to sort "good" hits later
       Crossover[i][j][1].x = alpha;
-
-      bool corr = false;
-      // if (i == 4)
-      {
-        for (int k = -4; k < 3; k++)
-        {
-          if ((i + 24 + k) % 24 == 23 - j) // the 23-j is used to accomodate for the fact that the order of the cathodes was reversed
-          {
-            corr = true;
-            break;
-          }
-          else if ((i + 24 + k) % 24 != 23 - j)
-          {
-            if (!corr)
-            // if (alpha < 1 && alpha >= -1)
-            {
-              // printf("i an: %d %f %f %f \n", i, an.X(), an.Y(), an.Z());
-              Crossover[i][j][0].z = 9999999; // this is a placeholder value to indicate that the anode and cathode wires do not intersect
-              // printf("Anode and cathode indices, alpha, denom, andiff, cndiff : %d %d %f %f %f %f\n", i, j, alpha, denom, adiff, cdiff);
-              // printf("AID, CID, Crossover z and alpha are :  %d %d %f %f \n",i,j, Crossover[i][j][0].z, Crossover[i][j][1].x /*this is alpha*/);
-            }
-          }
-        }
-      }
+      Crossover[i][j][1].y = 0;
+      // printf("AID, CID, Crossover z and alpha are :  %d %d %f %f \n", i, j, Crossover[i][j][0].z, Crossover[i][j][1].x /*this is alpha*/);
     }
   }
+
+  // if (i == 4)
+  {
+    // for (int k = -4; k < 3; k++)
+    // {
+    //   if ((i + 24 + k) % 24 == 23 - j) // the 23-j is used to accomodate for the fact that the order of the cathodes was reversed
+    //   {
+    //     Crossover[i][j][1].y = 1;
+    //   }
+    // }
+    // for (int k = -4; k < 3; k++)
+    // {
+    //   if (Crossover[i][j][k].y != 1)
+    //   // if (alpha < 1 && alpha >= -1)
+    //   {
+    //     // printf("i an: %d %f %f %f \n", i, an.X(), an.Y(), an.Z());
+    //     Crossover[i][j][0].z = 9999999; // this is a placeholder value to indicate that the anode and cathode wires do not intersect
+    //   }
+    // }
+  }
+  // printf("Anode and cathode indices, alpha, denom, andiff, cndiff : %d %d %f %f %f %f\n", i, j, alpha, denom, adiff, cdiff);
 
   // anodeIntersection.Clear();
   for (int i = 0; i < pc.multi; i++)
@@ -500,7 +500,7 @@ Bool_t Analyzer::Process(Long64_t entry)
   std::sort(cathodeHits.begin(), cathodeHits.end(), [](const std::pair<int, double> &a, const std::pair<int, double> &b)
             { return a.second > b.second; });
 
-  if (anodeHits.size() >= 1 && cathodeHits.size() >= 1)
+  if (anodeHits.size() >= 1 && cathodeHits.size() >=1)
   {
 
     for (const auto &anode : anodeHits)
@@ -548,15 +548,15 @@ Bool_t Analyzer::Process(Long64_t entry)
       // This section of code is used to find the cathodes are correlated with the max and next max anodes, as well as to figure out if there are any common cathodes
       // the anodes are correlated with the cathodes +/-3 from the anode number in the reverse order
       // bool corr = false;
+          hAVCcoin->Fill(aIDMax, cID);
       for (int j = -4; j < 3; j++)
       {
         if ((aIDMax + 24 + j) % 24 == 23 - cID) /* the 23-cID is used to accomodate for the fact that the order of the cathodes was reversed relative top the physical geometry */
         {
           corrcatMax.push_back(std::pair<int, double>(cID, cE));
-          printf("Max Anode : %d Correlated Cathode : %d Anode Energy : %f z value : %f \n", aIDMax, cID, aEMax, Crossover[aIDMax][cID][1].z /*prints alpha*/);
+          // printf("Max Anode : %d Correlated Cathode : %d Anode Energy : %f z value : %f \n", aIDMax, cID, cESum, Crossover[aIDMax][cID][1].z /*prints alpha*/);
           // std::cout << " Cathode iD : " << cID << " Energy : " << cE << std::endl;
           cESum += cE;
-          hAVCcoin->Fill(aIDMax, cID);
           // corr = true;
         }
         // if ((aIDnextMax + 24 + j) % 24 == cID)
@@ -584,19 +584,23 @@ Bool_t Analyzer::Process(Long64_t entry)
     // Implementing a method for PC reconstruction using a single Anode event
     // if (anodeHits.size() == 1)
     {
+      float x, y, z = 0;
       for (const auto &corr : corrcatMax)
       {
         if (cESum > 0)
         {
-          anodeIntersection += TVector3((corr.second) / cESum * Crossover[aIDMax][corr.first][0].x, (corr.second) / cESum * Crossover[aIDMax][corr.first][0].y,
-                                        (corr.second) / cESum * Crossover[aIDMax][corr.first][0].z);
-          std::cout << "Anode Intersection " << anodeIntersection.Z() << std::endl;
+          x += (corr.second) / cESum * Crossover[aIDMax][corr.first][0].x;
+          y += (corr.second) / cESum * Crossover[aIDMax][corr.first][0].y;
+          z += (corr.second) / cESum * Crossover[aIDMax][corr.first][0].z;
+          // printf("Max Anode : %d Correlated Cathode : %d cathode Energy : %f cESum Energy : %f z value : %f \n", aIDMax, corr.first, corr.second, cESum, Crossover[aIDMax][corr.first][1].z /*prints alpha*/);
         }
         else
         {
           printf("Warning: No valid cathode hits to correlate with anode %d! \n", aIDMax);
         }
       }
+      anodeIntersection = TVector3(x, y, z);
+      // std::cout << "Anode Intersection " << anodeIntersection.Z() << " " << x << " " << y << " " << z << std::endl;
     }
 
     // Filling the PC Z projection histogram
@@ -638,15 +642,7 @@ Bool_t Analyzer::Process(Long64_t entry)
     // if(inPCCut){
     hanVScatsum->Fill(aEMax, cESum);
     // }
-    // if (aID < 24 && aE > 50)
-    // {
-    //   hanVScatsum_a[aID]->Fill(aE, cESum);
-    // }
 
-    // }
-    // Fill histograms for the `pc` data
-    // hpcIndexVE->Fill(pc.index[i], pc.e[i]);
-    // if(anodeHits.size()==1){
     // if (sx3ecut)
     // {
     hCat4An->Fill(corrcatMax.size());
