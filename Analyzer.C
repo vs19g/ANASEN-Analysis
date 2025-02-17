@@ -25,6 +25,7 @@ TH2F *hpcIndexVE_GM;
 TH2F *hsx3Coin;
 TH2F *hqqqCoin;
 TH2F *hpcCoin;
+TH2F *hAVCcoin;
 
 TH2F *hqqqPolar;
 TH2F *hsx3VpcIndex;
@@ -34,7 +35,11 @@ TH2F *hsx3VpcE;
 TH2F *hanVScatsum;
 TH2F *hanVScatsum_a[24];
 TH1F *hPC_E[48];
-TH1F *hAnodeMultiplicity;
+TH1F *hCat4An;
+TH1F *hCat0An;
+TH1F *hAnodehits;
+TH2F *hNosvAe;
+TH2F *hUncorrCAN;
 
 int padID = 0;
 
@@ -46,6 +51,8 @@ TVector3 hitPos;
 std::map<int, std::pair<double, double>> slopeInterceptMap;
 
 bool HitNonZero;
+bool sx3ecut;
+bool qqqEcut;
 
 TH1F *hZProj;
 TH1F *hPCZProj;
@@ -66,6 +73,7 @@ void Analyzer::Begin(TTree * /*tree*/)
   hsx3Coin = new TH2F("hsx3Coin", "SX3 Coincident", 24 * 12, 0, 24 * 12, 24 * 12, 0, 24 * 12);
   hqqqCoin = new TH2F("hqqqCoin", "QQQ Coincident", 4 * 2 * 16, 0, 4 * 2 * 16, 4 * 2 * 16, 0, 4 * 2 * 16);
   hpcCoin = new TH2F("hpcCoin", "PC Coincident", 2 * 24, 0, 2 * 24, 2 * 24, 0, 2 * 24);
+  hAVCcoin = new TH2F("hAVCcoin", "Anode vs Cathode Coincident", 24, 0, 24, 24, 0, 24);
 
   hqqqPolar = new TH2F("hqqqPolar", "QQQ Polar ID", 16 * 4, -TMath::Pi(), TMath::Pi(), 16, 10, 50);
 
@@ -84,23 +92,27 @@ void Analyzer::Begin(TTree * /*tree*/)
   hsx3VpcE->SetNdivisions(-612, "x");
   hsx3VpcE->SetNdivisions(-12, "y");
 
-  hZProj = new TH1F("hZProj", "Z Projection", 1200, -600, 600);
-  hPCZProj = new TH1F("hPCZProj", "PC Z Projection", 1200, -600, 600);
+  // hZProj = new TH1F("hZProj", "Z Projection", 1200, -600, 600);
+  hPCZProj = new TH1F("hPCZProj", "PC Z Projection", 1200, -600, 10000);
 
   hanVScatsum = new TH2F("hanVScatsum", "Anode vs Cathode Sum; Anode E; Cathode E", 400, 0, 16000, 400, 0, 20000);
-  hAnodeMultiplicity = new TH1F("hAnodeMultiplicity", "Number of Anodes/Event", 40, 0, 40);
+  hCat4An = new TH1F("hCat4An", "Number of Cathodes/Anode", 24, 0, 24);
+  hCat0An = new TH1F("hCat0An", "Number of Cathodes without Anode", 24, 0, 24);
+  hAnodehits = new TH1F("hAnodehits", "Number of Anode hits", 24, 0, 24);
+  hNosvAe = new TH2F("hnosvAe", "Number of Cathodes/Anode vs Anode Energy", 20, 0, 20, 400, 0, 16000);
+  hUncorrCAN = new TH2F("hUncorrCAn", "Uncorrelated Cathodes/Anode", 24, 0, 24, 24, 0, 24);
   // for (int i = 0; i < 24; i++)
   // {
   //   TString histName = Form("hAnodeVsCathode_%d", i);
   //   TString histTitle = Form("Anode %d vs Cathode Sum; Anode E; Cathode Sum E", i);
   //   hanVScatsum_a[i] = new TH2F(histName, histTitle, 400, 0, 16000, 400, 0, 20000);
   // }
-  for (int i = 0; i < 48; i++)
-  {
-    TString histName = Form("hCathode_%d", i);
-    TString histTitle = Form("Cathode_E_%d;", i);
-    hPC_E[i] = new TH1F(histName, histTitle, 3200, 0, 32000);
-  }
+  // for (int i = 0; i < 48; i++)
+  // {
+  //   TString histName = Form("hCathode_%d", i);
+  //   TString histTitle = Form("Cathode_E_%d;", i);
+  //   hPC_E[i] = new TH1F(histName, histTitle, 3200, 0, 32000);
+  // }
   sx3_contr.ConstructGeo();
   pw_contr.ConstructGeo();
 
@@ -165,13 +177,17 @@ Bool_t Analyzer::Process(Long64_t entry)
 
   // ########################################################### Raw data
   //  //======================= SX3
-
+  sx3ecut = false;
   std::vector<std::pair<int, int>> ID; // first = id, 2nd = index
   for (int i = 0; i < sx3.multi; i++)
   {
     ID.push_back(std::pair<int, int>(sx3.id[i], i));
 
     hsx3IndexVE->Fill(sx3.index[i], sx3.e[i]);
+    if (sx3.e[i] > 1000 && sx3.e[i] < 2200)
+    {
+      sx3ecut = true;
+    }
 
     for (int j = i + 1; j < sx3.multi; j++)
     {
@@ -263,7 +279,7 @@ Bool_t Analyzer::Process(Long64_t entry)
       // hitPos.Print();
     }
   }
-
+  qqqEcut = false;
   // //======================= QQQ
   for (int i = 0; i < qqq.multi; i++)
   {
@@ -271,6 +287,10 @@ Bool_t Analyzer::Process(Long64_t entry)
     // if(pc.index[j]==4){
     hqqqIndexVE->Fill(qqq.index[i], qqq.e[i]);
     // }
+    if (qqq.e[i] > 1600 && qqq.e[i] < 2600)
+    {
+      qqqEcut = true;
+    }
     // }
     for (int j = 0; j < qqq.multi; j++)
     {
@@ -336,12 +356,13 @@ Bool_t Analyzer::Process(Long64_t entry)
 
   pwinstance.ConstructGeo();
   Coord Crossover[24][24][2];
-  TVector3 a, c, diff;
-  double a2, ac, c2, adiff, cdiff, denom, alpha, beta;
+  TVector3 a, c, diff, an, cn;
+  double a2, an2, ac, c2, cn2, adiff, cdiff, denom, alpha, beta;
   int index = 0;
   for (int i = 0; i < pwinstance.An.size(); i++)
   {
     a = pwinstance.An[i].first - pwinstance.An[i].second;
+
     for (int j = 0; j < pwinstance.Ca.size(); j++)
     {
       // Ok so this method uses what is essentially the solution of 2 equations to find the point of intersection between the anode and cathode wires
@@ -352,10 +373,12 @@ Bool_t Analyzer::Process(Long64_t entry)
       c = pwinstance.Ca[j].first - pwinstance.Ca[j].second;
       diff = pwinstance.An[i].first - pwinstance.Ca[j].first;
       a2 = a.Dot(a);
-      ac = a.Dot(c);
       c2 = c.Dot(c);
+      ac = a.Dot(c);
       adiff = a.Dot(diff);
       cdiff = c.Dot(diff);
+      an2 = an.Dot(an);
+      cn2 = cn.Dot(cn);
       denom = a2 * c2 - ac * ac;
       alpha = (ac * cdiff - c2 * adiff) / denom;
       beta = (a2 * cdiff - ac * adiff) / denom;
@@ -368,17 +391,25 @@ Bool_t Analyzer::Process(Long64_t entry)
       //-so that it can be used to sort "good" hits later
       Crossover[i][j][1].x = alpha;
 
-      if (i == 4)
+      bool corr = false;
+      // if (i == 4)
       {
         for (int k = -4; k < 3; k++)
         {
           if ((i + 24 + k) % 24 == 23 - j) // the 23-j is used to accomodate for the fact that the order of the cathodes was reversed
           {
+            corr = true;
+            break;
+          }
+          else if ((i + 24 + k) % 24 != 23 - j)
+          {
+            if (!corr)
             // if (alpha < 1 && alpha >= -1)
             {
+              // printf("i an: %d %f %f %f \n", i, an.X(), an.Y(), an.Z());
               Crossover[i][j][0].z = 9999999; // this is a placeholder value to indicate that the anode and cathode wires do not intersect
-              printf("Anode and cathode indices and coord : %d %d %f %f %f %f\n", i, j, pwinstance.Ca[j].first.X(), pwinstance.Ca[j].first.Y(), pwinstance.Ca[j].first.Z(), alpha);
-              // printf("Crossover wires, points and alpha are : %f %f %f %f \n", Crossover[i][j][1].x, Crossover[i][j][1].y, Crossover[i][j][1].z, Crossover[i][j][2].x /*this is alpha*/);
+              // printf("Anode and cathode indices, alpha, denom, andiff, cndiff : %d %d %f %f %f %f\n", i, j, alpha, denom, adiff, cdiff);
+              // printf("AID, CID, Crossover z and alpha are :  %d %d %f %f \n",i,j, Crossover[i][j][0].z, Crossover[i][j][1].x /*this is alpha*/);
             }
           }
         }
@@ -409,7 +440,7 @@ Bool_t Analyzer::Process(Long64_t entry)
         // printf("index: %d, New cathode energy: %d \n",pc.index[i], pc.e[i]);
       }
       hpcIndexVE_GM->Fill(pc.index[i], pc.e[i]);
-      // hPC_E[pc.index[i]]->Fill(pc.e[i]);
+      // hPC_E[pc.index[i]]->Fill(pc.e[i]); // gain matched energy per channel
     }
   }
 
@@ -487,11 +518,15 @@ Bool_t Analyzer::Process(Long64_t entry)
         aEnextMax = aE;
         aIDnextMax = aID;
       }
+      // for(const auto &cat : cathodeHits){
+      //   hAVCcoin->Fill(aID, cat.first);
+      // }
     }
 
     // std::cout << " Anode iD : " << aIDMax << " Energy : " << aEMax << std::endl;
 
     // printf("aID : %d, aE : %f, cE : %f\n", aID, aE, cE);
+    corrcatMax.clear();
     for (const auto &cathode : cathodeHits)
     {
       cID = cathode.first;
@@ -510,20 +545,24 @@ Bool_t Analyzer::Process(Long64_t entry)
       //   cIDnextMax = cID;
       // }
 
-      cESum += cE;
       // This section of code is used to find the cathodes are correlated with the max and next max anodes, as well as to figure out if there are any common cathodes
-      // the anodes are correlated with the cathodes +/-2 from the anode number in the reverse order
-      for (int j = -3; j < 2; j++)
+      // the anodes are correlated with the cathodes +/-3 from the anode number in the reverse order
+      // bool corr = false;
+      for (int j = -4; j < 3; j++)
       {
         if ((aIDMax + 24 + j) % 24 == 23 - cID) /* the 23-cID is used to accomodate for the fact that the order of the cathodes was reversed relative top the physical geometry */
         {
           corrcatMax.push_back(std::pair<int, double>(cID, cE));
+          printf("Max Anode : %d Correlated Cathode : %d Anode Energy : %f z value : %f \n", aIDMax, cID, aEMax, Crossover[aIDMax][cID][1].z /*prints alpha*/);
           // std::cout << " Cathode iD : " << cID << " Energy : " << cE << std::endl;
+          cESum += cE;
+          hAVCcoin->Fill(aIDMax, cID);
+          // corr = true;
         }
         // if ((aIDnextMax + 24 + j) % 24 == cID)
         // {
         //   corrcatnextMax.push_back(std::pair<int, double>(cathode.first, cathode.second));
-        //   std::sort(corrcatMax.begin(), corrcatMax.end(), [](const std::pair<int, double> &a, const std::pair<int, double> &b)
+        //   std::sort(corrcatMax.begin(), corrcatMax.end(), [](const std::pair<int, double> &a, const std::pair<int, double> &b)S
         //             { return a.second > b.second; });
         // }
         // for (int k = 0; k < 5; k++)
@@ -534,18 +573,29 @@ Bool_t Analyzer::Process(Long64_t entry)
         //   }
         // }
       }
+      // if (!corr)
+      // {
+      //   hUncorrCAN->Fill(aIDMax, cID);
+      // }
     }
-    // std::sort(corrcatMax.begin(), corrcatMax.end(), [](const std::pair<int, double> &a, const std::pair<int, double> &b ) { return a.second > b.second; });
 
     TVector3 anodeIntersection;
+    anodeIntersection.Clear();
     // Implementing a method for PC reconstruction using a single Anode event
     // if (anodeHits.size() == 1)
     {
       for (const auto &corr : corrcatMax)
       {
-        anodeIntersection += TVector3((corr.second) * 1.0 / cESum * Crossover[aIDMax][corr.first][0].x * 1.0, (corr.second) * 1.0 / cESum * Crossover[aIDMax][corr.first][0].y * 1.0,
-                                      (corr.second) * 1.0 / cESum * Crossover[aIDMax][corr.first][0].z * 1.0);
-        // std::cout << "Anode Intersection " << anodeIntersection.Z() << std::endl;
+        if (cESum > 0)
+        {
+          anodeIntersection += TVector3((corr.second) / cESum * Crossover[aIDMax][corr.first][0].x, (corr.second) / cESum * Crossover[aIDMax][corr.first][0].y,
+                                        (corr.second) / cESum * Crossover[aIDMax][corr.first][0].z);
+          std::cout << "Anode Intersection " << anodeIntersection.Z() << std::endl;
+        }
+        else
+        {
+          printf("Warning: No valid cathode hits to correlate with anode %d! \n", aIDMax);
+        }
       }
     }
 
@@ -597,14 +647,24 @@ Bool_t Analyzer::Process(Long64_t entry)
     // Fill histograms for the `pc` data
     // hpcIndexVE->Fill(pc.index[i], pc.e[i]);
     // if(anodeHits.size()==1){
-    hAnodeMultiplicity->Fill(corrcatMax.size());
+    // if (sx3ecut)
+    // {
+    hCat4An->Fill(corrcatMax.size());
+    hNosvAe->Fill(corrcatMax.size(), aEMax);
+    hAnodehits->Fill(anodeHits.size());
     // }
 
-    if (HitNonZero)
+    // }
+    if (anodeHits.size() < 1)
     {
-      pw_contr.CalTrack(hitPos, aID, cID);
-      hZProj->Fill(pw_contr.GetZ0());
+      hCat0An->Fill(cathodeHits.size());
     }
+
+    // if (HitNonZero)
+    // {
+    //   pw_contr.CalTrack(hitPos, aID, cID);
+    //   hZProj->Fill(pw_contr.GetZ0());
+    // }
   }
 
   // ########################################################### Track constrcution
@@ -694,22 +754,22 @@ void Analyzer::Terminate()
   //  hZProj->Draw();
   hanVScatsum->Draw("colz");
 
-  TFile *outRoot = new TFile("Histograms.root", "RECREATE");
+  // TFile *outRoot = new TFile("Histograms.root", "RECREATE");
 
-  if (!outRoot->IsOpen())
-  {
-    std::cerr << "Error opening file for writing!" << std::endl;
-    return;
-  }
+  // if (!outRoot->IsOpen())
+  // {
+  //   std::cerr << "Error opening file for writing!" << std::endl;
+  //   return;
+  // }
 
-  // Loop through histograms and write them to the ROOT file
-  for (int i = 0; i < 48; i++)
-  {
-    if (hPC_E[i] != nullptr)
-    {
-      hPC_E[i]->Write(); // Write histogram to file
-    }
-  }
+  // // Loop through histograms and write them to the ROOT file
+  // for (int i = 0; i < 48; i++)
+  // {
+  //   if (hPC_E[i] != nullptr)
+  //   {
+  //     hPC_E[i]->Write(); // Write histogram to file
+  //   }
+  // }
 
-  outRoot->Close();
+  // outRoot->Close();
 }

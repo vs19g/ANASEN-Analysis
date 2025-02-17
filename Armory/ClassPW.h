@@ -165,8 +165,8 @@ inline void PW::ConstructGeo()
   }
   // correcting for the fact that the order of the cathode wires is reversed
   std::reverse(Ca.begin(), Ca.end());
-  // adjusting for the 3 wire offset
-  std::rotate(Ca.begin(), Ca.begin() + 3, Ca.end());
+  // adjusting for the 3 wire offset, the rbegin and rend are used as the rotation of the wires is done in the opposite direction i.e. 1,2,3 -> 3,1,2
+  std::rotate(Ca.rbegin(), Ca.rbegin() + 3, Ca.rend());
 
   dAngle = wireShift * TMath::TwoPi() / nWire;
   anodeLength = TMath::Sqrt(zLen * zLen + TMath::Power(2 * radiusA * TMath::Sin(dAngle / 2), 2));
