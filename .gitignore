@@ -4,7 +4,7 @@ EventBuilder*
 *.pcm
 *.root
 *.exe
-
+*.txt
 Mapper
 AnasenMS
 
