@@ -154,19 +154,20 @@ inline void PW::ConstructGeo()
                      -zLen / 2);
     An.push_back(p1);
 
-    // Cathod rotate left-hand
-    q1.first.SetXYZ(radiusC * TMath::Cos(TMath::TwoPi() / nWire * (i) + TMath::PiOver2()),
-                    radiusC * TMath::Sin(TMath::TwoPi() / nWire * (i) + TMath::PiOver2()),
+    // Cathod rotate left-hand with the 3 wire offset accounted for (+1 from the calculated offset from the PC coincidence spectrum)
+    q1.first.SetXYZ(radiusC * TMath::Cos(TMath::TwoPi() / nWire * (i + wireShift + 1) + TMath::PiOver2()),
+                    radiusC * TMath::Sin(TMath::TwoPi() / nWire * (i + wireShift + 1) + TMath::PiOver2()),
                     zLen / 2);
-    q1.second.SetXYZ(radiusC * TMath::Cos(TMath::TwoPi() / nWire * (i - wireShift) + TMath::PiOver2()),
-                     radiusC * TMath::Sin(TMath::TwoPi() / nWire * (i - wireShift) + TMath::PiOver2()),
+    q1.second.SetXYZ(radiusC * TMath::Cos(TMath::TwoPi() / nWire * (i + 1) + TMath::PiOver2()),
+                     radiusC * TMath::Sin(TMath::TwoPi() / nWire * (i + 1) + TMath::PiOver2()),
                      -zLen / 2);
     Ca.push_back(q1);
   }
   // correcting for the fact that the order of the cathode wires is reversed
   std::reverse(Ca.begin(), Ca.end());
   // adjusting for the 3 wire offset, the rbegin and rend are used as the rotation of the wires is done in the opposite direction i.e. 1,2,3 -> 3,1,2
-  std::rotate(Ca.rbegin(), Ca.rbegin() + 3, Ca.rend());
+  // NOT NECESSARY ANY MORE, HAS BEEN IMCORPORATED INTO THE WIREOFFSET IN THE BEGINNING
+  // std::rotate(Ca.rbegin(), Ca.rbegin() + 4, Ca.rend());
 
   dAngle = wireShift * TMath::TwoPi() / nWire;
   anodeLength = TMath::Sqrt(zLen * zLen + TMath::Power(2 * radiusA * TMath::Sin(dAngle / 2), 2));

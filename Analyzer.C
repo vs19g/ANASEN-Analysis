@@ -287,7 +287,7 @@ Bool_t Analyzer::Process(Long64_t entry)
     // if(pc.index[j]==4){
     hqqqIndexVE->Fill(qqq.index[i], qqq.e[i]);
     // }
-    if (qqq.e[i] > 1600 && qqq.e[i] < 2600)
+    if (qqq.e[i] > 1600 && qqq.e[i] < 3000)
     {
       qqqEcut = true;
     }
@@ -392,7 +392,9 @@ Bool_t Analyzer::Process(Long64_t entry)
       //-so that it can be used to sort "good" hits later
       Crossover[i][j][1].x = alpha;
       Crossover[i][j][1].y = 0;
-      // printf("AID, CID, Crossover z and alpha are :  %d %d %f %f \n", i, j, Crossover[i][j][0].z, Crossover[i][j][1].x /*this is alpha*/);
+      // if(i==0){
+      // printf("CID, Crossover z and alpha are :  %d %f %f \n",  j, Crossover[i][j][0].z, Crossover[i][j][1].x /*this is alpha*/);
+      // }
     }
   }
 
@@ -500,7 +502,7 @@ Bool_t Analyzer::Process(Long64_t entry)
   std::sort(cathodeHits.begin(), cathodeHits.end(), [](const std::pair<int, double> &a, const std::pair<int, double> &b)
             { return a.second > b.second; });
 
-  if (anodeHits.size() >= 1 && cathodeHits.size() >=1)
+  if (anodeHits.size() >= 1 && cathodeHits.size() >1)
   {
 
     for (const auto &anode : anodeHits)
@@ -552,6 +554,7 @@ Bool_t Analyzer::Process(Long64_t entry)
       for (int j = -4; j < 3; j++)
       {
         if ((aIDMax + 24 + j) % 24 == 23 - cID) /* the 23-cID is used to accomodate for the fact that the order of the cathodes was reversed relative top the physical geometry */
+        // if(Crossover[aIDMax][cID][0].z != 9999999)
         {
           corrcatMax.push_back(std::pair<int, double>(cID, cE));
           // printf("Max Anode : %d Correlated Cathode : %d Anode Energy : %f z value : %f \n", aIDMax, cID, cESum, Crossover[aIDMax][cID][1].z /*prints alpha*/);
@@ -599,7 +602,7 @@ Bool_t Analyzer::Process(Long64_t entry)
           printf("Warning: No valid cathode hits to correlate with anode %d! \n", aIDMax);
         }
       }
-      anodeIntersection = TVector3(x, y, z);
+      if(qqqEcut)       anodeIntersection = TVector3(x, y, z);
       // std::cout << "Anode Intersection " << anodeIntersection.Z() << " " << x << " " << y << " " << z << std::endl;
     }
 
