@@ -103,8 +103,8 @@ void ANASEN_model(int anodeID1 = -1, int anodeID2 = -1, int cathodeID1 = -1, int
                                                        new TGeoRotation("rot1", 360/nSX3 * (i + 0.5), 0., 0.)));
   }
 
-  const int qqqR1 = 10;
-  const int qqqR2 = 50;
+  const int qqqR1 = 50;
+  const int qqqR2 = 100;
   TGeoVolume *qqq = geom->MakeTubs("qqq", Al, qqqR1, qqqR2, 0.5, 5, 85);
   qqq->SetLineColor(7);
   for( int i = 0; i < 4; i++){

@@ -82,7 +82,7 @@ public:
   void ConstructGeo();
   void FindWireID(TVector3 pos, TVector3 direction, bool verbose = false);
   void CalTrack(TVector3 sx3Pos, int anodeID, int cathodeID, bool verbose = false);
-  void CalTrack2(TVector3 sx3Pos, PWHitInfo hitInfo, double sigmaA = 0, double sigmaC = 0, bool verbose = false);
+  void CalTrack2(TVector3 sx3Pos, TVector3 anodeInt, bool verbose = false);
 
   void Print()
   {
@@ -283,41 +283,22 @@ inline void PW::CalTrack(TVector3 sx3Pos, int anodeID, int cathodeID, bool verbo
     printf("Theta, Phi = %f, %f \n", trackVec.Theta() * TMath::RadToDeg(), trackVec.Phi() * TMath::RadToDeg());
 }
 
-inline void PW::CalTrack2(TVector3 sx3Pos, PWHitInfo hitInfo, double sigmaA, double sigmaC, bool verbose)
+
+inline void PW::CalTrack2(TVector3 siPos, TVector3 anodeInt, bool verbose)
 {
 
-  trackPos = sx3Pos;
-
-  double p1 = TMath::Abs(hitInfo.nearestDist.first + gRandom->Gaus(0, sigmaA));
-  double p2 = TMath::Abs(hitInfo.nextNearestDist.first + gRandom->Gaus(0, sigmaA));
-  double fracA = p1 / (p1 + p2);
-  short anodeID1 = hitInfo.nearestWire.first;
-  short anodeID2 = hitInfo.nextNearestWire.first;
-  TVector3 shiftA1 = (An[anodeID2].first - An[anodeID1].first) * fracA;
-  TVector3 shiftA2 = (An[anodeID2].second - An[anodeID1].second) * fracA;
-
-  double q1 = TMath::Abs(hitInfo.nearestDist.second + gRandom->Gaus(0, sigmaC));
-  double q2 = TMath::Abs(hitInfo.nextNearestDist.second + gRandom->Gaus(0, sigmaC));
-  double fracC = q1 / (q1 + q2);
-  short cathodeID1 = hitInfo.nearestWire.second;
-  short cathodeID2 = hitInfo.nextNearestWire.second;
-  TVector3 shiftC1 = (Ca[cathodeID2].first - Ca[cathodeID1].first) * fracC;
-  TVector3 shiftC2 = (Ca[cathodeID2].second - Ca[cathodeID1].second) * fracC;
-
-  TVector3 a1 = An[anodeID1].first + shiftA1;
-  TVector3 a2 = An[anodeID1].second + shiftA2;
-
-  TVector3 c1 = Ca[cathodeID1].first + shiftC1;
-  TVector3 c2 = Ca[cathodeID1].second + shiftC2;
-
-  TVector3 n1 = (a1 - a2).Cross((sx3Pos - a2)).Unit();
-  TVector3 n2 = (c1 - c2).Cross((sx3Pos - c2)).Unit();
-
-  // if the handiness of anode and cathode revered, it should be n2 cross n1
-  trackVec = (n2.Cross(n1)).Unit();
+  float mx, my;
+  double z;
+  mx = siPos.X() / (siPos.X() - anodeInt.X());
+  my = siPos.Y() / (siPos.Y() - anodeInt.Y());
+  z=siPos.Z() + mx * (anodeInt.Z() - siPos.Z());
+  // if (mx == my)
+  {
+    trackVec=TVector3(0,0,z);
+  }
 
   if (verbose)
-    printf("Theta, Phi = %f, %f \n", trackVec.Theta() * TMath::RadToDeg(), trackVec.Phi() * TMath::RadToDeg());
+    printf("X slope = %f and Y slope = %f \n", mx, my);
 }
 
 inline double PW::GetZ0()
@@ -328,7 +309,7 @@ inline double PW::GetZ0()
   double rho = TMath::Sqrt(x * x + y * y);
   double theta = trackVec.Theta();
 
-  return trackPos.Z() - rho / TMath::Tan(theta);
+  return trackVec.Z();
 }
 
 #endif

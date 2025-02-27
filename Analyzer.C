@@ -39,7 +39,6 @@ TH1F *hCat4An;
 TH1F *hCat0An;
 TH1F *hAnodehits;
 TH2F *hNosvAe;
-TH2F *hUncorrCAN;
 
 int padID = 0;
 
@@ -92,7 +91,7 @@ void Analyzer::Begin(TTree * /*tree*/)
   hsx3VpcE->SetNdivisions(-612, "x");
   hsx3VpcE->SetNdivisions(-12, "y");
 
-  // hZProj = new TH1F("hZProj", "Z Projection", 1200, -600, 600);
+  hZProj = new TH1F("hZProj", "Z Projection", 1200, -600, 600);
   hPCZProj = new TH1F("hPCZProj", "PC Z Projection", 600, -300, 300);
 
   hanVScatsum = new TH2F("hanVScatsum", "Anode vs Cathode Sum; Anode E; Cathode E", 400, 0, 16000, 400, 0, 20000);
@@ -100,7 +99,6 @@ void Analyzer::Begin(TTree * /*tree*/)
   hCat0An = new TH1F("hCat0An", "Number of Cathodes without Anode", 24, 0, 24);
   hAnodehits = new TH1F("hAnodehits", "Number of Anode hits", 24, 0, 24);
   hNosvAe = new TH2F("hnosvAe", "Number of Cathodes/Anode vs Anode Energy", 20, 0, 20, 400, 0, 16000);
-  hUncorrCAN = new TH2F("hUncorrCAn", "Uncorrelated Cathodes/Anode", 24, 0, 24, 24, 0, 24);
   // for (int i = 0; i < 24; i++)
   // {
   //   TString histName = Form("hAnodeVsCathode_%d", i);
@@ -182,9 +180,9 @@ Bool_t Analyzer::Process(Long64_t entry)
   for (int i = 0; i < sx3.multi; i++)
   {
     ID.push_back(std::pair<int, int>(sx3.id[i], i));
-
     hsx3IndexVE->Fill(sx3.index[i], sx3.e[i]);
-    if (sx3.e[i] > 1000 && sx3.e[i] < 2200)
+
+    if (sx3.e[i] > 100)
     {
       sx3ecut = true;
     }
@@ -279,15 +277,18 @@ Bool_t Analyzer::Process(Long64_t entry)
       // hitPos.Print();
     }
   }
-  qqqEcut = false;
+
   // //======================= QQQ
+
+  qqqEcut = false;
   for (int i = 0; i < qqq.multi; i++)
   {
     // for( int j = 0; j < pc.multi; j++){
     // if(pc.index[j]==4){
     hqqqIndexVE->Fill(qqq.index[i], qqq.e[i]);
     // }
-    if (qqq.e[i] > 1600 && qqq.e[i] < 3000)
+    // printf("QQQ ID : %d, ch : %d, e : %d \n", qqq.id[i], qqq.ch[i], qqq.e[i]);
+    if (qqq.e[i] > 100)
     {
       qqqEcut = true;
     }
@@ -307,7 +308,7 @@ Bool_t Analyzer::Process(Long64_t entry)
         {
           hqqqVpcE->Fill(qqq.e[i], pc.e[k]);
           //  hpcIndexVE->Fill( pc.index[i], pc.e[i] );
-          hqqqVpcIndex->Fill(qqq.index[i], pc.index[j]);
+          hqqqVpcIndex->Fill(qqq.index[i], pc.index[k]);
         }
         // }
       }
@@ -329,7 +330,6 @@ Bool_t Analyzer::Process(Long64_t entry)
           chRing = qqq.ch[i];
           chWedge = qqq.ch[j] - 16;
         }
-
         // printf(" ID : %d , chWedge : %d, chRing : %d \n", qqq.id[i], chWedge, chRing);
 
         double theta = -TMath::Pi() / 2 + 2 * TMath::Pi() / 16 / 4. * (qqq.id[i] * 16 + chWedge + 0.5);
@@ -356,8 +356,8 @@ Bool_t Analyzer::Process(Long64_t entry)
 
   pwinstance.ConstructGeo();
   Coord Crossover[24][24][2];
-  TVector3 a, c, diff, an, cn;
-  double a2, an2, ac, c2, cn2, adiff, cdiff, denom, alpha, beta;
+  TVector3 a, c, diff;
+  double a2, ac, c2, adiff, cdiff, denom, alpha, beta;
   int index = 0;
   for (int i = 0; i < pwinstance.An.size(); i++)
   {
@@ -377,8 +377,6 @@ Bool_t Analyzer::Process(Long64_t entry)
       ac = a.Dot(c);
       adiff = a.Dot(diff);
       cdiff = c.Dot(diff);
-      an2 = an.Dot(an);
-      cn2 = cn.Dot(cn);
       denom = a2 * c2 - ac * ac;
       alpha = (ac * cdiff - c2 * adiff) / denom;
       beta = (a2 * cdiff - ac * adiff) / denom;
@@ -386,7 +384,8 @@ Bool_t Analyzer::Process(Long64_t entry)
       Crossover[i][j][0].x = pwinstance.An[i].first.X() + alpha * a.X();
       Crossover[i][j][0].y = pwinstance.An[i].first.Y() + alpha * a.Y();
       Crossover[i][j][0].z = pwinstance.An[i].first.Z() + alpha * a.Z();
-      if(Crossover[i][j][0].z <-190 || Crossover[i][j][0].z > 190) Crossover[i][j][0].z = 9999999;
+      if (Crossover[i][j][0].z < -190 || Crossover[i][j][0].z > 190)
+        Crossover[i][j][0].z = 9999999;
 
       // placeholder variable Crossover[i][j][2].x has nothing to do with the geometry of the crossover and is being used to store the alpha value-
       //-so that it can be used to sort "good" hits later
@@ -502,168 +501,154 @@ Bool_t Analyzer::Process(Long64_t entry)
   std::sort(cathodeHits.begin(), cathodeHits.end(), [](const std::pair<int, double> &a, const std::pair<int, double> &b)
             { return a.second > b.second; });
 
-  if (anodeHits.size() >= 1 && cathodeHits.size() >1)
+  bool SiPCflag;
+  corrcatMax.clear();
+
+  if (anodeHits.size() >= 1 && cathodeHits.size() > 1)
   {
-
-    for (const auto &anode : anodeHits)
+    // if (((TMath::TanH(hitPos.Y() / hitPos.X())) > (TMath::TanH(a.Y() / a.X()) - TMath::PiOver4())) || ((TMath::TanH(hitPos.Y() / hitPos.X())) < (TMath::TanH(a.Y() / a.X()) + TMath::PiOver4())))
     {
-      aID = anode.first;
-      aE = anode.second;
-      aESum += aE;
-      if (aE > aEMax)
+
+      for (const auto &anode : anodeHits)
       {
-        aEMax = aE;
-        aIDMax = aID;
+        aID = anode.first;
+        aE = anode.second;
+        aESum += aE;
+        if (aE > aEMax)
+        {
+          aEMax = aE;
+          aIDMax = aID;
+        }
+        if (aE > aEnextMax && aE < aEMax)
+        {
+          aEnextMax = aE;
+          aIDnextMax = aID;
+        }
+        // for(const auto &cat : cathodeHits){
+        //   hAVCcoin->Fill(aID, cat.first);
+        // }
       }
-      if (aE > aEnextMax && aE < aEMax)
+
+      // std::cout << " Anode iD : " << aIDMax << " Energy : " << aEMax << std::endl;
+
+      // printf("aID : %d, aE : %f, cE : %f\n", aID, aE, cE);
+      for (const auto &cathode : cathodeHits)
       {
-        aEnextMax = aE;
-        aIDnextMax = aID;
-      }
-      // for(const auto &cat : cathodeHits){
-      //   hAVCcoin->Fill(aID, cat.first);
-      // }
-    }
+        cID = cathode.first;
+        cE = cathode.second;
+        // std::cout << "Cathode ID : " << cID << " Energy : " << cE << std::endl;
 
-    // std::cout << " Anode iD : " << aIDMax << " Energy : " << aEMax << std::endl;
+        hAVCcoin->Fill(aIDMax, cID);
 
-    // printf("aID : %d, aE : %f, cE : %f\n", aID, aE, cE);
-    corrcatMax.clear();
-    for (const auto &cathode : cathodeHits)
-    {
-      cID = cathode.first;
-      cE = cathode.second;
-      // std::cout << "Cathode ID : " << cID << " Energy : " << cE << std::endl;
-      // if (cE > cEMax)
-      // {
-      //   cIDnextMax = cIDMax;
-      //   cEnextMax = cEMax;
-      //   cEMax = cE;
-      //   cIDMax = cID;
-      // }
-      // if (cE > cEnextMax && cE < cEMax)
-      // {
-      //   cEnextMax = cE;
-      //   cIDnextMax = cID;
-      // }
+        // This section of code is used to find the cathodes are correlated with the max and next max anodes, as well as to figure out if there are any common cathodes
+        // the anodes are correlated with the cathodes +/-3 from the anode number in the reverse order
 
-      // This section of code is used to find the cathodes are correlated with the max and next max anodes, as well as to figure out if there are any common cathodes
-      // the anodes are correlated with the cathodes +/-3 from the anode number in the reverse order
-      // bool corr = false;
-          hAVCcoin->Fill(aIDMax, cID);
-      for (int j = -4; j < 3; j++)
-      {
-        if ((aIDMax + 24 + j) % 24 == 23 - cID) /* the 23-cID is used to accomodate for the fact that the order of the cathodes was reversed relative top the physical geometry */
-        // if(Crossover[aIDMax][cID][0].z != 9999999)
+        // for (int j = -4; j < 3; j++)
+
+        // if ((aIDMax + 24 + j) % 24 == 23 - cID) /* the 23-cID is used to accomodate for the fact that the order of the cathodes was reversed relative top the physical geometry */
+        if (Crossover[aIDMax][cID][0].z != 9999999)
         {
           corrcatMax.push_back(std::pair<int, double>(cID, cE));
+          cESum += cE;
           // printf("Max Anode : %d Correlated Cathode : %d Anode Energy : %f z value : %f \n", aIDMax, cID, cESum, Crossover[aIDMax][cID][1].z /*prints alpha*/);
           // std::cout << " Cathode iD : " << cID << " Energy : " << cE << std::endl;
-          cESum += cE;
-          // corr = true;
         }
-        // if ((aIDnextMax + 24 + j) % 24 == cID)
-        // {
-        //   corrcatnextMax.push_back(std::pair<int, double>(cathode.first, cathode.second));
-        //   std::sort(corrcatMax.begin(), corrcatMax.end(), [](const std::pair<int, double> &a, const std::pair<int, double> &b)S
-        //             { return a.second > b.second; });
-        // }
-        // for (int k = 0; k < 5; k++)
-        // {
-        //   if ((aIDMax + 24 + j) % 24 == (aIDnextMax + 24 + k) % 24)
-        //   {
-        //     commcat.push_back(std::pair<int, double>(cathode.first, cathode.second));
-        //   }
-        // }
       }
-      // if (!corr)
+    }
+  }
+
+  TVector3 anodeIntersection;
+  anodeIntersection.Clear();
+  // Implementing a method for PC reconstruction using a single Anode event
+  // if (anodeHits.size() == 1)
+  {
+    float x, y, z = 0;
+    for (const auto &corr : corrcatMax)
+    {
+      if (cESum > 0)
+      {
+        x += (corr.second) / cESum * Crossover[aIDMax][corr.first][0].x;
+        y += (corr.second) / cESum * Crossover[aIDMax][corr.first][0].y;
+        z += (corr.second) / cESum * Crossover[aIDMax][corr.first][0].z;
+        // printf("Max Anode : %d Correlated Cathode : %d cathode Energy : %f cESum Energy : %f z value : %f \n", aIDMax, corr.first, corr.second, cESum, Crossover[aIDMax][corr.first][1].z /*prints alpha*/);
+      }
+      else
+      {
+        printf("Warning: No valid cathode hits to correlate with anode %d! \n", aIDMax);
+      }
+      // printf("EventID : %llu, Max Anode : %d Cathode: %d PC X and Y : (%f, %f) \n", entry, aIDMax, cID, Crossover[aIDMax][cID][0].x, Crossover[aIDMax][cID][0].y);
+      // for (int i = 0; i < sx3.multi; i++)
       // {
-      //   hUncorrCAN->Fill(aIDMax, cID);
+      //   printf("EventID : %llu, HitPos X, Y, Z:  %f %f %f SX3ID : %d %d \n", entry, hitPos.X(), hitPos.Y(), hitPos.Z(), sx3.id[i], sx3.ch[i]);
+      // }
+
+      // for (int i = 0; i < qqq.multi; i++)
+      // {
+      //   printf("Max Anode : %d Cathode: %d PC X and Y : %f %f \n", aIDMax, cID, Crossover[aIDMax][cID][0].x, Crossover[aIDMax][cID][0].y);
+      //   printf("HitPos X, Y, Z, QQQID : %f %f %f %d \n", hitPos.X(), hitPos.Y(), hitPos.Z(), qqq.id[i]);
       // }
     }
+    anodeIntersection = TVector3(x, y, z);
+    // std::cout << "Anode Intersection " << anodeIntersection.Z() << " " << x << " " << y << " " << z << std::endl;
+  }
 
-    TVector3 anodeIntersection;
-    anodeIntersection.Clear();
-    // Implementing a method for PC reconstruction using a single Anode event
-    // if (anodeHits.size() == 1)
-    {
-      float x, y, z = 0;
-      for (const auto &corr : corrcatMax)
-      {
-        if (cESum > 0)
-        {
-          x += (corr.second) / cESum * Crossover[aIDMax][corr.first][0].x;
-          y += (corr.second) / cESum * Crossover[aIDMax][corr.first][0].y;
-          z += (corr.second) / cESum * Crossover[aIDMax][corr.first][0].z;
-          // printf("Max Anode : %d Correlated Cathode : %d cathode Energy : %f cESum Energy : %f z value : %f \n", aIDMax, corr.first, corr.second, cESum, Crossover[aIDMax][corr.first][1].z /*prints alpha*/);
-        }
-        else
-        {
-          printf("Warning: No valid cathode hits to correlate with anode %d! \n", aIDMax);
-        }
-      }
-      if(qqqEcut)       anodeIntersection = TVector3(x, y, z);
-      // std::cout << "Anode Intersection " << anodeIntersection.Z() << " " << x << " " << y << " " << z << std::endl;
-    }
+  // Filling the PC Z projection histogram
+  // std::cout << anodeIntersection.Z() << std::endl;
+  hPCZProj->Fill(anodeIntersection.Z());
 
-    // Filling the PC Z projection histogram
-    // std::cout << anodeIntersection.Z() << std::endl;
-    hPCZProj->Fill(anodeIntersection.Z());
+  // }
 
-    // }
+  // inCuth = false;
+  // inCutl = false;
+  // inPCCut = false;
+  // for(int j=i+1;j<pc.multi;j++){
+  //   if(PCCoinc_cut1->IsInside(pc.index[i], pc.index[j]) || PCCoinc_cut2->IsInside(pc.index[i], pc.index[j])){
+  //     // hpcCoin->Fill(pc.index[i], pc.index[j]);
+  //     inPCCut = true;
+  //   }
+  //   hpcCoin->Fill(pc.index[i], pc.index[j]);
+  // }
 
-    // inCuth = false;
-    // inCutl = false;
-    // inPCCut = false;
-    // for(int j=i+1;j<pc.multi;j++){
-    //   if(PCCoinc_cut1->IsInside(pc.index[i], pc.index[j]) || PCCoinc_cut2->IsInside(pc.index[i], pc.index[j])){
-    //     // hpcCoin->Fill(pc.index[i], pc.index[j]);
-    //     inPCCut = true;
-    //   }
-    //   hpcCoin->Fill(pc.index[i], pc.index[j]);
-    // }
+  // Check if the accumulated energies are within the defined ranges
+  // if (AnCatSum_high && AnCatSum_high->IsInside(aESum, cESum)) {
+  //     inCuth = true;
+  // }
+  // if (AnCatSum_low && AnCatSum_low->IsInside(aESum, cESum)) {
+  //     inCutl = true;
+  // }
 
-    // Check if the accumulated energies are within the defined ranges
-    // if (AnCatSum_high && AnCatSum_high->IsInside(aESum, cESum)) {
-    //     inCuth = true;
-    // }
-    // if (AnCatSum_low && AnCatSum_low->IsInside(aESum, cESum)) {
-    //     inCutl = true;
-    // }
+  // Fill histograms based on the cut conditions
+  // if (inCuth && inPCCut) {
+  //     hanVScatsum_hcut->Fill(aESum, cESum);
+  // }
+  // if (inCutl && inPCCut) {
+  //     hanVScatsum_lcut->Fill(aESum, cESum);
+  // }
+  // for(auto anode : anodeHits){
 
-    // Fill histograms based on the cut conditions
-    // if (inCuth && inPCCut) {
-    //     hanVScatsum_hcut->Fill(aESum, cESum);
-    // }
-    // if (inCutl && inPCCut) {
-    //     hanVScatsum_lcut->Fill(aESum, cESum);
-    // }
-    // for(auto anode : anodeHits){
+  // float aE = anode.second;
+  // aESum += aE;
+  // if(inPCCut){
+  hanVScatsum->Fill(aEMax, cESum);
+  // }
 
-    // float aE = anode.second;
-    // aESum += aE;
-    // if(inPCCut){
-    hanVScatsum->Fill(aEMax, cESum);
-    // }
+  // if (sx3ecut)
+  // {
+  hCat4An->Fill(corrcatMax.size());
+  hNosvAe->Fill(corrcatMax.size(), aEMax);
+  hAnodehits->Fill(anodeHits.size());
+  // }
 
-    // if (sx3ecut)
-    // {
-    hCat4An->Fill(corrcatMax.size());
-    hNosvAe->Fill(corrcatMax.size(), aEMax);
-    hAnodehits->Fill(anodeHits.size());
-    // }
+  // }
+  if (anodeHits.size() < 1)
+  {
+    hCat0An->Fill(cathodeHits.size());
+  }
 
-    // }
-    if (anodeHits.size() < 1)
-    {
-      hCat0An->Fill(cathodeHits.size());
-    }
-
-    // if (HitNonZero)
-    // {
-    //   pw_contr.CalTrack(hitPos, aID, cID);
-    //   hZProj->Fill(pw_contr.GetZ0());
-    // }
+  if (HitNonZero)
+  {
+    pw_contr.CalTrack2(hitPos, anodeIntersection);
+    hZProj->Fill(pw_contr.GetZ0());
   }
 
   // ########################################################### Track constrcution
