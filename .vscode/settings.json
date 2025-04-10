@@ -105,7 +105,8 @@
     "Analyzer1.C": "cpp",
     "FitHistogramsWithTSpectrum_Sequential_Improved.C": "cpp",
     "PlotAndFitCentroids.C": "cpp",
-    "MatchAndPlotCentroids.C": "cpp"
+    "MatchAndPlotCentroids.C": "cpp",
+    "GainMatch.C": "cpp"
   },
   "github-enterprise.uri": "https://fsunuc.physics.fsu.edu"
 }
