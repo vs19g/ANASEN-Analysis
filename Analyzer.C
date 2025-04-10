@@ -194,10 +194,13 @@ Bool_t Analyzer::Process(Long64_t entry)
 
     for (int j = 0; j < pc.multi; j++)
     {
-      hsx3VpcIndex->Fill(sx3.index[i], pc.index[j]);
-      //  if( sx3.ch[index] > 8 ){
-      //    hsx3VpcE->Fill( sx3.e[i], pc.e[j] );
-      //   }
+      if (pc.index[j] < 24 && pc.e[j] > 100)
+      {
+        hsx3VpcIndex->Fill(sx3.index[i], pc.index[j]);
+        //  if( sx3.ch[index] > 8 ){
+        //    hsx3VpcE->Fill( sx3.e[i], pc.e[j] );
+        //   }
+      }
     }
   }
 
@@ -300,18 +303,20 @@ Bool_t Analyzer::Process(Long64_t entry)
       hqqqCoin->Fill(qqq.index[i], qqq.index[j]);
     }
 
+    for (int k = 0; k < pc.multi; k++)
+    {
+      if (pc.index[k] < 24 && pc.e[k] > 50)
+      {
+        hqqqVpcE->Fill(qqq.e[i], pc.e[k]);
+        //  hpcIndexVE->Fill( pc.index[i], pc.e[i] );
+        hqqqVpcIndex->Fill(qqq.index[i], pc.index[k]);
+      }
+    }
+
+    // }
+
     for (int j = i + 1; j < qqq.multi; j++)
     {
-      for (int k = 0; k < pc.multi; k++)
-      {
-        if (pc.index[k] < 24 && pc.e[k] > 50)
-        {
-          hqqqVpcE->Fill(qqq.e[i], pc.e[k]);
-          //  hpcIndexVE->Fill( pc.index[i], pc.e[i] );
-          hqqqVpcIndex->Fill(qqq.index[i], pc.index[k]);
-        }
-        // }
-      }
       // if( qqq.used[i] == true ) continue;
 
       // if( qqq.id[i] == qqq.id[j] && (16 - qqq.ch[i]) * (16 - qqq.ch[j]) < 0  ){ // must be same detector and wedge and ring
@@ -333,7 +338,7 @@ Bool_t Analyzer::Process(Long64_t entry)
         // printf(" ID : %d , chWedge : %d, chRing : %d \n", qqq.id[i], chWedge, chRing);
 
         double theta = -TMath::Pi() / 2 + 2 * TMath::Pi() / 16 / 4. * (qqq.id[i] * 16 + chWedge + 0.5);
-        double rho = 10. + 40. / 16. * (chRing + 0.5);
+        double rho = 50. + 40. / 16. * (chRing + 0.5);
         // if(qqq.e[i]>50){
         hqqqPolar->Fill(theta, rho);
         // }
@@ -385,36 +390,19 @@ Bool_t Analyzer::Process(Long64_t entry)
       Crossover[i][j][0].y = pwinstance.An[i].first.Y() + alpha * a.Y();
       Crossover[i][j][0].z = pwinstance.An[i].first.Z() + alpha * a.Z();
       if (Crossover[i][j][0].z < -190 || Crossover[i][j][0].z > 190)
+      {
         Crossover[i][j][0].z = 9999999;
-
-      // placeholder variable Crossover[i][j][2].x has nothing to do with the geometry of the crossover and is being used to store the alpha value-
+      }
+      // placeholder variable Crossover[i][j][1].x has nothing to do with the geometry of the crossover and is being used to store the alpha value-
       //-so that it can be used to sort "good" hits later
       Crossover[i][j][1].x = alpha;
       Crossover[i][j][1].y = 0;
       // if(i==0){
       // printf("CID, Crossover z and alpha are :  %d %f %f \n",  j, Crossover[i][j][0].z, Crossover[i][j][1].x /*this is alpha*/);
       // }
+      //   }
+      // }
     }
-  }
-
-  // if (i == 4)
-  {
-    // for (int k = -4; k < 3; k++)
-    // {
-    //   if ((i + 24 + k) % 24 == 23 - j) // the 23-j is used to accomodate for the fact that the order of the cathodes was reversed
-    //   {
-    //     Crossover[i][j][1].y = 1;
-    //   }
-    // }
-    // for (int k = -4; k < 3; k++)
-    // {
-    //   if (Crossover[i][j][k].y != 1)
-    //   // if (alpha < 1 && alpha >= -1)
-    //   {
-    //     // printf("i an: %d %f %f %f \n", i, an.X(), an.Y(), an.Z());
-    //     Crossover[i][j][0].z = 9999999; // this is a placeholder value to indicate that the anode and cathode wires do not intersect
-    //   }
-    // }
   }
   // printf("Anode and cathode indices, alpha, denom, andiff, cndiff : %d %d %f %f %f %f\n", i, j, alpha, denom, adiff, cdiff);
 
@@ -502,11 +490,11 @@ Bool_t Analyzer::Process(Long64_t entry)
             { return a.second > b.second; });
 
   bool SiPCflag;
-  corrcatMax.clear();
 
+  corrcatMax.clear();
   if (anodeHits.size() >= 1 && cathodeHits.size() > 1)
   {
-    // if (((TMath::TanH(hitPos.Y() / hitPos.X())) > (TMath::TanH(a.Y() / a.X()) - TMath::PiOver4())) || ((TMath::TanH(hitPos.Y() / hitPos.X())) < (TMath::TanH(a.Y() / a.X()) + TMath::PiOver4())))
+    if (((TMath::TanH(hitPos.Y() / hitPos.X())) > (TMath::TanH(a.Y() / a.X()) - TMath::PiOver4())) || ((TMath::TanH(hitPos.Y() / hitPos.X())) < (TMath::TanH(a.Y() / a.X()) + TMath::PiOver4())))
     {
 
       for (const auto &anode : anodeHits)
@@ -543,15 +531,17 @@ Bool_t Analyzer::Process(Long64_t entry)
         // This section of code is used to find the cathodes are correlated with the max and next max anodes, as well as to figure out if there are any common cathodes
         // the anodes are correlated with the cathodes +/-3 from the anode number in the reverse order
 
-        // for (int j = -4; j < 3; j++)
-
-        // if ((aIDMax + 24 + j) % 24 == 23 - cID) /* the 23-cID is used to accomodate for the fact that the order of the cathodes was reversed relative top the physical geometry */
-        if (Crossover[aIDMax][cID][0].z != 9999999)
+        for (int j = -4; j < 3; j++)
         {
-          corrcatMax.push_back(std::pair<int, double>(cID, cE));
-          cESum += cE;
-          // printf("Max Anode : %d Correlated Cathode : %d Anode Energy : %f z value : %f \n", aIDMax, cID, cESum, Crossover[aIDMax][cID][1].z /*prints alpha*/);
-          // std::cout << " Cathode iD : " << cID << " Energy : " << cE << std::endl;
+          if ((aIDMax + 24 + j) % 24 == 23 - cID)
+          /* the 23-cID is used to accomodate for the fact that the order of the cathodes was reversed relative top the physical geometry */
+          // if (Crossover[aIDMax][cID][0].z != 9999999)
+          {
+            corrcatMax.push_back(std::pair<int, double>(cID, cE));
+            cESum += cE;
+            // printf("Max Anode : %d Correlated Cathode : %d Anode Energy : %f z value : %f \n", aIDMax, cID, cESum, Crossover[aIDMax][cID][1].z /*prints alpha*/);
+            // std::cout << " Cathode iD : " << cID << " Energy : " << cE << std::endl;
+          }
         }
       }
     }
@@ -591,10 +581,13 @@ Bool_t Analyzer::Process(Long64_t entry)
     anodeIntersection = TVector3(x, y, z);
     // std::cout << "Anode Intersection " << anodeIntersection.Z() << " " << x << " " << y << " " << z << std::endl;
   }
-
+  
+  if(anodeIntersection.Z() != 0){
+    hPCZProj->Fill(anodeIntersection.Z());
+  }
   // Filling the PC Z projection histogram
   // std::cout << anodeIntersection.Z() << std::endl;
-  hPCZProj->Fill(anodeIntersection.Z());
+  // hPCZProj->Fill(anodeIntersection.Z());
 
   // }
 
@@ -645,7 +638,7 @@ Bool_t Analyzer::Process(Long64_t entry)
     hCat0An->Fill(cathodeHits.size());
   }
 
-  if (HitNonZero)
+  if (HitNonZero && anodeIntersection.Z() != 0)
   {
     pw_contr.CalTrack2(hitPos, anodeIntersection);
     hZProj->Fill(pw_contr.GetZ0());
@@ -661,99 +654,99 @@ Bool_t Analyzer::Process(Long64_t entry)
 void Analyzer::Terminate()
 {
 
-  gStyle->SetOptStat("neiou");
-  TCanvas *canvas = new TCanvas("cANASEN", "ANASEN", 2000, 2000);
-  canvas->Divide(3, 3);
+  // gStyle->SetOptStat("neiou");
+  // TCanvas *canvas = new TCanvas("cANASEN", "ANASEN", 2000, 2000);
+  // canvas->Divide(3, 3);
 
-  // hsx3VpcIndex->Draw("colz");
+  // // hsx3VpcIndex->Draw("colz");
 
-  //=============================================== pad-1
-  padID++;
-  canvas->cd(padID);
-  canvas->cd(padID)->SetGrid(1);
+  // //=============================================== pad-1
+  // padID++;
+  // canvas->cd(padID);
+  // canvas->cd(padID)->SetGrid(1);
 
-  hsx3IndexVE->Draw("colz");
+  // hsx3IndexVE->Draw("colz");
 
-  //=============================================== pad-2
-  padID++;
-  canvas->cd(padID);
-  canvas->cd(padID)->SetGrid(1);
+  // //=============================================== pad-2
+  // padID++;
+  // canvas->cd(padID);
+  // canvas->cd(padID)->SetGrid(1);
 
-  hqqqIndexVE->Draw("colz");
+  // hqqqIndexVE->Draw("colz");
 
-  //=============================================== pad-3
-  padID++;
-  canvas->cd(padID);
-  canvas->cd(padID)->SetGrid(1);
+  // //=============================================== pad-3
+  // padID++;
+  // canvas->cd(padID);
+  // canvas->cd(padID)->SetGrid(1);
 
-  hpcIndexVE->Draw("colz");
+  // hpcIndexVE->Draw("colz");
 
-  //=============================================== pad-4
-  padID++;
-  canvas->cd(padID);
-  canvas->cd(padID)->SetGrid(1);
+  // //=============================================== pad-4
+  // padID++;
+  // canvas->cd(padID);
+  // canvas->cd(padID)->SetGrid(1);
 
-  hsx3Coin->Draw("colz");
+  // hsx3Coin->Draw("colz");
 
-  //=============================================== pad-5
-  padID++;
-  canvas->cd(padID);
-  canvas->cd(padID)->SetGrid(1);
+  // //=============================================== pad-5
+  // padID++;
+  // canvas->cd(padID);
+  // canvas->cd(padID)->SetGrid(1);
 
-  canvas->cd(padID)->SetLogz(true);
+  // canvas->cd(padID)->SetLogz(true);
 
-  hqqqCoin->Draw("colz");
+  // hqqqCoin->Draw("colz");
 
-  //=============================================== pad-6
-  padID++;
-  canvas->cd(padID);
-  canvas->cd(padID)->SetGrid(1);
+  // //=============================================== pad-6
+  // padID++;
+  // canvas->cd(padID);
+  // canvas->cd(padID)->SetGrid(1);
 
-  hpcCoin->Draw("colz");
+  // hpcCoin->Draw("colz");
 
-  //=============================================== pad-7
-  padID++;
-  canvas->cd(padID);
-  canvas->cd(padID)->SetGrid(1);
+  // //=============================================== pad-7
+  // padID++;
+  // canvas->cd(padID);
+  // canvas->cd(padID)->SetGrid(1);
 
-  // hsx3VpcIndex ->Draw("colz");
-  hsx3VpcE->Draw("colz");
+  // // hsx3VpcIndex ->Draw("colz");
+  // hsx3VpcE->Draw("colz");
 
-  //=============================================== pad-8
-  padID++;
-  canvas->cd(padID);
-  canvas->cd(padID)->SetGrid(1);
+  // //=============================================== pad-8
+  // padID++;
+  // canvas->cd(padID);
+  // canvas->cd(padID)->SetGrid(1);
 
-  // hqqqVpcIndex ->Draw("colz");
+  // // hqqqVpcIndex ->Draw("colz");
 
-  hqqqVpcE->Draw("colz");
-  //=============================================== pad-9
-  padID++;
+  // hqqqVpcE->Draw("colz");
+  // //=============================================== pad-9
+  // padID++;
 
-  // canvas->cd(padID)->DrawFrame(-50, -50, 50, 50);
-  // hqqqPolar->Draw("same colz pol");
+  // // canvas->cd(padID)->DrawFrame(-50, -50, 50, 50);
+  // // hqqqPolar->Draw("same colz pol");
 
-  canvas->cd(padID);
-  canvas->cd(padID)->SetGrid(1);
-  //  hZProj->Draw();
-  hanVScatsum->Draw("colz");
+  // canvas->cd(padID);
+  // canvas->cd(padID)->SetGrid(1);
+  // //  hZProj->Draw();
+  // hanVScatsum->Draw("colz");
 
-  // TFile *outRoot = new TFile("Histograms.root", "RECREATE");
+  // // TFile *outRoot = new TFile("Histograms.root", "RECREATE");
 
-  // if (!outRoot->IsOpen())
-  // {
-  //   std::cerr << "Error opening file for writing!" << std::endl;
-  //   return;
-  // }
+  // // if (!outRoot->IsOpen())
+  // // {
+  // //   std::cerr << "Error opening file for writing!" << std::endl;
+  // //   return;
+  // // }
 
-  // // Loop through histograms and write them to the ROOT file
-  // for (int i = 0; i < 48; i++)
-  // {
-  //   if (hPC_E[i] != nullptr)
-  //   {
-  //     hPC_E[i]->Write(); // Write histogram to file
-  //   }
-  // }
+  // // // Loop through histograms and write them to the ROOT file
+  // // for (int i = 0; i < 48; i++)
+  // // {
+  // //   if (hPC_E[i] != nullptr)
+  // //   {
+  // //     hPC_E[i]->Write(); // Write histogram to file
+  // //   }
+  // // }
 
-  // outRoot->Close();
+  // // outRoot->Close();
 }
