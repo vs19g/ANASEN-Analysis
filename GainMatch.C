@@ -25,13 +25,8 @@ SX3 sx3_contr;
 PW pw_contr;
 TVector3 hitPos;
 bool HitNonZero;
-
-const int MAX_DET = 4;
-const int MAX_WEDGE = 16;
-const int MAX_RING = 16;
-
-bool gainValid[MAX_DET][MAX_RING][MAX_WEDGE] = {{{false}}};
-double gainArray[MAX_DET][MAX_RING][MAX_WEDGE] = {{{0}}};
+TCutG *cut;
+std::map<std::tuple<int, int, int>, std::vector<std::pair<double, double>>> dataPoints;
 
 void GainMatch::Begin(TTree * /*tree*/)
 {
@@ -43,6 +38,20 @@ void GainMatch::Begin(TTree * /*tree*/)
     sx3_contr.ConstructGeo();
     pw_contr.ConstructGeo();
 
+    // Load the TCutG object
+    TFile *cutFile = TFile::Open("qqqcorr.root");
+    if (!cutFile || cutFile->IsZombie())
+    {
+        std::cerr << "Error: Could not open qqqcorr.root" << std::endl;
+        return;
+    }
+    cut = dynamic_cast<TCutG *>(cutFile->Get("qqqcorr"));
+    if (!cut)
+    {
+        std::cerr << "Error: Could not find TCutG named 'qqqcorr' in qqqcorr.root" << std::endl;
+        return;
+    }
+    cut->SetName("qqqcorr"); // Ensure the cut has the correct name
 }
 
 Bool_t GainMatch::Process(Long64_t entry)
@@ -169,10 +178,15 @@ Bool_t GainMatch::Process(Long64_t entry)
                 TH2F *hist2d = (TH2F *)gDirectory->Get(histName);
                 if (!hist2d)
                 {
-                    hist2d = new TH2F(histName, Form("QQQ GainMatch Det%d R%d W%d;Wedge E;Ring E", qqq.id[i], chRing, chWedge), 400, 0, 16000, 400, 0, 16000);
+                    hist2d = new TH2F(histName, Form("QQQ Det%d R%d W%d;Wedge E;Ring E", qqq.id[i], chRing, chWedge), 400, 0, 16000, 400, 0, 16000);
                 }
 
                 hist2d->Fill(eWedge, eRing);
+                if (cut && cut->IsInside(eWedge, eRing))
+                {
+                    // Accumulate data for gain matching
+                    dataPoints[{qqq.id[i], chRing, chWedge}].emplace_back(eWedge, eRing);
+                }
             }
         }
     }
@@ -182,128 +196,58 @@ Bool_t GainMatch::Process(Long64_t entry)
 
 void GainMatch::Terminate()
 {
-
-    TFile *cutFile = TFile::Open("qqqcorr.root");
-    TCutG *cut = (TCutG *)cutFile->Get("qqqcorr");
     const int MAX_DET = 4;
     const int MAX_RING = 16;
     const int MAX_WEDGE = 16;
 
-    // Store gains and validity
-    static double gainArray[MAX_DET][MAX_RING][MAX_WEDGE] = {{{0}}};
-    static bool gainValid[MAX_DET][MAX_RING][MAX_WEDGE] = {{{false}}};
+    double gainArray[MAX_DET][MAX_RING][MAX_WEDGE] = {{{0}}};
+    bool gainValid[MAX_DET][MAX_RING][MAX_WEDGE] = {{{false}}};
 
     std::ofstream outFile("qqq_gainmatch.txt");
     if (!outFile.is_open())
     {
-        printf("Error opening output file!");
+        std::cerr << "Error opening output file!" << std::endl;
         return;
     }
 
-    // Collect all (wedgeE, ringE) pairs per detector/ring/wedge
-    std::map<std::tuple<int, int, int>, std::vector<std::pair<double, double>>> dataPoints;
-    TIter next(gDirectory->GetList());
-    TObject *obj;
-    while ((obj = next()))
-    {
-        if (!obj->InheritsFrom("TH2F"))
-            continue;
-        TH2F *hist2d = static_cast<TH2F *>(obj);
-        TString name = hist2d->GetName();
-        if (!name.BeginsWith("hQQQFVB_id"))
-            continue;
-        if (hist2d->GetEntries() < 100)
-            continue;
-
-        int id, ring, wedge;
-        sscanf(name.Data(), "hQQQFVB_id%d_r%d_w%d", &id, &ring, &wedge);
-
-        for (int binX = 1; binX <= hist2d->GetNbinsX(); ++binX)
-        {
-            TH1D *projY = hist2d->ProjectionY("_py", binX, binX + 1);
-            if (projY->GetEntries() < 30)
-            {
-                delete projY;
-                continue;
-            }
-
-            double mean = projY->GetMean();
-            TF1 *fit = new TF1("fit", "gaus", mean - 100, mean + 100);
-            projY->Fit(fit, "QNR");
-
-            double wedgeE = hist2d->GetXaxis()->GetBinCenter(binX);
-            double ringE = fit->GetParameter(1);
-            dataPoints[{id, ring, wedge}].emplace_back(wedgeE, ringE);
-
-            delete fit;
-            delete projY;
-        }
-    }
-
-    // Fit slopes with sigma-clipping
-    for (auto &kv : dataPoints)
+    for (const auto &kv : dataPoints)
     {
         auto [id, ring, wedge] = kv.first;
-        auto &pts = kv.second;
+        const auto &pts = kv.second;
         if (pts.size() < 5)
             continue;
 
-        // Build vectors
         std::vector<double> wE, rE;
-        for (auto &pr : pts)
+        for (const auto &pr : pts)
         {
             wE.push_back(pr.first);
             rE.push_back(pr.second);
         }
 
-        // Initial fit
-        TGraph *g0 = new TGraph(wE.size(), wE.data(), rE.data());
-        TF1 *f0 = new TF1("f0", "[0]*x + [1]", 0, 16000);
-        g0->Fit(f0, "QNR");
-        double m0 = f0->GetParameter(0), b0 = f0->GetParameter(1);
-
-        // Clip to cut
-        std::vector<double> wC, rC;
-        for (size_t i = 0; i < wE.size(); ++i)
-        {
-            if (cut->IsInside(wE[i], rE[i]))
-            {
-                wC.push_back(wE[i]);
-                rC.push_back(rE[i]);
-            }
-        }
-
-        // Final fit
-        if (wC.size() >= 5)
-        {
-            TGraph *g1 = new TGraph(wC.size(), wC.data(), rC.data());
-            TF1 *f1 = new TF1("f1", "[0]*x + [1]", 0, 16000);
-            g1->Fit(f1, "QNR");
-            gainArray[id][ring][wedge] = f1->GetParameter(0);
-            gainValid[id][ring][wedge] = true;
-            delete g1;
-            delete f1;
-        }
-        delete g0;
-        delete f0;
+        TGraph g(wE.size(), wE.data(), rE.data());
+        TF1 f("f", "[0]*x + [1]", 0, 16000);
+        g.Fit(&f, "QNR");
+        gainArray[id][ring][wedge] = f.GetParameter(0);
+        gainValid[id][ring][wedge] = true;
     }
 
-    // Write out valid entries
     for (int id = 0; id < MAX_DET; ++id)
     {
         for (int ring = 0; ring < MAX_RING; ++ring)
         {
             for (int wedge = 0; wedge < MAX_WEDGE; ++wedge)
             {
-                if (!gainValid[id][ring][wedge])
-                    continue;
-                outFile << id << " " << wedge << " " << ring << " " << gainArray[id][ring][wedge] << std::endl;
-                // printf("Gain match Det%d Ring%d Wedge%d → %.4f \n", id, ring, wedge, gainArray[id][ring][wedge]);
+                if (gainValid[id][ring][wedge])
+                {
+                    outFile << id << " " << wedge << " " << ring << " " << gainArray[id][ring][wedge] << std::endl;
+                    printf("Gain match Det%d Ring%d Wedge%d → %.4f \n", id, ring, wedge, gainArray[id][ring][wedge]);
+                }
             }
         }
     }
+
     outFile.close();
-    printf("Gain matching complete (with sigma-clipping)");
+    std::cout << "Gain matching complete." << std::endl;
 
     // === Plot all gain-matched QQQ points together with a 2D histogram ===
     TH2F *hAll = new TH2F("hAll", "All QQQ Gain-Matched;Corrected Wedge E;Ring E",
