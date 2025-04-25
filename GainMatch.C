@@ -225,7 +225,7 @@ void GainMatch::Terminate()
         }
 
         TGraph g(wE.size(), wE.data(), rE.data());
-        TF1 f("f", "[0]*x + [1]", 0, 16000);
+        TF1 f("f", "[0]*x", 0, 16000);
         g.Fit(&f, "QNR");
         gainArray[id][ring][wedge] = f.GetParameter(0);
         gainValid[id][ring][wedge] = true;
