@@ -106,7 +106,10 @@
     "FitHistogramsWithTSpectrum_Sequential_Improved.C": "cpp",
     "PlotAndFitCentroids.C": "cpp",
     "MatchAndPlotCentroids.C": "cpp",
-    "GainMatch.C": "cpp"
+    "GainMatch.C": "cpp",
+    "GainMatchSX3.C": "cpp",
+    "RelBack_Fix_new.C": "cpp",
+    "SiRelativeGains_Step1_new.C": "cpp"
   },
   "github-enterprise.uri": "https://fsunuc.physics.fsu.edu"
 }

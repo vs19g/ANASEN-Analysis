@@ -1,6 +1,6 @@
-#define GainMatch_cxx
+#define GainMatchSX3_cxx
 
-#include "GainMatch.h"
+#include "GainMatchSX3.h"
 #include <TH2.h>
 #include <TF1.h>
 #include <TStyle.h>
@@ -24,32 +24,31 @@ SX3 sx3_contr;
 TCutG *cut;
 std::map<std::tuple<int, int, int>, std::vector<std::pair<double, double>>> dataPoints;
 
-void GainMatch::Begin(TTree * /*tree*/)
+void GainMatchSX3::Begin(TTree * /*tree*/)
 {
     TString option = GetOption();
 
     hSX3FvsB = new TH2F("hSX3FvsB", "SX3 Front vs Back; Front E; Back E", 400, 0, 16000, 400, 0, 16000);
-    hQQQFVB = new TH2F("hQQQFVB", "number of good QQQ vs QQQ id", 400, 0, 16000, 400, 0, 16000);
 
     sx3_contr.ConstructGeo();
 
     // Load the TCutG object
-    TFile *cutFile = TFile::Open("qqqcorr.root");
+    TFile *cutFile = TFile::Open("sx3cut.root");
     if (!cutFile || cutFile->IsZombie())
     {
-        std::cerr << "Error: Could not open qqqcorr.root" << std::endl;
+        std::cerr << "Error: Could not open sx3cut.root" << std::endl;
         return;
     }
-    cut = dynamic_cast<TCutG *>(cutFile->Get("qqqcorr"));
+    cut = dynamic_cast<TCutG *>(cutFile->Get("sx3cut"));
     if (!cut)
     {
-        std::cerr << "Error: Could not find TCutG named 'qqqcorr' in qqqcorr.root" << std::endl;
+        std::cerr << "Error: Could not find TCutG named 'sx3cut' in sx3cut.root" << std::endl;
         return;
     }
-    cut->SetName("qqqcorr"); // Ensure the cut has the correct name
+    cut->SetName("sx3cut"); // Ensure the cut has the correct name
 }
 
-Bool_t GainMatch::Process(Long64_t entry)
+Bool_t GainMatchSX3::Process(Long64_t entry)
 {
 
     b_sx3Multi->GetEntry(entry);
@@ -119,12 +118,12 @@ Bool_t GainMatch::Process(Long64_t entry)
                 {
                     if (sx3.ch[index] % 2 == 0)
                     {
-                        sx3ChDn = sx3.ch[index];
+                        sx3ChDn = sx3.ch[index]/2;
                         sx3EDn = sx3.e[index];
                     }
                     else
                     {
-                        sx3ChUp = sx3.ch[index];
+                        sx3ChUp = sx3.ch[index]/2;
                         sx3EUp = sx3.e[index];
                     }
                 }
@@ -135,50 +134,21 @@ Bool_t GainMatch::Process(Long64_t entry)
                 }
             }
             hSX3FvsB->Fill(sx3EUp + sx3EDn, sx3EBk);
-        }
-    }
 
-    for (int i = 0; i < qqq.multi; i++)
-    {
-        for (int j = i + 1; j < qqq.multi; j++)
-        {
-            if (qqq.id[i] == qqq.id[j])
+            for (int i = 0; i < sx3.multi; i++)
             {
-                int chWedge = -1;
-                int chRing = -1;
-                float eWedge = 0.0;
-                float eRing = 0.0;
-                if (qqq.ch[i] < 16 && qqq.ch[j] >= 16)
-                {
-                    chWedge = qqq.ch[i];
-                    eWedge = qqq.e[i];
-                    chRing = qqq.ch[j] - 16;
-                    eRing = qqq.e[j];
-                }
-                else if (qqq.ch[j] < 16 && qqq.ch[i] >= 16)
-                {
-                    chWedge = qqq.ch[j];
-                    eWedge = qqq.e[j];
-                    chRing = qqq.ch[i] - 16;
-                    eRing = qqq.e[i];
-                }
-                else
-                    continue;
-
-                hQQQFVB->Fill(eWedge, eRing);
-
-                TString histName = Form("hQQQFVB_id%d_r%d_w%d", qqq.id[i], chRing, chWedge);
+                TString histName = Form("hSX3FVB_id%d_F%d_L+R%d", sx3.id[i], sx3ChUp, sx3ChBk);
                 TH2F *hist2d = (TH2F *)gDirectory->Get(histName);
                 if (!hist2d)
                 {
-                    hist2d = new TH2F(histName, Form("QQQ Det%d R%d W%d;Wedge E;Ring E", qqq.id[i], chRing, chWedge), 400, 0, 16000, 400, 0, 16000);
+                    hist2d = new TH2F(histName, Form("hSX3FVB_id%d_F%d_L+R%d", sx3.id[i], sx3ChUp, sx3ChBk), 400, 0, 16000, 400, 0, 16000);
                 }
 
-                hist2d->Fill(eWedge, eRing);
-                if (cut && cut->IsInside(eWedge, eRing))
+                hist2d->Fill(sx3EUp + sx3EDn, sx3EBk);
+                if (cut && cut->IsInside(sx3EUp + sx3EDn, sx3EBk))
                 {
                     // Accumulate data for gain matching
-                    dataPoints[{qqq.id[i], chRing, chWedge}].emplace_back(eWedge, eRing);
+                    dataPoints[{sx3.id[i], sx3ChUp, sx3ChBk}].emplace_back(sx3EBk, sx3EUp + sx3EDn);
                 }
             }
         }
@@ -187,16 +157,17 @@ Bool_t GainMatch::Process(Long64_t entry)
     return kTRUE;
 }
 
-void GainMatch::Terminate()
+void GainMatchSX3::Terminate()
 {
-    const int MAX_DET = 4;
-    const int MAX_RING = 16;
-    const int MAX_WEDGE = 16;
+    const int MAX_DET = 24;
+    const int MAX_UP = 4;
+    const int MAX_DOWN = 4;
+    const int MAX_BK = 4;
 
-    double gainArray[MAX_DET][MAX_RING][MAX_WEDGE] = {{{0}}};
-    bool gainValid[MAX_DET][MAX_RING][MAX_WEDGE] = {{{false}}};
+    double gainArray[MAX_DET][MAX_UP][MAX_BK] = {{{0}}};
+    bool gainValid[MAX_DET][MAX_UP][MAX_BK] = {{{false}}};
 
-    std::ofstream outFile("qqq_gainmatch.txt");
+    std::ofstream outFile("sx3_GainMatch.txt");
     if (!outFile.is_open())
     {
         std::cerr << "Error opening output file!" << std::endl;
@@ -205,35 +176,35 @@ void GainMatch::Terminate()
 
     for (const auto &kv : dataPoints)
     {
-        auto [id, ring, wedge] = kv.first;
+        auto [id, ud,bk] = kv.first;
         const auto &pts = kv.second;
         if (pts.size() < 5)
             continue;
 
-        std::vector<double> wE, rE;
+        std::vector<double> bkE, udE;
         for (const auto &pr : pts)
         {
-            wE.push_back(pr.first);
-            rE.push_back(pr.second);
+            bkE.push_back(pr.first);
+            udE.push_back(pr.second);
         }
 
-        TGraph g(wE.size(), wE.data(), rE.data());
+        TGraph g(bkE.size(), bkE.data(), udE.data());
         TF1 f("f", "[0]*x", 0, 16000);
         g.Fit(&f, "QNR");
-        gainArray[id][ring][wedge] = f.GetParameter(0);
-        gainValid[id][ring][wedge] = true;
+        gainArray[id][ud][bk] = f.GetParameter(0);
+        gainValid[id][ud][bk] = true;
     }
 
     for (int id = 0; id < MAX_DET; ++id)
     {
-        for (int ring = 0; ring < MAX_RING; ++ring)
+        for (int bk = 0; bk < MAX_BK; ++bk)
         {
-            for (int wedge = 0; wedge < MAX_WEDGE; ++wedge)
+            for (int ud = 0; ud < MAX_UP; ++ud)
             {
-                if (gainValid[id][ring][wedge])
+                if (gainValid[id][ud][bk])
                 {
-                    outFile << id << " " << wedge << " " << ring << " " << gainArray[id][ring][wedge] << std::endl;
-                    printf("Gain match Det%d Ring%d Wedge%d → %.4f \n", id, ring, wedge, gainArray[id][ring][wedge]);
+                    outFile << id << " " << bk << " " << ud << " " << gainArray[id][ud][bk] << std::endl;
+                    printf("Gain match Det%d Up+Dn%d Back%d → %.4f \n", id, ud, bk, gainArray[id][ud][bk]);
                 }
             }
         }
@@ -243,22 +214,22 @@ void GainMatch::Terminate()
     std::cout << "Gain matching complete." << std::endl;
 
     // === Plot all gain-matched QQQ points together with a 2D histogram ===
-    TH2F *hAll = new TH2F("hAll", "All QQQ Gain-Matched;Corrected Wedge E;Ring E",
+    TH2F *hAll = new TH2F("hAll", "All SX3 Gain-Matched;Corrected Back E;Up+dn E",
                           400, 0, 16000, 400, 0, 16000);
 
     // Fill the combined TH2F with corrected data
     for (auto &kv : dataPoints)
     {
-        int id, ring, wedge;
-        std::tie(id, ring, wedge) = kv.first;
-        if (!gainValid[id][ring][wedge])
+        int id, ud, bk;
+        std::tie(id, ud, bk) = kv.first;
+        if (!gainValid[id][ud][bk])
             continue;
         auto &pts = kv.second;
         for (auto &pr : pts)
         {
-            double corrWedge = pr.first * gainArray[id][ring][wedge];
-            double ringE = pr.second;
-            hAll->Fill(corrWedge, ringE);
+            double corrBack = pr.first * gainArray[id][ud][bk];
+            double udE = pr.second;
+            hAll->Fill(corrBack, udE);
         }
     }
 }
