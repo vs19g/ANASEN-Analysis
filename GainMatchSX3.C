@@ -17,12 +17,12 @@
 
 TH2F *hSX3FvsB;
 TH2F *hQQQFVB;
-
 int padID = 0;
 
 SX3 sx3_contr;
 TCutG *cut;
-std::map<std::tuple<int, int, int>, std::vector<std::pair<double, double>>> dataPoints;
+std::map<std::tuple<int, int, int>, std::vector<std::tuple<double, double, double>>> dataPoints;
+
 
 void GainMatchSX3::Begin(TTree * /*tree*/)
 {
@@ -46,6 +46,7 @@ void GainMatchSX3::Begin(TTree * /*tree*/)
         return;
     }
     cut->SetName("sx3cut"); // Ensure the cut has the correct name
+    
 }
 
 Bool_t GainMatchSX3::Process(Long64_t entry)
@@ -148,7 +149,7 @@ Bool_t GainMatchSX3::Process(Long64_t entry)
                 if (cut && cut->IsInside(sx3EUp + sx3EDn, sx3EBk))
                 {
                     // Accumulate data for gain matching
-                    dataPoints[{sx3.id[i], sx3ChUp, sx3ChBk}].emplace_back(sx3EBk, sx3EUp + sx3EDn);
+                    dataPoints[{sx3.id[i], sx3ChUp, sx3ChBk}].emplace_back(sx3EBk, sx3EUp , sx3EDn);
                 }
             }
         }
@@ -156,7 +157,6 @@ Bool_t GainMatchSX3::Process(Long64_t entry)
 
     return kTRUE;
 }
-
 void GainMatchSX3::Terminate()
 {
     const int MAX_DET = 24;
@@ -174,9 +174,13 @@ void GainMatchSX3::Terminate()
         return;
     }
 
+    // === Updated dataPoints type ===
+    // std::map<std::tuple<int, int, int>, std::vector<std::tuple<double, double, double>>> dataPoints;
+
+    // Gain fit using up+dn vs bk
     for (const auto &kv : dataPoints)
     {
-        auto [id, ud,bk] = kv.first;
+        auto [id, ud, bk] = kv.first;
         const auto &pts = kv.second;
         if (pts.size() < 5)
             continue;
@@ -184,8 +188,10 @@ void GainMatchSX3::Terminate()
         std::vector<double> bkE, udE;
         for (const auto &pr : pts)
         {
-            bkE.push_back(pr.first);
-            udE.push_back(pr.second);
+            double eUp, eDn, eBk;
+            std::tie(eBk, eUp, eDn) = pr;
+            bkE.push_back(eBk);
+            udE.push_back(eUp + eDn);
         }
 
         TGraph g(bkE.size(), bkE.data(), udE.data());
@@ -195,6 +201,7 @@ void GainMatchSX3::Terminate()
         gainValid[id][ud][bk] = true;
     }
 
+    // Output results
     for (int id = 0; id < MAX_DET; ++id)
     {
         for (int bk = 0; bk < MAX_BK; ++bk)
@@ -213,23 +220,39 @@ void GainMatchSX3::Terminate()
     outFile.close();
     std::cout << "Gain matching complete." << std::endl;
 
-    // === Plot all gain-matched QQQ points together with a 2D histogram ===
-    TH2F *hAll = new TH2F("hAll", "All SX3 Gain-Matched;Corrected Back E;Up+dn E",
+    // === Create histograms ===
+    TH2F *hFVB = new TH2F("hFVB", "Corrected Up+Dn vs Corrected Back;Corrected Back E;Up+Dn E",
                           400, 0, 16000, 400, 0, 16000);
+    TH2F *hAsym = new TH2F("hAsym", "Up vs Dn dvide back;Up+Dn E;(Up-Dn)/(Up+Dn)",
+                           400, -1.0,1.0, 400, -1.0, 1.0);
 
-    // Fill the combined TH2F with corrected data
-    for (auto &kv : dataPoints)
+    // Fill histograms
+    for (const auto &kv : dataPoints)
+{
+    auto [id, ud, bk] = kv.first;
+    if (!gainValid[id][ud][bk]) continue;
+    double gain = gainArray[id][ud][bk];
+
+    for (const auto &pr : kv.second)
     {
-        int id, ud, bk;
-        std::tie(id, ud, bk) = kv.first;
-        if (!gainValid[id][ud][bk])
-            continue;
-        auto &pts = kv.second;
-        for (auto &pr : pts)
-        {
-            double corrBack = pr.first * gainArray[id][ud][bk];
-            double udE = pr.second;
-            hAll->Fill(corrBack, udE);
-        }
+        double eBk, eUp, eDn;
+        std::tie(eBk, eUp, eDn) = pr;
+
+        double updn = eUp + eDn;
+        if (updn == 0) continue;
+
+        double asym = (eUp - eDn) / updn;
+        double correctedBack = eBk * gain;
+
+        hFVB->Fill(correctedBack, updn);
+        hAsym->Fill(eUp/eBk,eDn/eBk);
     }
+}
+
+
+    // Optional: save histograms to a file
+    // TFile *outHist = new TFile("sx3_gainmatch_hists.root", "RECREATE");
+    // hFVB->Write();
+    // hAsym->Write();
+    // outHist->Close();
 }
