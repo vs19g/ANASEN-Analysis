@@ -16,19 +16,19 @@
 #include "TVector3.h"
 
 TH2F *hSX3FvsB;
-TH2F *hQQQFVB;
+TH2F *hsx3IndexVE;
 int padID = 0;
 
 SX3 sx3_contr;
 TCutG *cut;
 std::map<std::tuple<int, int, int>, std::vector<std::tuple<double, double, double>>> dataPoints;
 
-
 void GainMatchSX3::Begin(TTree * /*tree*/)
 {
     TString option = GetOption();
 
     hSX3FvsB = new TH2F("hSX3FvsB", "SX3 Front vs Back; Front E; Back E", 400, 0, 16000, 400, 0, 16000);
+    hsx3IndexVE = new TH2F("hsx3IndexVE", "SX3 index vs Energy; sx3 index ; Energy", 24 * 12, 0, 24 * 12, 400, 0, 5000);
 
     sx3_contr.ConstructGeo();
 
@@ -46,7 +46,6 @@ void GainMatchSX3::Begin(TTree * /*tree*/)
         return;
     }
     cut->SetName("sx3cut"); // Ensure the cut has the correct name
-    
 }
 
 Bool_t GainMatchSX3::Process(Long64_t entry)
@@ -119,37 +118,49 @@ Bool_t GainMatchSX3::Process(Long64_t entry)
                 {
                     if (sx3.ch[index] % 2 == 0)
                     {
-                        sx3ChDn = sx3.ch[index]/2;
+                        sx3ChDn = sx3.ch[index] / 2;
                         sx3EDn = sx3.e[index];
                     }
                     else
                     {
-                        sx3ChUp = sx3.ch[index]/2;
+                        sx3ChUp = sx3.ch[index] / 2;
                         sx3EUp = sx3.e[index];
                     }
                 }
                 else
                 {
-                    sx3ChBk = sx3.ch[index];
+                    sx3ChBk = sx3.ch[index] - 8;
+                    // if (sx3ChBk == 2)
+                    //     printf("Found back channel Det %d Back %d \n", sx3.id[index], sx3ChBk);
                     sx3EBk = sx3.e[index];
                 }
             }
             hSX3FvsB->Fill(sx3EUp + sx3EDn, sx3EBk);
 
+            // Fill the histogram for the front vs back
+            std::array<int, 24> detectorIDs;
+
             for (int i = 0; i < sx3.multi; i++)
             {
-                TString histName = Form("hSX3FVB_id%d_F%d_L+R%d", sx3.id[i], sx3ChUp, sx3ChBk);
-                TH2F *hist2d = (TH2F *)gDirectory->Get(histName);
-                if (!hist2d)
+                if (sx3.id[i]==3)
                 {
-                    hist2d = new TH2F(histName, Form("hSX3FVB_id%d_F%d_L+R%d", sx3.id[i], sx3ChUp, sx3ChBk), 400, 0, 16000, 400, 0, 16000);
-                }
+                    TString histName = Form("hSX3FVB_id%d_U%d_D%d_B%d", sx3.id[i], sx3ChUp, sx3ChDn, sx3ChBk);
+                    TH2F *hist2d = (TH2F *)gDirectory->Get(histName);
+                    if (!hist2d)
+                    {
+                        hist2d = new TH2F(histName, Form("hSX3FVB_id%d_U%d_D%d_B%d", sx3.id[i], sx3ChUp, sx3ChDn, sx3ChBk), 400, 0, 16000, 400, 0, 16000);
+                    }
 
-                hist2d->Fill(sx3EUp + sx3EDn, sx3EBk);
-                if (cut && cut->IsInside(sx3EUp + sx3EDn, sx3EBk))
-                {
-                    // Accumulate data for gain matching
-                    dataPoints[{sx3.id[i], sx3ChUp, sx3ChBk}].emplace_back(sx3EBk, sx3EUp , sx3EDn);
+                    // if (sx3ChBk == 2)
+                    //     printf("Found back channel Det %d Back %d \n", sx3.id[i], sx3ChBk);
+                    hsx3IndexVE->Fill(sx3.index[i], sx3.e[i]);
+
+                    hist2d->Fill(sx3EUp + sx3EDn, sx3EBk);
+                    if (cut && cut->IsInside(sx3EUp + sx3EDn, sx3EBk))
+                    {
+                        // Accumulate data for gain matching
+                        dataPoints[{sx3.id[i], sx3ChUp, sx3ChBk}].emplace_back(sx3EBk, sx3EUp, sx3EDn);
+                    }
                 }
             }
         }
@@ -223,32 +234,33 @@ void GainMatchSX3::Terminate()
     // === Create histograms ===
     TH2F *hFVB = new TH2F("hFVB", "Corrected Up+Dn vs Corrected Back;Corrected Back E;Up+Dn E",
                           400, 0, 16000, 400, 0, 16000);
-    TH2F *hAsym = new TH2F("hAsym", "Up vs Dn dvide back;Up+Dn E;(Up-Dn)/(Up+Dn)",
-                           400, -1.0,1.0, 400, -1.0, 1.0);
+    TH2F *hAsym = new TH2F("hAsym", "Up vs Dn dvide corrected back;Up/Back E;Dn/Back E",
+                           400, 0.0, 1.0, 400, 0.0, 1.0);
 
     // Fill histograms
     for (const auto &kv : dataPoints)
-{
-    auto [id, ud, bk] = kv.first;
-    if (!gainValid[id][ud][bk]) continue;
-    double gain = gainArray[id][ud][bk];
-
-    for (const auto &pr : kv.second)
     {
-        double eBk, eUp, eDn;
-        std::tie(eBk, eUp, eDn) = pr;
+        auto [id, ud, bk] = kv.first;
+        if (!gainValid[id][ud][bk])
+            continue;
+        double gain = gainArray[id][ud][bk];
 
-        double updn = eUp + eDn;
-        if (updn == 0) continue;
+        for (const auto &pr : kv.second)
+        {
+            double eBk, eUp, eDn;
+            std::tie(eBk, eUp, eDn) = pr;
 
-        double asym = (eUp - eDn) / updn;
-        double correctedBack = eBk * gain;
+            double updn = eUp + eDn;
+            if (updn == 0)
+                continue;
 
-        hFVB->Fill(correctedBack, updn);
-        hAsym->Fill(eUp/eBk,eDn/eBk);
+            double asym = (eUp - eDn) / updn;
+            double correctedBack = eBk * gain;
+
+            hFVB->Fill(correctedBack, updn);
+            hAsym->Fill(eUp / correctedBack, eDn / correctedBack);
+        }
     }
-}
-
 
     // Optional: save histograms to a file
     // TFile *outHist = new TFile("sx3_gainmatch_hists.root", "RECREATE");
