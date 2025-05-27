@@ -10,13 +10,15 @@
 #include <fstream>
 #include <utility>
 #include <algorithm>
-
+#include <TProfile.h>
 #include "Armory/ClassSX3.h"
 
 #include "TVector3.h"
 
 TH2F *hSX3FvsB;
+TH2F *hSX3FvsB_g;
 TH2F *hsx3IndexVE;
+TH2F *hsx3IndexVE_g;
 int padID = 0;
 
 SX3 sx3_contr;
@@ -28,7 +30,9 @@ void GainMatchSX3::Begin(TTree * /*tree*/)
     TString option = GetOption();
 
     hSX3FvsB = new TH2F("hSX3FvsB", "SX3 Front vs Back; Front E; Back E", 400, 0, 16000, 400, 0, 16000);
+    hSX3FvsB_g = new TH2F("hSX3FvsB_g", "SX3 Front vs Back; Front E; Back E", 400, 0, 16000, 400, 0, 16000);
     hsx3IndexVE = new TH2F("hsx3IndexVE", "SX3 index vs Energy; sx3 index ; Energy", 24 * 12, 0, 24 * 12, 400, 0, 5000);
+    hsx3IndexVE_g = new TH2F("hsx3IndexVE_g", "SX3 index vs Energy; sx3 index ; Energy", 24 * 12, 0, 24 * 12, 400, 0, 5000);
 
     sx3_contr.ConstructGeo();
 
@@ -74,7 +78,11 @@ Bool_t GainMatchSX3::Process(Long64_t entry)
     std::vector<std::pair<int, int>> ID;
     for (int i = 0; i < sx3.multi; i++)
     {
-        ID.push_back(std::pair<int, int>(sx3.id[i], i));
+        if (sx3.e[i] > 100)
+        {
+            ID.push_back(std::pair<int, int>(sx3.id[i], i));
+            hsx3IndexVE->Fill(sx3.index[i], sx3.e[i]);
+        }
     }
 
     if (ID.size() > 0)
@@ -127,7 +135,7 @@ Bool_t GainMatchSX3::Process(Long64_t entry)
                         sx3EUp = sx3.e[index];
                     }
                 }
-                else
+                else 
                 {
                     sx3ChBk = sx3.ch[index] - 8;
                     // if (sx3ChBk == 2)
@@ -135,15 +143,20 @@ Bool_t GainMatchSX3::Process(Long64_t entry)
                     sx3EBk = sx3.e[index];
                 }
             }
-            hSX3FvsB->Fill(sx3EUp + sx3EDn, sx3EBk);
 
             // Fill the histogram for the front vs back
-            std::array<int, 24> detectorIDs;
+            hSX3FvsB->Fill(sx3EUp + sx3EDn, sx3EBk);
 
             for (int i = 0; i < sx3.multi; i++)
             {
-                if (sx3.id[i]==3)
+                if (sx3.id[i] == 3)
                 {
+                    // Fill the histogram for the front vs back with gain correction
+                    hSX3FvsB_g->Fill(sx3EUp + sx3EDn, sx3EBk);
+                    // Fill the index vs energy histogram
+                    hsx3IndexVE_g->Fill(sx3.index[i], sx3.e[i]);
+                // }
+                // {
                     TString histName = Form("hSX3FVB_id%d_U%d_D%d_B%d", sx3.id[i], sx3ChUp, sx3ChDn, sx3ChBk);
                     TH2F *hist2d = (TH2F *)gDirectory->Get(histName);
                     if (!hist2d)
@@ -153,10 +166,13 @@ Bool_t GainMatchSX3::Process(Long64_t entry)
 
                     // if (sx3ChBk == 2)
                     //     printf("Found back channel Det %d Back %d \n", sx3.id[i], sx3ChBk);
-                    hsx3IndexVE->Fill(sx3.index[i], sx3.e[i]);
+                    // hsx3IndexVE_g->Fill(sx3.index[i], sx3.e[i]);
+                    // hSX3FvsB_g->Fill(sx3EUp + sx3EDn, sx3EBk);
 
                     hist2d->Fill(sx3EUp + sx3EDn, sx3EBk);
-                    if (cut && cut->IsInside(sx3EUp + sx3EDn, sx3EBk))
+                    
+                    // if (cut && cut->IsInside(sx3EUp + sx3EDn, sx3EBk))
+                    // if (sx3.id[i] < 24 && sx3ChUp < 4 && sx3ChBk < 4 && std::isfinite(sx3EUp) && std::isfinite(sx3EDn) && std::isfinite(sx3EBk))
                     {
                         // Accumulate data for gain matching
                         dataPoints[{sx3.id[i], sx3ChUp, sx3ChBk}].emplace_back(sx3EBk, sx3EUp, sx3EDn);
@@ -168,6 +184,7 @@ Bool_t GainMatchSX3::Process(Long64_t entry)
 
     return kTRUE;
 }
+
 void GainMatchSX3::Terminate()
 {
     const int MAX_DET = 24;
@@ -177,6 +194,8 @@ void GainMatchSX3::Terminate()
 
     double gainArray[MAX_DET][MAX_UP][MAX_BK] = {{{0}}};
     bool gainValid[MAX_DET][MAX_UP][MAX_BK] = {{{false}}};
+    std::map<int, TH2F *> updn2DHistos;
+    std::map<int, double> upCorrFactor;
 
     std::ofstream outFile("sx3_GainMatch.txt");
     if (!outFile.is_open())
@@ -185,11 +204,9 @@ void GainMatchSX3::Terminate()
         return;
     }
 
-    // === Updated dataPoints type ===
-    // std::map<std::tuple<int, int, int>, std::vector<std::tuple<double, double, double>>> dataPoints;
-
     // Gain fit using up+dn vs bk
     for (const auto &kv : dataPoints)
+
     {
         auto [id, ud, bk] = kv.first;
         const auto &pts = kv.second;
@@ -228,6 +245,13 @@ void GainMatchSX3::Terminate()
         }
     }
 
+    for (int bk = 0; bk < MAX_BK; ++bk)
+    {
+        TString name = Form("hUpDnVsBk_%d", bk);
+        TString title = Form("Up/Bk vs Dn/Bk for Back %d;Dn/Bk;Up/Bk", bk);
+        updn2DHistos[bk] = new TH2F(name, title, 400, 0, 1, 400, 0, 1);
+    }
+
     outFile.close();
     std::cout << "Gain matching complete." << std::endl;
 
@@ -249,9 +273,9 @@ void GainMatchSX3::Terminate()
         {
             double eBk, eUp, eDn;
             std::tie(eBk, eUp, eDn) = pr;
-
+            
             double updn = eUp + eDn;
-            if (updn == 0)
+            if (updn == 0|| eBk == 0)
                 continue;
 
             double asym = (eUp - eDn) / updn;
@@ -259,9 +283,54 @@ void GainMatchSX3::Terminate()
 
             hFVB->Fill(correctedBack, updn);
             hAsym->Fill(eUp / correctedBack, eDn / correctedBack);
+            updn2DHistos[bk]->Fill(eUp / correctedBack, eDn / correctedBack);
+            // hAsym->()
         }
     }
 
+    for (auto &[bk, h2] : updn2DHistos)
+    {
+        // Project along diagonal
+        TProfile *prof = h2->ProfileY(Form("prof_bk%d", bk), 1, h2->GetNbinsX(), "s");
+        TF1 *fitLine = new TF1("fitLine", "[0]*x", 0, 1);
+        fitLine->SetParameters(-1, 0.5); // initial guess: slope -1
+        prof->Fit(fitLine, "QNR");
+
+        double slope = fitLine->GetParameter(0);
+        if (slope == 0)
+        {
+            slope = 1e-6; // prevent div-by-zero
+        }
+
+        // double corr = slope / -1.0;
+        upCorrFactor[bk] = -1.0 / slope;
+
+        printf("Back %d: Fit slope = %.4f → Up correction factor = %.4f\n", bk, slope, upCorrFactor[bk]);
+    }
+
+    TH2F *hFVB_Corr = new TH2F("hFVB_Corr", "Corrected Up+Dn vs Back;Back E;Corrected Up+Dn E",
+                               400, 0, 16000, 400, 0, 16000);
+    TH2F *hAsym_Corr = new TH2F("hAsym_Corr", "Corrected Up/Bk vs Dn/Bk;Dn/Bk;Up/Bk",
+                                400, 0, 1.5, 400, 0, 1.5);
+
+    for (const auto &kv : dataPoints)
+    {
+        auto [id, ud, bk] = kv.first;
+        double factor = upCorrFactor.count(bk) ? upCorrFactor[bk] : 1.0;
+
+        for (const auto &pr : kv.second)
+        {
+            double correctedBack, eUp, eDn;
+            std::tie(correctedBack, eUp, eDn) = pr;
+
+            double eUpCorr = eUp * factor;
+            double eDnCorr = eDn;
+            double eSumCorr = eUpCorr + eDnCorr;
+
+            hFVB_Corr->Fill(correctedBack, eSumCorr);
+            hAsym_Corr->Fill(eDnCorr / correctedBack, eUpCorr / correctedBack);
+        }
+    }
     // Optional: save histograms to a file
     // TFile *outHist = new TFile("sx3_gainmatch_hists.root", "RECREATE");
     // hFVB->Write();
