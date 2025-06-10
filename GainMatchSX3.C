@@ -26,7 +26,7 @@ int padID = 0;
 
 SX3 sx3_contr;
 TCutG *cut;
-std::map<std::tuple<int, int, int>, std::vector<std::tuple<double, double, double>>> dataPoints;
+std::map<std::tuple<int, int, int, int>, std::vector<std::tuple< double, double, double>>> dataPoints;
 
 void GainMatchSX3::Begin(TTree * /*tree*/)
 {
@@ -85,11 +85,11 @@ Bool_t GainMatchSX3::Process(Long64_t entry)
     for (int i = 0; i < sx3.multi; i++)
     {
 
-        for (int j = i + 1; j < sx3.multi; j++)
-        {
-            if (sx3.id[i] == 3)
-                hsx3Coin->Fill(sx3.index[i], sx3.index[j]);
-        }
+        // for (int j = i + 1; j < sx3.multi; j++)
+        // {
+        //     if (sx3.id[i] == 3)
+        //         hsx3Coin->Fill(sx3.index[i], sx3.index[j]);
+        // }
         if (sx3.e[i] > 100)
         {
             ID.push_back(std::pair<int, int>(sx3.id[i], i));
@@ -193,7 +193,7 @@ Bool_t GainMatchSX3::Process(Long64_t entry)
                     // if (sx3.id[i] < 24 && sx3ChUp < 4 && sx3ChBk < 4 && std::isfinite(sx3EUp) && std::isfinite(sx3EDn) && std::isfinite(sx3EBk))
                     {
                         // Accumulate data for gain matching
-                        dataPoints[{sx3.id[i], sx3ChUp, sx3ChBk}].emplace_back(sx3EBk, sx3EUp, sx3EDn);
+                        dataPoints[{sx3.id[i], sx3ChBk, sx3ChUp, sx3ChDn}].emplace_back(sx3EBk, sx3EUp, sx3EDn);
                     }
                 }
             }
@@ -210,10 +210,10 @@ void GainMatchSX3::Terminate()
     const int MAX_DOWN = 4;
     const int MAX_BK = 4;
 
-    double gainArray[MAX_DET][MAX_UP][MAX_BK] = {{{0}}};
-    bool gainValid[MAX_DET][MAX_UP][MAX_BK] = {{{false}}};
-    double fbgain[MAX_DET][MAX_UP][MAX_DOWN] = {{{0}}};
-    bool fbgainValid[MAX_DET][MAX_UP][MAX_DOWN] = {{{false}}};
+    double gainArray[MAX_DET][MAX_BK][MAX_UP][MAX_DOWN] = {{{{0}}}};
+    bool gainValid[MAX_DET][MAX_BK][MAX_UP][MAX_DOWN] = {{{{false}}}};
+    double fbgain[MAX_DET][MAX_BK][MAX_UP][MAX_DOWN]= {{{{0}}}};
+    bool fbgainValid[MAX_DET][MAX_BK][MAX_UP][MAX_DOWN] = {{{{false}}}};
 
     // std::map<int, TH2F *> updn2DHistos;
     std::map<int, double> upCorrFactor;
@@ -242,7 +242,7 @@ void GainMatchSX3::Terminate()
     {
         // kv.first is a tuple of (id, up, bk)
         // kv.second is a vector of tuples (bkE, upE, dnE)
-        auto [id, ud, bk] = kv.first;
+        auto [id,bk,u,d] = kv.first;
         const auto &pts = kv.second;
         // Check if we have enough points for fitting
         if (pts.size() < 5)
@@ -263,8 +263,8 @@ void GainMatchSX3::Terminate()
         // Fit the graph to a linear function
         TF1 f("f", "[0]*x", 0, 16000);
         g.Fit(&f, "QNR");
-        gainArray[id][ud][bk] = f.GetParameter(0);
-        gainValid[id][ud][bk] = true;
+        gainArray[id][bk][u][d] = f.GetParameter(0);
+        gainValid[id][bk][u][d] = true;
     }
 
     // Output results
@@ -272,13 +272,17 @@ void GainMatchSX3::Terminate()
     {
         for (int bk = 0; bk < MAX_BK; ++bk)
         {
-            for (int ud = 0; ud < MAX_UP; ++ud)
+            for (int u = 0; u < MAX_UP; ++u)
             {
-                if (gainValid[id][ud][bk])
+                for( int d = 0; d < MAX_DOWN; ++d)
                 {
-                    outFile1 << id << " " << bk << " " << ud << " " << gainArray[id][ud][bk] << std::endl;
-                    printf("Gain match Det%d Up+Dn%d Back%d → %.4f \n", id, ud, bk, gainArray[id][ud][bk]);
+                    // Check if the gain is valid for this detector, back, up, and down
+                if (gainValid[id][bk][u][d])
+                {
+                    outFile1 << id << " " << bk << " " << u <<" "<< d << " " << gainArray[id][u][d][bk] << std::endl;
+                    printf("Gain match Det%d Up%dDn%d Back%d → %.4f \n", id, u,d, bk, gainArray[id][u][d][bk]);
                 }
+            }
             }
         }
     }
@@ -302,10 +306,10 @@ void GainMatchSX3::Terminate()
     // Fill histograms
     for (const auto &kv : dataPoints)
     {
-        auto [id, ud, bk] = kv.first;
-        if (!gainValid[id][ud][bk])
+        auto [id, u,d, bk] = kv.first;
+        if (!gainValid[id][u][d][bk])
             continue;
-        double gain = gainArray[id][ud][bk];
+        double gain = gainArray[id][u][d][bk];
 
         // Prepare vectors to hold the points for TGraph
         std::vector<double> xVals;
@@ -338,11 +342,11 @@ void GainMatchSX3::Terminate()
             TGraph g2(xVals.size(), xVals.data(), yVals.data());
             TF1 f1("f1", "[0]*x", 0, 16000);
             g2.Fit(&f1, "QNR");
-            fbgain[id][ud][bk] = f1.GetParameter(0);
-            fbgainValid[id][ud][bk] = true;
+            fbgain[id][u][d][bk] = f1.GetParameter(0);
+            fbgainValid[id][u][d][bk] = true;
             // Optional: save the graph or the fit result if you want
             // g2.Write(Form("gFVB_id%d_U%d_B%d", id, ud, bk));
-            printf("Gain match Det%d Up+Dn%d Back%d → %.4f \n", id, ud, bk, fbgain[id][ud][bk]);
+            printf("Gain match Det%d Up%d Dn%d Back%d → %.4f \n", id, u,d, bk, fbgain[id][u][d][bk]);
         }
     }
     // Output results
@@ -350,13 +354,17 @@ void GainMatchSX3::Terminate()
     {
         for (int bk = 0; bk < MAX_BK; ++bk)
         {
-            for (int ud = 0; ud < MAX_UP; ++ud)
+            for (int u = 0; u < MAX_UP; ++u)
             {
-                if (fbgainValid[id][ud][bk])
+                for( int d = 0; d < MAX_DOWN; ++d)
                 {
-                    outFile2 << id << " " << bk << " " << ud << " " << fbgain[id][ud][bk] << std::endl;
-                    printf("Gain match Det%d Up+Dn%d Back%d → %.4f \n", id, ud, bk, fbgain[id][ud][bk]);
+                    // Check if the gain is valid for this detector, back, up, and down
+                if (fbgainValid[id][u][d][bk])
+                {
+                    outFile2 << id << " " << bk << " " << u<<" "<<d << " " << fbgain[id][u][d][bk] << std::endl;
+                    printf("Gain match Det%d Up%d Dn%d Back%d → %.4f \n", id, u,d, bk, fbgain[id][u][d][bk]);
                 }
+            }
             }
         }
     }
@@ -369,8 +377,8 @@ void GainMatchSX3::Terminate()
 
     for (const auto &kv : dataPoints)
     {
-        auto [id, ud, bk] = kv.first;
-        if (!fbgainValid[id][ud][bk])
+        auto [id, u,d, bk] = kv.first;
+        if (!fbgainValid[id][u][d][bk])
             continue;
         // double factor = fbgain[id][ud][bk];
 
@@ -379,8 +387,8 @@ void GainMatchSX3::Terminate()
             double correctedBack, eBk, eUp, eDn;
             std::tie(eBk, eUp, eDn) = pr;
 
-            correctedBack = eBk * gainArray[id][ud][bk];
-            double eUpCorr = eUp * fbgain[id][ud][bk];
+            correctedBack = eBk * gainArray[id][u][d][bk];
+            double eUpCorr = eUp * fbgain[id][u][d][bk];
             double eDnCorr = eDn;
             double eSumCorr = eUpCorr + eDnCorr;
             if (correctedBack == 0 || eSumCorr == 0)
