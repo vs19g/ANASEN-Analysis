@@ -59,7 +59,7 @@
             "includePath": [
                 "${workspaceFolder}/**",
                 "/usr/include/x86_64-linux-gnu/qt6/**",
-                "/usr/local/cern/root/include/**",
+                "/usr/local/cern/root/include/**"
             ],
             "defines": [],
             "compilerPath": "/usr/bin/gcc",
