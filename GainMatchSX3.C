@@ -12,6 +12,8 @@
 #include <algorithm>
 #include <TProfile.h>
 #include "Armory/ClassSX3.h"
+#include "TGraphErrors.h"
+#include "TMultiDimFit.h"
 
 #include "TVector3.h"
 
@@ -26,7 +28,9 @@ int padID = 0;
 
 SX3 sx3_contr;
 TCutG *cut;
-std::map<std::tuple<int, int, int, int>, std::vector<std::tuple< double, double, double>>> dataPoints;
+TCutG *cut1;
+std::map<std::tuple<int, int, int, int>, std::vector<std::tuple<double, double, double>>> dataPoints;
+
 
 void GainMatchSX3::Begin(TTree * /*tree*/)
 {
@@ -56,6 +60,21 @@ void GainMatchSX3::Begin(TTree * /*tree*/)
         return;
     }
     cut->SetName("sx3cut"); // Ensure the cut has the correct name
+
+        // Load the TCutG object
+    TFile *cutFile1 = TFile::Open("UvD.root");
+    if (!cutFile1 || cutFile1->IsZombie())
+    {
+        std::cerr << "Error: Could not open UvD.root" << std::endl;
+        return;
+    }
+    cut1 = dynamic_cast<TCutG *>(cutFile1->Get("UvD"));
+    if (!cut1)
+    {
+        std::cerr << "Error: Could not find TCutG named 'UvD' in UvD.root" << std::endl;
+        return;
+    }
+    cut1->SetName("UvD");
 }
 
 Bool_t GainMatchSX3::Process(Long64_t entry)
@@ -85,11 +104,11 @@ Bool_t GainMatchSX3::Process(Long64_t entry)
     for (int i = 0; i < sx3.multi; i++)
     {
 
-        // for (int j = i + 1; j < sx3.multi; j++)
-        // {
-        //     if (sx3.id[i] == 3)
-        //         hsx3Coin->Fill(sx3.index[i], sx3.index[j]);
-        // }
+        for (int j = i + 1; j < sx3.multi; j++)
+        {
+            if (sx3.id[i] == 3)
+                hsx3Coin->Fill(sx3.index[i], sx3.index[j]);
+        }
         if (sx3.e[i] > 100)
         {
             ID.push_back(std::pair<int, int>(sx3.id[i], i));
@@ -167,7 +186,7 @@ Bool_t GainMatchSX3::Process(Long64_t entry)
 
             for (int i = 0; i < sx3.multi; i++)
             {
-                if (sx3.id[i] == 3)
+                if (sx3.id[i] == 3 && sx3.e[i] > 100)
                 {
                     // Fill the histogram for the front vs back with gain correction
                     hSX3FvsB_g->Fill(sx3EUp + sx3EDn, sx3EBk);
@@ -189,7 +208,7 @@ Bool_t GainMatchSX3::Process(Long64_t entry)
 
                     hist2d->Fill(sx3EUp + sx3EDn, sx3EBk);
 
-                    // if (cut && cut->IsInside(sx3EUp + sx3EDn, sx3EBk))
+                    if (cut && cut->IsInside(sx3EUp + sx3EDn, sx3EBk))
                     // if (sx3.id[i] < 24 && sx3ChUp < 4 && sx3ChBk < 4 && std::isfinite(sx3EUp) && std::isfinite(sx3EDn) && std::isfinite(sx3EBk))
                     {
                         // Accumulate data for gain matching
@@ -212,195 +231,121 @@ void GainMatchSX3::Terminate()
 
     double gainArray[MAX_DET][MAX_BK][MAX_UP][MAX_DOWN] = {{{{0}}}};
     bool gainValid[MAX_DET][MAX_BK][MAX_UP][MAX_DOWN] = {{{{false}}}};
-    double fbgain[MAX_DET][MAX_BK][MAX_UP][MAX_DOWN]= {{{{0}}}};
-    bool fbgainValid[MAX_DET][MAX_BK][MAX_UP][MAX_DOWN] = {{{{false}}}};
 
-    // std::map<int, TH2F *> updn2DHistos;
-    std::map<int, double> upCorrFactor;
-
-    // === Gain matching ===
-
-    std::ofstream outFile1("sx3_GainMatchback.txt");
-    if (!outFile1.is_open())
+    std::ofstream outFile("sx3_MultiDimFit_results.txt");
+    if (!outFile.is_open())
     {
         std::cerr << "Error opening output file!" << std::endl;
         return;
     }
 
-    std::ofstream outFile2("sx3_GainMatchfront.txt");
-    if (!outFile2.is_open())
-    {
-        std::cerr << "Error opening output file!" << std::endl;
-        return;
-    }
-    
-
-
-    // Gain fit using up+dn vs bk
+    // === Loop over all (id, bk, up, dn) combinations ===
     for (const auto &kv : dataPoints)
-
     {
-        // kv.first is a tuple of (id, up, bk)
-        // kv.second is a vector of tuples (bkE, upE, dnE)
-        auto [id,bk,u,d] = kv.first;
+        auto [id, bk, u, d] = kv.first;
         const auto &pts = kv.second;
-        // Check if we have enough points for fitting
+
         if (pts.size() < 5)
             continue;
 
-        std::vector<double> bkE, udE;
+        int N = pts.size();
+        double *x0 = new double[N];
+        double *x1 = new double[N];
+        double *x2 = new double[N];
+        double *y  = new double[N];
+        int mPowers[]   = {1,1,1};
 
-        for (const auto &pr : pts)
+        // Fill arrays
+        for (int i = 0; i < N; ++i)
         {
-            double eUp, eDn, eBk;
-            std::tie(eBk, eUp, eDn) = pr;
-            bkE.push_back(eBk);
-            udE.push_back(eUp + eDn);
+            double eBk, eUp, eDn;
+            std::tie(eBk, eUp, eDn) = pts[i];
+            x0[i] = eBk;
+            x1[i] = eUp;
+            x2[i] = eDn;
+            y[i]  = eUp + eDn;  // Target is front sum
         }
 
-        // Fill the TGraph with bkE and udE
-        TGraph g(bkE.size(), bkE.data(), udE.data());
-        // Fit the graph to a linear function
-        TF1 f("f", "[0]*x", 0, 16000);
-        g.Fit(&f, "QNR");
-        gainArray[id][bk][u][d] = f.GetParameter(0);
-        gainValid[id][bk][u][d] = true;
-    }
+        // Build MultiDim Fit
+        TMultiDimFit *mdf = new TMultiDimFit(3, TMultiDimFit::kMonomials, "v");
+        mdf->SetMaxPowers(mPowers); // Up to quadratic terms
+        mdf->SetMaxTerms(3); // Limit number of terms kept
 
-    // Output results
-    for (int id = 0; id < MAX_DET; ++id)
-    {
-        for (int bk = 0; bk < MAX_BK; ++bk)
+        // Add points
+        for (int i = 0; i < N; ++i)
         {
-            for (int u = 0; u < MAX_UP; ++u)
-            {
-                for( int d = 0; d < MAX_DOWN; ++d)
-                {
-                    // Check if the gain is valid for this detector, back, up, and down
-                if (gainValid[id][bk][u][d])
-                {
-                    outFile1 << id << " " << bk << " " << u <<" "<< d << " " << gainArray[id][u][d][bk] << std::endl;
-                    printf("Gain match Det%d Up%dDn%d Back%d → %.4f \n", id, u,d, bk, gainArray[id][u][d][bk]);
-                }
-            }
-            }
+            double vars[3] = {x0[i], x1[i], x2[i]};
+            mdf->AddRow(vars, y[i]);
         }
+
+        mdf->MakeHistograms();
+        mdf->FindParameterization();
+        mdf->Print("a"); // Print coefficients
+        mdf->
+        // Save result string
+        TString formula;
+        mdf->GetFunctions(formula);
+        outFile << id << " " << bk << " " << u << " " << d << " " << formula.Data() << std::endl;
+        printf("Det %d Bk %d Up %d Dn %d — MultiDimFit formula: %s\n", id, bk, u, d, formula.Data());
+
+        gainValid[id][bk][u][d] = true; // Save as "valid" so we can use it
+
+        // Clean up
+        delete[] x0;
+        delete[] x1;
+        delete[] x2;
+        delete[] y;
+        delete mdf;
     }
 
-    // for (int bk = 0; bk < MAX_BK; ++bk)
-    // {
-    //     TString name = Form("hUpDnVsBk_%d", bk);
-    //     TString title = Form("Up/Bk vs Dn/Bk for Back %d;Dn/Bk;Up/Bk", bk);
-    //     updn2DHistos[bk] = new TH2F(name, title, 400, 0, 1, 400, 0, 1);
-    // }
+    outFile.close();
+    std::cout << "MultiDim fits complete.\n";
 
-    outFile1.close();
-    std::cout << "Gain matching complete." << std::endl;
-
-    // === Create histograms ===
-    TH2F *hFVB = new TH2F("hFVB", "Corrected Up+Dn vs Corrected Back;Corrected Back E;Up+Dn E",
+    // === Example histogram after correction ===
+    TH2F *hFVB = new TH2F("hFVB", "Corrected Up+Dn vs Back;Back E;Corrected Up+Dn E",
                           400, 0, 16000, 400, 0, 16000);
-    TH2F *hAsym = new TH2F("hAsym", "Up vs Dn dvide corrected back;Up/Back E;Dn/Back E",
-                           400, 0.0, 1.0, 400, 0.0, 1.0);
 
-    // Fill histograms
     for (const auto &kv : dataPoints)
     {
-        auto [id, u,d, bk] = kv.first;
-        if (!gainValid[id][u][d][bk])
+        auto [id, bk, u, d] = kv.first;
+        if (!gainValid[id][bk][u][d])
             continue;
-        double gain = gainArray[id][u][d][bk];
 
-        // Prepare vectors to hold the points for TGraph
-        std::vector<double> xVals;
-        std::vector<double> yVals;
+        // Recreate the fitted model to evaluate
+        TMultiDimFit *mdf = new TMultiDimFit(3, TMultiDimFit::kMonomials, "v");
+        mdf->SetMaxPowers(2);
+        mdf->SetMaxTerms(10);
 
+        // Re-fill points to refit (if needed — or you can serialize coefficients instead)
+        const auto &pts = kv.second;
+        for (const auto &pr : pts)
+        {
+            double eBk, eUp, eDn;
+            std::tie(eBk, eUp, eDn) = pr;
+            double vars[3] = {eBk, eUp, eDn};
+            double y = eUp + eDn;
+            mdf->AddRow(vars, y);
+        }
+
+        mdf->FindParameterization();
+
+        // Fill histogram with corrected "front" from model
         for (const auto &pr : kv.second)
         {
             double eBk, eUp, eDn;
             std::tie(eBk, eUp, eDn) = pr;
-
-            double updn = eUp + eDn;
-            if (updn == 0 || eBk == 0)
+            double vars[3] = {eBk, eUp, eDn};
+            double correctedFront = mdf->Eval(vars);
+            if (eBk == 0 || correctedFront == 0)
                 continue;
-
-            double asym = (eUp - eDn) / updn;
-            double correctedBack = eBk * gain;
-
-            hFVB->Fill(correctedBack, updn);
-            hAsym->Fill(eUp / correctedBack, eDn / correctedBack);
-            // updn2DHistos[bk]->Fill(eUp / correctedBack, eDn / correctedBack);
-
-            // Store the point for fitting
-            xVals.push_back(correctedBack);
-            yVals.push_back(updn);
+            hFVB->Fill(eBk, correctedFront);
         }
 
-        // Now create the graph from all the points for this (id, ud, bk)
-        if (!xVals.empty())
-        {
-            TGraph g2(xVals.size(), xVals.data(), yVals.data());
-            TF1 f1("f1", "[0]*x", 0, 16000);
-            g2.Fit(&f1, "QNR");
-            fbgain[id][u][d][bk] = f1.GetParameter(0);
-            fbgainValid[id][u][d][bk] = true;
-            // Optional: save the graph or the fit result if you want
-            // g2.Write(Form("gFVB_id%d_U%d_B%d", id, ud, bk));
-            printf("Gain match Det%d Up%d Dn%d Back%d → %.4f \n", id, u,d, bk, fbgain[id][u][d][bk]);
-        }
-    }
-    // Output results
-    for (int id = 0; id < MAX_DET; ++id)
-    {
-        for (int bk = 0; bk < MAX_BK; ++bk)
-        {
-            for (int u = 0; u < MAX_UP; ++u)
-            {
-                for( int d = 0; d < MAX_DOWN; ++d)
-                {
-                    // Check if the gain is valid for this detector, back, up, and down
-                if (fbgainValid[id][u][d][bk])
-                {
-                    outFile2 << id << " " << bk << " " << u<<" "<<d << " " << fbgain[id][u][d][bk] << std::endl;
-                    printf("Gain match Det%d Up%d Dn%d Back%d → %.4f \n", id, u,d, bk, fbgain[id][u][d][bk]);
-                }
-            }
-            }
-        }
+        delete mdf;
     }
 
-
-    TH2F *hFVB_Corr = new TH2F("hFVB_Corr", "Corrected Up+Dn vs Back;Back E;Corrected Up+Dn E",
-                               400, 0, 16000, 400, 0, 16000);
-    TH2F *hAsym_Corr = new TH2F("hAsym_Corr", "Corrected Up/Bk vs Dn/Bk;Dn/Bk;Up/Bk",
-                                400, 0, 1.5, 400, 0, 1.5);
-
-    for (const auto &kv : dataPoints)
-    {
-        auto [id, u,d, bk] = kv.first;
-        if (!fbgainValid[id][u][d][bk])
-            continue;
-        // double factor = fbgain[id][ud][bk];
-
-        for (const auto &pr : kv.second)
-        {
-            double correctedBack, eBk, eUp, eDn;
-            std::tie(eBk, eUp, eDn) = pr;
-
-            correctedBack = eBk * gainArray[id][u][d][bk];
-            double eUpCorr = eUp * fbgain[id][u][d][bk];
-            double eDnCorr = eDn;
-            double eSumCorr = eUpCorr + eDnCorr;
-            if (correctedBack == 0 || eSumCorr == 0)
-                continue;
-
-            hFVB_Corr->Fill(correctedBack, eSumCorr);
-            hAsym_Corr->Fill(eDnCorr / correctedBack, eUpCorr / correctedBack);
-        }
-    }
-    // Optional: save histograms to a file
-    // TFile *outHist = new TFile("sx3_gainmatch_hists.root", "RECREATE");
+    // Save histogram if needed
+    // TFile *outHist = new TFile("sx3_multidimfit_hists.root", "RECREATE");
     // hFVB->Write();
-    // hAsym->Write();
     // outHist->Close();
 }

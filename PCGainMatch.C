@@ -185,10 +185,10 @@ Bool_t PCGainMatch::Process(Long64_t entry){
               aID = anode.first;
               aE = anode.second;
               aESum += aE;
-              printf("aID : %d, aE : %f\n", aID, aE);
+              // printf("aID : %d, aE : %f\n", aID, aE);
           }
 
-            printf("aID : %d, aE : %f, cE : %f\n", aID, aE, cE);
+            // printf("aID : %d, aE : %f, cE : %f\n", aID, aE, cE);
             for (const auto& cathode : cathodeHits) {
               cID = cathode.first;
               cE = cathode.second;
