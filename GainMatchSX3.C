@@ -224,6 +224,9 @@ Bool_t GainMatchSX3::Process(Long64_t entry)
 
 void GainMatchSX3::Terminate()
 {
+
+    // --- Store fit coefficients in memory ---
+    std::map<std::tuple<int, int, int, int>, TVectorD> fitCoefficients;
     const int MAX_DET = 24;
     const int MAX_UP = 4;
     const int MAX_DOWN = 4;
@@ -240,112 +243,115 @@ void GainMatchSX3::Terminate()
     }
 
     // === Loop over all (id, bk, up, dn) combinations ===
-    for (const auto &kv : dataPoints)
-    {
+    for (const auto &kv : dataPoints) {
         auto [id, bk, u, d] = kv.first;
         const auto &pts = kv.second;
 
-        if (pts.size() < 5)
-            continue;
+        if (pts.size() < 20) continue;
 
-        int N = pts.size();
-        double *x0 = new double[N];
-        double *x1 = new double[N];
-        double *x2 = new double[N];
-        double *y  = new double[N];
-        int mPowers[]   = {1,1,1};
-
-        // Fill arrays
-        for (int i = 0; i < N; ++i)
-        {
+        std::vector<double> x_bk, x_up, y_fsum;
+        for (const auto &pr : pts) {
             double eBk, eUp, eDn;
-            std::tie(eBk, eUp, eDn) = pts[i];
-            x0[i] = eBk;
-            x1[i] = eUp;
-            x2[i] = eDn;
-            y[i]  = eUp + eDn;  // Target is front sum
+            std::tie(eBk, eUp, eDn) = pr;
+            if (eBk > 0 && eUp > 0 && eDn > 0) {
+                 x_bk.push_back(eBk);
+                 x_up.push_back(eUp);
+                 y_fsum.push_back(eUp + eDn);
+            }
         }
 
-        // Build MultiDim Fit
-        TMultiDimFit *mdf = new TMultiDimFit(3, TMultiDimFit::kMonomials, "v");
-        mdf->SetMaxPowers(mPowers); // Up to quadratic terms
-        mdf->SetMaxTerms(3); // Limit number of terms kept
+        int nPoints = y_fsum.size();
+        if (nPoints < 20) continue;
 
-        // Add points
-        for (int i = 0; i < N; ++i)
-        {
-            double vars[3] = {x0[i], x1[i], x2[i]};
-            mdf->AddRow(vars, y[i]);
+        TMultiDimFit *mdf = new TMultiDimFit(2, TMultiDimFit::kMonomials);
+        mdf->SetMaxPowers(new Int_t[2]{1, 1});
+        mdf->SetMinAngle(10);
+        mdf->SetMinRelativeError(1e-4);
+
+        double *x_row = new double[2];
+        for (int i = 0; i < nPoints; ++i) {
+            x_row[0] = x_bk[i];
+            x_row[1] = x_up[i];
+            mdf->AddRow(x_row, y_fsum[i]);
+        }
+        delete[] x_row;
+
+        mdf->Fit();
+
+        const TVectorD *coeffs = mdf->GetCoefficients();
+        if (!coeffs || coeffs->GetNoElements() == 0 || !TMath::Finite((*coeffs)(0))) {
+            std::cerr << "Fit failed for Det" << id << " B" << bk << " U" << u << " D" << d << std::endl;
+            delete mdf;
+            continue;
         }
 
-        mdf->MakeHistograms();
-        mdf->FindParameterization();
-        mdf->Print("a"); // Print coefficients
-        mdf->
-        // Save result string
-        TString formula;
-        mdf->GetFunctions(formula);
-        outFile << id << " " << bk << " " << u << " " << d << " " << formula.Data() << std::endl;
-        printf("Det %d Bk %d Up %d Dn %d — MultiDimFit formula: %s\n", id, bk, u, d, formula.Data());
+        // Store coefficients in the map and write to file
+        fitCoefficients[kv.first] = *coeffs;
+        
+        int nCoeffs = mdf->GetNCoefficients();
+        outFile << id << " " << bk << " " << u << " " << d;
+        printf("Fit for Det%d B%d U%d D%d -> ", id, bk, u, d);
+        for (int i = 0; i < nCoeffs; ++i) {
+            outFile << " " << (*coeffs)(i);
+            printf("p%d: %.4f ", i, (*coeffs)(i));
+        }
+        outFile << std::endl;
+        printf("\n");
 
-        gainValid[id][bk][u][d] = true; // Save as "valid" so we can use it
-
-        // Clean up
-        delete[] x0;
-        delete[] x1;
-        delete[] x2;
-        delete[] y;
         delete mdf;
     }
 
     outFile.close();
-    std::cout << "MultiDim fits complete.\n";
+    std::cout << "Multi-dimensional gain matching complete. Results saved." << std::endl;
 
-    // === Example histogram after correction ===
-    TH2F *hFVB = new TH2F("hFVB", "Corrected Up+Dn vs Back;Back E;Corrected Up+Dn E",
-                          400, 0, 16000, 400, 0, 16000);
+    // --- Stage 2: Apply corrections and create new histograms ---
+    std::cout << "--- Stage 2: Applying Corrections and Visualizing Results ---" << std::endl;
+    TH2F *hCorrectedFvB = new TH2F("hCorrectedFvB", "Gain Corrected Data;Predicted Front Sum (from fit);Measured Front Sum", 400, 0, 16000, 400, 0, 16000);
 
-    for (const auto &kv : dataPoints)
-    {
-        auto [id, bk, u, d] = kv.first;
-        if (!gainValid[id][bk][u][d])
-            continue;
+    for (const auto &kv : dataPoints) {
+        // Find the coefficients for this segment
+        if (fitCoefficients.find(kv.first) == fitCoefficients.end()) {
+            continue; // Skip if no valid fit was found
+        }
+        const TVectorD& coeffs = fitCoefficients[kv.first];
+        double p0 = coeffs(0);
+        double p1 = coeffs(1);
+        double p2 = coeffs(2);
 
-        // Recreate the fitted model to evaluate
-        TMultiDimFit *mdf = new TMultiDimFit(3, TMultiDimFit::kMonomials, "v");
-        mdf->SetMaxPowers(2);
-        mdf->SetMaxTerms(10);
-
-        // Re-fill points to refit (if needed — or you can serialize coefficients instead)
+        // Loop over the data points for this segment and apply the correction
         const auto &pts = kv.second;
-        for (const auto &pr : pts)
-        {
+        for (const auto &pr : pts) {
             double eBk, eUp, eDn;
             std::tie(eBk, eUp, eDn) = pr;
-            double vars[3] = {eBk, eUp, eDn};
-            double y = eUp + eDn;
-            mdf->AddRow(vars, y);
+
+            // Calculate the predicted front sum using the fit parameters
+            double predicted_front_sum = p0 + p1 * eBk + p2 * eUp;
+            
+            // The measured front sum is just the raw sum
+            double measured_front_sum = eUp + eDn;
+
+            // Fill the corrected histogram
+            hCorrectedFvB->Fill(predicted_front_sum, measured_front_sum);
         }
-
-        mdf->FindParameterization();
-
-        // Fill histogram with corrected "front" from model
-        for (const auto &pr : kv.second)
-        {
-            double eBk, eUp, eDn;
-            std::tie(eBk, eUp, eDn) = pr;
-            double vars[3] = {eBk, eUp, eDn};
-            double correctedFront = mdf->Eval(vars);
-            if (eBk == 0 || correctedFront == 0)
-                continue;
-            hFVB->Fill(eBk, correctedFront);
-        }
-
-        delete mdf;
     }
 
-    // Save histogram if needed
-    // TFile *outHist = new TFile("sx3_multidimfit_hists.root", "RECREATE");
-    // hFVB->Write();
-    // outHist->Close();
+    // --- Stage 3: Draw the comparison canvases ---
+    gStyle->SetOptStat(1110);
+    TCanvas *c1 = new TCanvas("c1", "Gain Correction Results", 1200, 600);
+    c1->Divide(2, 1);
+
+    c1->cd(1);
+    hSX3FvsB_g->SetTitle("Before Correction (Gated)");
+    hSX3FvsB_g->GetXaxis()->SetTitle("Measured Front Sum (E_Up + E_Dn)");
+    hSX3FvsB_g->GetYaxis()->SetTitle("Measured Back E");
+    hSX3FvsB_g->Draw("colz");
+
+    c1->cd(2);
+    hCorrectedFvB->SetTitle("After Correction");
+    hCorrectedFvB->Draw("colz");
+    // Draw a perfect y=x line for comparison
+    TF1 *diag = new TF1("diag", "x", 0, 16000);
+    diag->SetLineColor(kRed);
+    diag->SetLineWidth(2);
+    diag->Draw("same");
 }
