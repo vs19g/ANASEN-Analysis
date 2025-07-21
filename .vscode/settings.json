@@ -111,7 +111,9 @@
     "RelBack_Fix_new.C": "cpp",
     "SiRelativeGains_Step1_new.C": "cpp",
     "charconv": "cpp",
-    "format": "cpp"
+    "format": "cpp",
+    "GainMatchSX3Front.C": "cpp",
+    "GainMatchSX3Front1.C": "cpp"
   },
   "github-enterprise.uri": "https://fsunuc.physics.fsu.edu"
 }
