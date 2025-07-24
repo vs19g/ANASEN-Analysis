@@ -91,7 +91,10 @@ void GainMatchSX3Front::Begin(TTree * /*tree*/)
     while (infile >> id >> bk >> u >> d >> gain)
     {
         backGain[id][bk][u][d] = gain;
-        backGainValid[id][bk][u][d] = true;
+        if(backGain[id][bk][u][d] > 0)
+            backGainValid[id][bk][u][d] = true;
+        else
+            backGainValid[id][bk][u][d] = false;
     }
 
     infile.close();
@@ -116,7 +119,7 @@ Bool_t GainMatchSX3Front::Process(Long64_t entry)
 
         for (int j = i + 1; j < sx3.multi; j++)
         {
-            if (sx3.id[i] == 3)
+            // if (sx3.id[i] == 3)
                 hsx3Coin->Fill(sx3.index[i], sx3.index[j]);
         }
         if (sx3.e[i] > 100)
@@ -196,7 +199,7 @@ Bool_t GainMatchSX3Front::Process(Long64_t entry)
 
             for (int i = 0; i < sx3.multi; i++)
             {
-                if (sx3.id[i] == 3 && sx3.e[i] > 100)
+                if ( sx3.e[i] > 100)// && sx3.id[i] == 4)
                 {
                     // back gain correction
 
@@ -220,19 +223,14 @@ Bool_t GainMatchSX3Front::Process(Long64_t entry)
 
                     hist2d->Fill(sx3EUp + sx3EDn, sx3EBk);
 
-                    if (cut && cut->IsInside(sx3EUp + sx3EDn, sx3EBk) &&
-                        cut1 && cut1->IsInside(sx3EUp / sx3EBk, sx3EDn / sx3EBk))
+                    if (cut && cut->IsInside(sx3EUp + sx3EDn, sx3EBk)
+                     && cut1 && cut1->IsInside(sx3EUp / sx3EBk, sx3EDn / sx3EBk))
                     {
 
                         if (backGainValid[sx3.id[i]][sx3ChBk][sx3ChUp][sx3ChDn])
                         {
                             sx3EBk *= backGain[sx3.id[i]][sx3ChBk][sx3ChUp][sx3ChDn];
                         }
-                        // Accumulate data for gain matching
-                        dataPoints[{sx3.id[i], sx3ChBk, sx3ChUp, sx3ChDn}].emplace_back(sx3EBk, sx3EUp, sx3EDn);
-                    }
-                    // if (sx3.id[i] < 24 && sx3ChUp < 4 && sx3ChBk < 4 && std::isfinite(sx3EUp) && std::isfinite(sx3EDn) && std::isfinite(sx3EBk))
-                    {
                         // Accumulate data for gain matching
                         dataPoints[{sx3.id[i], sx3ChBk, sx3ChUp, sx3ChDn}].emplace_back(sx3EBk, sx3EUp, sx3EDn);
                     }
@@ -268,20 +266,71 @@ void GainMatchSX3Front::Terminate()
         if (pts.size() < 5)
             continue;
 
-        std::vector<double> udE, corrBkE;
+        std::vector<double> uE, dE, udE, corrBkE;
 
         for (const auto &pr : pts)
         {
             double eBkCorr, eUp, eDn;
             std::tie(eBkCorr, eUp, eDn) = pr;
+            if( (eBkCorr < 100) || (eUp <100) || (eDn < 100))
+                continue; // Skip if any energy is zero
+            uE.push_back(eUp / eBkCorr);
+            dE.push_back(eDn / eBkCorr);
             udE.push_back(eUp + eDn);
             corrBkE.push_back(eBkCorr);
             hUvD->Fill(eUp / eBkCorr, eDn / eBkCorr);
         }
+        if( uE.size() < 5 || dE.size() < 5 || corrBkE.size() < 5)
+            continue; // Ensure we have enough points for fitting
+        // TGraph g(udE.size(), udE.data(), corrBkE.data());
 
-        TGraph g(udE.size(), udE.data(), corrBkE.data());
-        TF1 f("f", "[0]*x", 0, 40000);
-        g.Fit(&f, "QNR");
+        // TF1 f("f", "[0]*x", 0, 20000);
+        // f.SetParameter(0, 1.0); // Initial guess for the gain
+        // g.Fit(&f, "R");
+
+        const double fixedError = 20.0; // in ADC channels
+
+        std::vector<double> xVals, yVals, exVals, eyVals;
+
+        // Build data with fixed error
+        for (size_t i = 0; i < udE.size(); ++i)
+        {
+            double x = udE[i]; // front energy
+            double y = corrBkE[i];        // back energy
+
+            xVals.push_back(x);
+            yVals.push_back(y);
+            // exVals.push_back(fixedError); // error in front energy
+            eyVals.push_back(fixedError); // error in back energy
+        }
+
+        // Build TGraphErrors with errors
+        TGraphErrors g(xVals.size(), xVals.data(), yVals.data(), exVals.data(), eyVals.data());
+
+        TF1 f("f", "[0]*x", 0, 16000);
+        // f.SetParameter(0, 1.0); // Initial guess
+
+        // Interactive canvas
+        TCanvas *c = new TCanvas(Form("c_%d_%d_%d_%d", id, bk, u, d), "Fit", 800, 600);
+        g.SetTitle(Form("Detector %d: U%d D%d B%d", id, u, d, bk));
+        g.SetMarkerStyle(20);
+        g.SetMarkerColor(kBlue);
+        g.Draw("AP");
+
+        g.Fit(&f, "Q"); // Quiet fit
+
+        double chi2 = f.GetChisquare();
+        int ndf = f.GetNDF();
+        double reducedChi2 = (ndf != 0) ? chi2 / ndf : -1;
+
+        std::cout << Form("Det%d U%d D%d B%d → Gain: %.4f | χ²/ndf = %.2f/%d = %.2f",
+                          id, u, d, bk, f.GetParameter(0), chi2, ndf, reducedChi2)
+                  << std::endl;
+
+        // Show canvas and wait for user to continue
+        c->Update();
+        gPad->WaitPrimitive();
+
 
         frontGain[id][bk][u][d] = f.GetParameter(0);
         frontGainValid[id][bk][u][d] = true;
@@ -294,7 +343,7 @@ void GainMatchSX3Front::Terminate()
     std::cout << "Gain matching complete." << std::endl;
 
     // === Stage 3: Create corrected histogram ===
-    TH2F *hCorrectedFvB = new TH2F("hCorrectedFvB", "Corrected;Corrected Front Sum;Corrected Back", 800, 0, 16000, 800, 0, 16000);
+    TH2F *hCorrectedFvB = new TH2F("hCorrectedFvB", "Corrected;Corrected Front Sum;Corrected Back", 800, 0, 8000, 800, 0, 8000);
     TH2F *hCorrectedUvD = new TH2F("hCorrectedUvD", "Corrected UvD; UvD Up; UvD Down", 600, 0, 1, 600, 0, 1);
 
     for (const auto &kv : dataPoints)
@@ -308,31 +357,31 @@ void GainMatchSX3Front::Terminate()
             double eBk, eUp, eDn;
             std::tie(eBk, eUp, eDn) = pr;
             double corrUp = eUp * front;
-            double corrDn = eDn * front;
+            // double corrDn = eDn * front;
 
-            hCorrectedFvB->Fill(corrUp + corrDn, eBk);
-            hCorrectedUvD->Fill(corrUp / eBk, corrDn / eBk);
+            hCorrectedFvB->Fill(corrUp + eDn, eBk);
+            hCorrectedUvD->Fill(corrUp / eBk, eDn / eBk);
         }
     }
 
-    // === Final canvas ===
-    gStyle->SetOptStat(1110);
-    TCanvas *c1 = new TCanvas("c1", "Gain Correction Results", 1200, 600);
-    c1->Divide(2, 1);
+    // // === Final canvas ===
+    // gStyle->SetOptStat(1110);
+    // TCanvas *c1 = new TCanvas("c1", "Gain Correction Results", 1200, 600);
+    // c1->Divide(2, 1);
 
-    c1->cd(1);
-    hSX3FvsB_g->SetTitle("Before Correction (Gated)");
-    hSX3FvsB_g->GetXaxis()->SetTitle("Measured Front Sum (E_Up + E_Dn)");
-    hSX3FvsB_g->GetYaxis()->SetTitle("Measured Back E");
-    hSX3FvsB_g->Draw("colz");
+    // c1->cd(1);
+    // hSX3FvsB_g->SetTitle("Before Correction (Gated)");
+    // hSX3FvsB_g->GetXaxis()->SetTitle("Measured Front Sum (E_Up + E_Dn)");
+    // hSX3FvsB_g->GetYaxis()->SetTitle("Measured Back E");
+    // hSX3FvsB_g->Draw("colz");
 
-    c1->cd(2);
-    hCorrectedFvB->SetTitle("After Correction");
-    hCorrectedFvB->Draw("colz");
-    TF1 *diag = new TF1("diag", "x", 0, 40000);
-    diag->SetLineColor(kRed);
-    diag->SetLineWidth(2);
-    diag->Draw("same");
+    // c1->cd(2);
+    // hCorrectedFvB->SetTitle("After Correction");
+    // hCorrectedFvB->Draw("colz");
+    // TF1 *diag = new TF1("diag", "x", 0, 40000);
+    // diag->SetLineColor(kRed);
+    // diag->SetLineWidth(2);
+    // diag->Draw("same");
 
     std::cout << "Terminate() completed successfully." << std::endl;
 }
