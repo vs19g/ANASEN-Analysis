@@ -42,6 +42,11 @@ bool backGainValid[MAX_DET][MAX_BK][MAX_UP][MAX_DOWN] = {{{{false}}}};
 double frontGain[MAX_DET][MAX_BK][MAX_UP][MAX_DOWN] = {{{{0}}}};
 bool frontGainValid[MAX_DET][MAX_BK][MAX_UP][MAX_DOWN] = {{{{false}}}};
 
+// ==== Configuration Flags ====
+const bool interactiveMode = false; // If true: show canvas + wait for user
+const bool verboseFit = true;       // If true: print fit summary and chi²
+const bool drawCanvases = true;     // If false: canvases won't be drawn at all
+
 void GainMatchSX3Front::Begin(TTree * /*tree*/)
 {
     TString option = GetOption();
@@ -91,7 +96,7 @@ void GainMatchSX3Front::Begin(TTree * /*tree*/)
     while (infile >> id >> bk >> u >> d >> gain)
     {
         backGain[id][bk][u][d] = gain;
-        if(backGain[id][bk][u][d] > 0)
+        if (backGain[id][bk][u][d] > 0)
             backGainValid[id][bk][u][d] = true;
         else
             backGainValid[id][bk][u][d] = false;
@@ -120,7 +125,7 @@ Bool_t GainMatchSX3Front::Process(Long64_t entry)
         for (int j = i + 1; j < sx3.multi; j++)
         {
             // if (sx3.id[i] == 3)
-                hsx3Coin->Fill(sx3.index[i], sx3.index[j]);
+            hsx3Coin->Fill(sx3.index[i], sx3.index[j]);
         }
         if (sx3.e[i] > 100)
         {
@@ -199,7 +204,7 @@ Bool_t GainMatchSX3Front::Process(Long64_t entry)
 
             for (int i = 0; i < sx3.multi; i++)
             {
-                if ( sx3.e[i] > 100)// && sx3.id[i] == 4)
+                if (sx3.e[i] > 100) // && sx3.id[i] == 4)
                 {
                     // back gain correction
 
@@ -223,8 +228,7 @@ Bool_t GainMatchSX3Front::Process(Long64_t entry)
 
                     hist2d->Fill(sx3EUp + sx3EDn, sx3EBk);
 
-                    if (cut && cut->IsInside(sx3EUp + sx3EDn, sx3EBk)
-                     && cut1 && cut1->IsInside(sx3EUp / sx3EBk, sx3EDn / sx3EBk))
+                    if (cut && cut->IsInside(sx3EUp + sx3EDn, sx3EBk) && cut1 && cut1->IsInside(sx3EUp / sx3EBk, sx3EDn / sx3EBk))
                     {
 
                         if (backGainValid[sx3.id[i]][sx3ChBk][sx3ChUp][sx3ChDn])
@@ -272,7 +276,7 @@ void GainMatchSX3Front::Terminate()
         {
             double eBkCorr, eUp, eDn;
             std::tie(eBkCorr, eUp, eDn) = pr;
-            if( (eBkCorr < 100) || (eUp <100) || (eDn < 100))
+            if ((eBkCorr < 100) || (eUp < 100) || (eDn < 100))
                 continue; // Skip if any energy is zero
             uE.push_back(eUp / eBkCorr);
             dE.push_back(eDn / eBkCorr);
@@ -280,7 +284,7 @@ void GainMatchSX3Front::Terminate()
             corrBkE.push_back(eBkCorr);
             hUvD->Fill(eUp / eBkCorr, eDn / eBkCorr);
         }
-        if( uE.size() < 5 || dE.size() < 5 || corrBkE.size() < 5)
+        if (uE.size() < 5 || dE.size() < 5 || corrBkE.size() < 5)
             continue; // Ensure we have enough points for fitting
         // TGraph g(udE.size(), udE.data(), corrBkE.data());
 
@@ -295,8 +299,8 @@ void GainMatchSX3Front::Terminate()
         // Build data with fixed error
         for (size_t i = 0; i < udE.size(); ++i)
         {
-            double x = udE[i]; // front energy
-            double y = corrBkE[i];        // back energy
+            double x = udE[i];     // front energy
+            double y = corrBkE[i]; // back energy
 
             xVals.push_back(x);
             yVals.push_back(y);
@@ -308,29 +312,43 @@ void GainMatchSX3Front::Terminate()
         TGraphErrors g(xVals.size(), xVals.data(), yVals.data(), exVals.data(), eyVals.data());
 
         TF1 f("f", "[0]*x", 0, 16000);
-        // f.SetParameter(0, 1.0); // Initial guess
+        f.SetParameter(0, 1.0); // Initial guess
 
-        // Interactive canvas
-        TCanvas *c = new TCanvas(Form("c_%d_%d_%d_%d", id, bk, u, d), "Fit", 800, 600);
-        g.SetTitle(Form("Detector %d: U%d D%d B%d", id, u, d, bk));
-        g.SetMarkerStyle(20);
-        g.SetMarkerColor(kBlue);
-        g.Draw("AP");
+        if (drawCanvases)
+        {
+            TCanvas *c = new TCanvas(Form("c_%d_%d_%d_%d", id, bk, u, d), "Fit", 800, 600);
+            g.SetTitle(Form("Detector %d: U%d D%d B%d", id, u, d, bk));
+            g.SetMarkerStyle(20);
+            g.SetMarkerColor(kBlue);
+            g.Draw("AP");
 
-        g.Fit(&f, "Q"); // Quiet fit
+            g.Fit(&f, interactiveMode ? "Q" : "QNR"); // 'R' avoids refit, 'N' skips drawing
 
-        double chi2 = f.GetChisquare();
-        int ndf = f.GetNDF();
-        double reducedChi2 = (ndf != 0) ? chi2 / ndf : -1;
+            if (verboseFit)
+            {
+                double chi2 = f.GetChisquare();
+                int ndf = f.GetNDF();
+                double reducedChi2 = (ndf != 0) ? chi2 / ndf : -1;
 
-        std::cout << Form("Det%d U%d D%d B%d → Gain: %.4f | χ²/ndf = %.2f/%d = %.2f",
-                          id, u, d, bk, f.GetParameter(0), chi2, ndf, reducedChi2)
-                  << std::endl;
+                std::cout << Form("Det%d U%d D%d B%d → Gain: %.4f | χ²/ndf = %.2f/%d = %.2f",
+                                  id, u, d, bk, f.GetParameter(0), chi2, ndf, reducedChi2)
+                          << std::endl;
+            }
 
-        // Show canvas and wait for user to continue
-        c->Update();
-        gPad->WaitPrimitive();
-
+            if (interactiveMode)
+            {
+                c->Update();
+                gPad->WaitPrimitive();
+            }
+            else
+            {
+                c->Close(); // Optionally avoid clutter in batch
+            }
+        }
+        else
+        {
+            g.Fit(&f, "QNR");
+        }
 
         frontGain[id][bk][u][d] = f.GetParameter(0);
         frontGainValid[id][bk][u][d] = true;

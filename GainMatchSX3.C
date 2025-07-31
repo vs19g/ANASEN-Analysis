@@ -38,6 +38,11 @@ const int MAX_BK = 4;
 double frontGain[MAX_DET][MAX_BK][MAX_UP][MAX_DOWN] = {{{{0}}}};
 bool frontGainValid[MAX_DET][MAX_BK][MAX_UP][MAX_DOWN] = {{{{false}}}};
 
+// ==== Configuration Flags ====
+const bool interactiveMode = false; // If true: show canvas + wait for user
+const bool verboseFit = true;      // If true: print fit summary and chi²
+const bool drawCanvases = true;    // If false: canvases won't be drawn at all
+
 void GainMatchSX3::Begin(TTree * /*tree*/)
 {
     TString option = GetOption();
@@ -240,7 +245,7 @@ Bool_t GainMatchSX3::Process(Long64_t entry)
 
                     hist2d->Fill(sx3EUp + sx3EDn, sx3EBk);
 
-                    if (cut && cut->IsInside(sx3EUp + sx3EDn, sx3EBk))// && cut1 && cut1->IsInside(sx3EUp / sx3EBk, sx3EDn / sx3EBk))
+                    // if (cut && cut->IsInside(sx3EUp + sx3EDn, sx3EBk))// && cut1 && cut1->IsInside(sx3EUp / sx3EBk, sx3EDn / sx3EBk))
                     {
                         // Accumulate data for gain matching
                         // if (frontGainValid[sx3.id[i]][sx3ChBk][sx3ChUp][sx3ChDn])
@@ -325,7 +330,7 @@ void GainMatchSX3::Terminate()
         for (size_t i = 0; i < udE.size(); ++i)
         {
             double x = udE[i]; // front energy
-            double y = bkE[i];        // back energy
+            double y = bkE[i]; // back energy
 
             xVals.push_back(x);
             yVals.push_back(y);
@@ -337,33 +342,42 @@ void GainMatchSX3::Terminate()
         TGraphErrors g(xVals.size(), xVals.data(), yVals.data(), exVals.data(), eyVals.data());
 
         TF1 f("f", "[0]*x", 0, 16000);
-        // f.SetParameter(0, 1.0); // Initial guess
+        f.SetParameter(0, 1.0); // Initial guess
 
-        // Interactive canvas
-        TCanvas *c = new TCanvas(Form("c_%d_%d_%d_%d", id, bk, u, d), "Fit", 800, 600);
-        g.SetTitle(Form("Detector %d: U%d D%d B%d", id, u, d, bk));
-        g.SetMarkerStyle(20);
-        g.SetMarkerColor(kBlue);
-        g.Draw("AP");
-
-        g.Fit(&f, "Q"); // Quiet fit
-
-        double chi2 = f.GetChisquare();
-        int ndf = f.GetNDF();
-        double reducedChi2 = (ndf != 0) ? chi2 / ndf : -1;
-
-        std::cout << Form("Det%d U%d D%d B%d → Gain: %.4f | χ²/ndf = %.2f/%d = %.2f",
-                          id, u, d, bk, f.GetParameter(0), chi2, ndf, reducedChi2)
-                  << std::endl;
-
-        // Show canvas and wait for user to continue
-        c->Update();
-        gPad->WaitPrimitive();
-
-        if (TMath::Abs(f.GetParameter(0) - 1) > 3.0)
+        if (drawCanvases)
         {
-            delete c; // Clean up unused canvas
-            continue;
+            TCanvas *c = new TCanvas(Form("c_%d_%d_%d_%d", id, bk, u, d), "Fit", 800, 600);
+            g.SetTitle(Form("Detector %d: U%d D%d B%d", id, u, d, bk));
+            g.SetMarkerStyle(20);
+            g.SetMarkerColor(kBlue);
+            g.Draw("AP");
+
+            g.Fit(&f, interactiveMode ? "Q" : "QNR"); // 'R' avoids refit, 'N' skips drawing
+
+            if (verboseFit)
+            {
+                double chi2 = f.GetChisquare();
+                int ndf = f.GetNDF();
+                double reducedChi2 = (ndf != 0) ? chi2 / ndf : -1;
+
+                std::cout << Form("Det%d U%d D%d B%d → Gain: %.4f | χ²/ndf = %.2f/%d = %.2f",
+                                  id, u, d, bk, f.GetParameter(0), chi2, ndf, reducedChi2)
+                          << std::endl;
+            }
+
+            if (interactiveMode)
+            {
+                c->Update();
+                gPad->WaitPrimitive();
+            }
+            else
+            {
+                c->Close(); // Optionally avoid clutter in batch
+            }
+        }
+        else
+        {
+            g.Fit(&f, "QNR");
         }
 
         gainArray[id][bk][u][d] = f.GetParameter(0);
