@@ -40,8 +40,8 @@ bool frontGainValid[MAX_DET][MAX_BK][MAX_UP][MAX_DOWN] = {{{{false}}}};
 
 // ==== Configuration Flags ====
 const bool interactiveMode = false; // If true: show canvas + wait for user
-const bool verboseFit = true;      // If true: print fit summary and chi²
-const bool drawCanvases = true;    // If false: canvases won't be drawn at all
+const bool verboseFit = true;       // If true: print fit summary and chi²
+const bool drawCanvases = true;     // If false: canvases won't be drawn at all
 
 void GainMatchSX3::Begin(TTree * /*tree*/)
 {
@@ -207,15 +207,15 @@ Bool_t GainMatchSX3::Process(Long64_t entry)
             {
                 auto key = std::make_tuple(sx3.id[i], sx3ChBk, sx3ChUp, sx3ChDn);
                 comboCounts[key]++;
+                // If we have a valid front and back channel, fill the histograms
+                hSX3->Fill(sx3ChDn+4, sx3ChBk);
+                hSX3->Fill(sx3ChUp, sx3ChBk);
+    
+                // Fill the histogram for the front vs back
+                hSX3FvsB->Fill(sx3EUp + sx3EDn, sx3EBk);
             }
 
-            // If we have a valid front and back channel, fill the histograms
-            hSX3->Fill(sx3ChDn, sx3ChBk);
-            hSX3->Fill(sx3ChUp, sx3ChBk);
-
-            // Fill the histogram for the front vs back
-            hSX3FvsB->Fill(sx3EUp + sx3EDn, sx3EBk);
-
+            
             for (int i = 0; i < sx3.multi; i++)
             {
                 // if (sx3.id[i] == 4)
@@ -322,7 +322,7 @@ void GainMatchSX3::Terminate()
         // if (TMath::Abs(f.GetParameter(0) - 1) > 3.0)
         //     continue;
 
-        const double fixedError = 20.0; // in ADC channels
+        const double fixedError = 10.0; // in ADC channels
 
         std::vector<double> xVals, yVals, exVals, eyVals;
 
@@ -334,7 +334,7 @@ void GainMatchSX3::Terminate()
 
             xVals.push_back(x);
             yVals.push_back(y);
-            // exVals.push_back(fixedError); // error in front energy
+            exVals.push_back(fixedError); // error in front energy
             eyVals.push_back(fixedError); // error in back energy
         }
 
@@ -382,22 +382,36 @@ void GainMatchSX3::Terminate()
 
         gainArray[id][bk][u][d] = f.GetParameter(0);
         gainValid[id][bk][u][d] = true;
+        // }
 
-        // Check if the gain is valid for this detector, back, up, and down
-        if (gainValid[id][bk][u][d])
+        // // Output results
+        // for (int id = 0; id < MAX_DET; ++id)
+        // {
+        //     for (int bk = 0; bk < MAX_BK; ++bk)
+        //     {
+        //         for (int u = 0; u < MAX_UP; ++u)
+        //         {
+        //             for (int d = 0; d < MAX_DOWN; ++d)
+        //             {
+        //                 // Check if the gain is valid for this detector, back, up, and down
+        //                 if (gainValid[id][bk][u][d])
+        //                 {
+        if (TMath::Abs(gainArray[id][u][d][bk] - 1) < 0.3)
         {
-            if (TMath::Abs(gainArray[id][u][d][bk] - 1) < 0.3)
-            {
-                printf("Gain match Det%d Up%dDn%d Back%d → %.4f \n", id, u, d, bk, gainArray[id][u][d][bk]);
-                outFile << id << " " << bk << " " << u << " " << d << " " << gainArray[id][u][d][bk] << std::endl;
-            }
-            else if (gainArray[id][u][d][bk] != 0)
-            {
-                std::cerr << "Warning: Gain value out of range for Det " << id << " Up " << u << " Dn " << d << " Back " << bk << ": "
-                          << gainArray[id][u][d][bk] << std::endl;
-            }
+            printf("Gain match Det%d Up%dDn%d Backs%d → %.4f \n", id, u, d, bk, gainArray[id][u][d][bk]);
+            outFile << id << " " << bk << " " << u << " " << d << " " << gainArray[id][u][d][bk] << std::endl;
+        }
+        else if (gainArray[id][u][d][bk] != 0)
+        {
+            std::cerr << "Warning: Gain value out of range for Det " << id << " Up " << u << " Dn " << d << " Back " << bk << ": "
+                      << gainArray[id][u][d][bk] << std::endl;
         }
     }
+    //             }
+    //         }
+    //     }
+    // }
+    // }
 
     // for (int bk = 0; bk < MAX_BK; ++bk)
     // {
@@ -411,7 +425,7 @@ void GainMatchSX3::Terminate()
 
     // === Create histograms ===
     TH2F *hFVB = new TH2F("hFVB", "Corrected Up+Dn vs Corrected Back;Corrected Back E;Up+Dn E",
-                          400, 0, 16000, 400, 0, 16000);
+                          600, 0, 16000, 600, 0, 16000);
     TH2F *hAsym = new TH2F("hAsym", "Up vs Dn dvide corrected back;Up/Back E;Dn/Back E",
                            400, 0.0, 1.0, 400, 0.0, 1.0);
 

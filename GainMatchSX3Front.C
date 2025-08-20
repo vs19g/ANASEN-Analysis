@@ -41,11 +41,13 @@ double backGain[MAX_DET][MAX_BK][MAX_UP][MAX_DOWN] = {{{{0}}}};
 bool backGainValid[MAX_DET][MAX_BK][MAX_UP][MAX_DOWN] = {{{{false}}}};
 double frontGain[MAX_DET][MAX_BK][MAX_UP][MAX_DOWN] = {{{{0}}}};
 bool frontGainValid[MAX_DET][MAX_BK][MAX_UP][MAX_DOWN] = {{{{false}}}};
-
+double uvdslope[MAX_DET][MAX_BK][MAX_UP][MAX_DOWN] = {{{{0}}}};
 // ==== Configuration Flags ====
 const bool interactiveMode = false; // If true: show canvas + wait for user
+const bool interactiveMode1 = true; // If true: show canvas + wait for user
 const bool verboseFit = true;       // If true: print fit summary and chi²
-const bool drawCanvases = true;     // If false: canvases won't be drawn at all
+const bool drawCanvases = false;     // If false: canvases won't be drawn at all
+const bool drawCanvases1 = true;    // If false: canvases won't be drawn at all
 
 void GainMatchSX3Front::Begin(TTree * /*tree*/)
 {
@@ -195,15 +197,16 @@ Bool_t GainMatchSX3Front::Process(Long64_t entry)
                     sx3EBk = sx3.e[index];
                 }
             }
-            // If we have a valid front and back channel, fill the histograms
-            hSX3->Fill(sx3ChDn + 4, sx3ChBk);
-            hSX3->Fill(sx3ChUp, sx3ChBk);
-
-            // Fill the histogram for the front vs back
-            hSX3FvsB->Fill(sx3EUp + sx3EDn, sx3EBk);
 
             for (int i = 0; i < sx3.multi; i++)
             {
+                // If we have a valid front and back channel, fill the histograms
+                hSX3->Fill(sx3ChDn + 4, sx3ChBk);
+                hSX3->Fill(sx3ChUp, sx3ChBk);
+
+                // Fill the histogram for the front vs back
+                hSX3FvsB->Fill(sx3EUp + sx3EDn, sx3EBk);
+
                 if (sx3.e[i] > 100) // && sx3.id[i] == 4)
                 {
                     // back gain correction
@@ -330,9 +333,9 @@ void GainMatchSX3Front::Terminate()
                 int ndf = f.GetNDF();
                 double reducedChi2 = (ndf != 0) ? chi2 / ndf : -1;
 
-                std::cout << Form("Det%d U%d D%d B%d → Gain: %.4f | χ²/ndf = %.2f/%d = %.2f",
-                                  id, u, d, bk, f.GetParameter(0), chi2, ndf, reducedChi2)
-                          << std::endl;
+                // std::cout << Form("Det%d U%d D%d B%d → Gain: %.4f | χ²/ndf = %.2f/%d = %.2f",
+                //                   id, u, d, bk, f.GetParameter(0), chi2, ndf, reducedChi2)
+                //           << std::endl;
             }
 
             if (interactiveMode)
@@ -354,7 +357,87 @@ void GainMatchSX3Front::Terminate()
         frontGainValid[id][bk][u][d] = true;
 
         outFile << id << " " << bk << " " << u << " " << d << " " << frontGain[id][bk][u][d] << std::endl;
-        printf("Front gain Det%d Back%d Up%dDn%d → %.4f\n", id, bk, u, d, frontGain[id][bk][u][d]);
+        // printf("Front gain Det%d Back%d Up%dDn%d → %.4f\n", id, bk, u, d, frontGain[id][bk][u][d]);
+    }
+
+    for (const auto &kv : dataPoints)
+    {
+        auto [id, bk, u, d] = kv.first;
+        const auto &pts = kv.second;
+        std::vector<double> uvals, dvals;
+
+        if (pts.size() < 5)
+            continue;
+
+        std::vector<double> uE, dE, udE, corrBkE;
+
+        for (const auto &pr : pts)
+        {
+            double eBkCorr, eUp, eDn;
+            std::tie(eBkCorr, eUp, eDn) = pr;
+            if ((eBkCorr < 100) || (eUp < 100) || (eDn < 100))
+                continue; // Skip if any energy is zero
+            eUp *= frontGain[id][bk][u][d];
+            eDn *= frontGain[id][bk][u][d];
+
+            uE.push_back(eUp / eBkCorr);
+            dE.push_back(eDn / eBkCorr);
+            corrBkE.push_back(eBkCorr);
+        }
+        for (size_t i = 0; i < uE.size(); ++i)
+        {
+            uvals.push_back(uE[i]);
+            dvals.push_back(dE[i]);
+        }
+
+        TGraph g1(uvals.size(), uvals.data(), dvals.data());
+        g1.SetMarkerStyle(20);
+        g1.SetMarkerColor(kBlue);
+        g1.SetTitle(Form("Det %d: U%d D%d B%d", id, u, d, bk));
+
+        // Fit function (straight line through origin)
+        TF1 f1("f1", "[0]*x", 0, 16000);
+        f1.SetParameter(0, -1.0);
+
+        if (drawCanvases1)
+        {
+            TCanvas *c1 = new TCanvas(Form("c_%d_%d_%d_%d", id, bk, u, d), "Fit", 800, 600);
+            g1.SetTitle(Form("Detector %d: U%d D%d B%d", id, u, d, bk));
+            g1.SetMarkerStyle(20);
+            g1.SetMarkerColor(kBlue);
+            g1.Draw("AP");
+
+            g1.Fit(&f1, interactiveMode ? "Q" : "QNR"); // 'R' avoids refit, 'N' skips drawing
+
+            if (verboseFit)
+            {
+                double chi2 = f1.GetChisquare();
+                int ndf1 = f1.GetNDF();
+                double reducedChi2 = (ndf1 != 0) ? chi2 / ndf1 : -1;
+
+                std::cout << Form("Det%d U%d D%d B%d → Gain: %.4f | χ²/ndf = %.2f/%d = %.2f",
+                                  id, u, d, bk, f1.GetParameter(0), chi2, ndf1, reducedChi2)
+                          << std::endl;
+            }
+
+            if (interactiveMode1)
+            {
+                c1->Update();
+                gPad->WaitPrimitive();
+            }
+            else
+            {
+                c1->Close(); // Optionally avoid clutter in batch
+            }
+        }
+        else
+        {
+            g1.Fit(&f1, "QNR");
+        }
+
+        // Save slope
+        uvdslope[id][bk][u][d] = f1.GetParameter(0);
+        printf("UvD slope Det%d Back%d Up%dDn%d → %.4f\n", id, bk, u, d, uvdslope[id][bk][u][d]);
     }
 
     outFile.close();
