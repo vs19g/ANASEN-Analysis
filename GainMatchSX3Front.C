@@ -44,10 +44,10 @@ bool frontGainValid[MAX_DET][MAX_BK][MAX_UP][MAX_DOWN] = {{{{false}}}};
 double uvdslope[MAX_DET][MAX_BK][MAX_UP][MAX_DOWN] = {{{{0}}}};
 // ==== Configuration Flags ====
 const bool interactiveMode = false; // If true: show canvas + wait for user
-const bool interactiveMode1 = true; // If true: show canvas + wait for user
+const bool interactiveMode1 = false; // If true: show canvas + wait for user
 const bool verboseFit = true;       // If true: print fit summary and chi²
-const bool drawCanvases = false;     // If false: canvases won't be drawn at all
-const bool drawCanvases1 = true;    // If false: canvases won't be drawn at all
+const bool drawCanvases = false;    // If false: canvases won't be drawn at all
+const bool drawCanvases1 = false;    // If false: canvases won't be drawn at all
 
 void GainMatchSX3Front::Begin(TTree * /*tree*/)
 {
@@ -270,7 +270,7 @@ void GainMatchSX3Front::Terminate()
         auto [id, bk, u, d] = kv.first;
         const auto &pts = kv.second;
 
-        if (pts.size() < 5)
+        if (pts.size() < 500)
             continue;
 
         std::vector<double> uE, dE, udE, corrBkE;
@@ -365,6 +365,7 @@ void GainMatchSX3Front::Terminate()
         auto [id, bk, u, d] = kv.first;
         const auto &pts = kv.second;
         std::vector<double> uvals, dvals;
+        double front = frontGain[id][bk][u][d];
 
         if (pts.size() < 5)
             continue;
@@ -377,8 +378,8 @@ void GainMatchSX3Front::Terminate()
             std::tie(eBkCorr, eUp, eDn) = pr;
             if ((eBkCorr < 100) || (eUp < 100) || (eDn < 100))
                 continue; // Skip if any energy is zero
-            eUp *= frontGain[id][bk][u][d];
-            eDn *= frontGain[id][bk][u][d];
+            eUp *= front;
+            // eDn *= frontGain[id][bk][u][d];
 
             uE.push_back(eUp / eBkCorr);
             dE.push_back(eDn / eBkCorr);
@@ -396,7 +397,7 @@ void GainMatchSX3Front::Terminate()
         g1.SetTitle(Form("Det %d: U%d D%d B%d", id, u, d, bk));
 
         // Fit function (straight line through origin)
-        TF1 f1("f1", "[0]*x", 0, 16000);
+        TF1 f1("f1", "[0]*x+[1]", 0, 16000);
         f1.SetParameter(0, -1.0);
 
         if (drawCanvases1)
@@ -407,7 +408,7 @@ void GainMatchSX3Front::Terminate()
             g1.SetMarkerColor(kBlue);
             g1.Draw("AP");
 
-            g1.Fit(&f1, interactiveMode ? "Q" : "QNR"); // 'R' avoids refit, 'N' skips drawing
+            g1.Fit(&f1, interactiveMode1 ? "Q" : "QNR"); // 'R' avoids refit, 'N' skips drawing
 
             if (verboseFit)
             {
@@ -451,8 +452,13 @@ void GainMatchSX3Front::Terminate()
     {
 
         auto [id, bk, u, d] = kv.first;
-        double front = frontGain[id][bk][u][d];
-
+        double front;
+        if (abs((uvdslope[id][bk][u][d] + 1) < 0.2))
+        {
+            front = frontGain[id][bk][u][d];
+        }
+        else
+            front=0.;
         for (const auto &pr : kv.second)
         {
             double eBk, eUp, eDn;
