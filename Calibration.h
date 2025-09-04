@@ -1,5 +1,5 @@
-#ifndef GainMatch_h
-#define GainMatch_h
+#ifndef Calibration_h
+#define Calibration_h
 
 #include <TROOT.h>
 #include <TChain.h>
@@ -8,7 +8,7 @@
 
 #include "Armory/ClassDet.h"
 
-class GainMatch : public TSelector {
+class Calibration : public TSelector {
 public :
    TTree          *fChain;   //!pointer to the analyzed TTree or TChain
 
@@ -41,8 +41,8 @@ public :
    TBranch        *b_pcE;   //!
    TBranch        *b_pcT;   //!
 
-   GainMatch(TTree * /*tree*/ =0) : fChain(0) { }
-   virtual ~GainMatch() { }
+   Calibration(TTree * /*tree*/ =0) : fChain(0) { }
+   virtual ~Calibration() { }
    virtual Int_t   Version() const { return 2; }
    virtual void    Begin(TTree *tree);
    virtual void    SlaveBegin(TTree *tree);
@@ -57,13 +57,13 @@ public :
    virtual void    SlaveTerminate();
    virtual void    Terminate();
 
-   ClassDef(GainMatch,0);
+   ClassDef(Calibration,0);
 };
 
 #endif
 
-#ifdef GainMatch_cxx
-void GainMatch::Init(TTree *tree){
+#ifdef Calibration_cxx
+void Calibration::Init(TTree *tree){
 
    // Set branch addresses and branch pointers
    if (!tree) return;
@@ -95,20 +95,20 @@ void GainMatch::Init(TTree *tree){
 
 }
 
-Bool_t GainMatch::Notify(){
+Bool_t Calibration::Notify(){
 
    return kTRUE;
 }
 
-void GainMatch::SlaveBegin(TTree * /*tree*/){
+void Calibration::SlaveBegin(TTree * /*tree*/){
 
    TString option = GetOption();
 
 }
 
-void GainMatch::SlaveTerminate(){
+void Calibration::SlaveTerminate(){
 
 }
 
 
-#endif // #ifdef GainMatch_cxx
+#endif // #ifdef Calibration_cxx

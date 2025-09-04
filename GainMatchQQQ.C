@@ -1,6 +1,6 @@
-#define GainMatch_cxx
+#define GainMatchQQQ_cxx
 
-#include "GainMatch.h"
+#include "GainMatchQQQ.h"
 #include <TH2.h>
 #include <TF1.h>
 #include <TStyle.h>
@@ -24,7 +24,7 @@ SX3 sx3_contr;
 TCutG *cut;
 std::map<std::tuple<int, int, int>, std::vector<std::pair<double, double>>> dataPoints;
 
-void GainMatch::Begin(TTree * /*tree*/)
+void GainMatchQQQ::Begin(TTree * /*tree*/)
 {
     TString option = GetOption();
 
@@ -49,7 +49,7 @@ void GainMatch::Begin(TTree * /*tree*/)
     cut->SetName("qqqcorr"); // Ensure the cut has the correct name
 }
 
-Bool_t GainMatch::Process(Long64_t entry)
+Bool_t GainMatchQQQ::Process(Long64_t entry)
 {
 
     b_sx3Multi->GetEntry(entry);
@@ -187,7 +187,7 @@ Bool_t GainMatch::Process(Long64_t entry)
     return kTRUE;
 }
 
-void GainMatch::Terminate()
+void GainMatchQQQ::Terminate()
 {
     const int MAX_DET = 4;
     const int MAX_RING = 16;
@@ -196,7 +196,7 @@ void GainMatch::Terminate()
     double gainArray[MAX_DET][MAX_RING][MAX_WEDGE] = {{{0}}};
     bool gainValid[MAX_DET][MAX_RING][MAX_WEDGE] = {{{false}}};
 
-    std::ofstream outFile("qqq_gainmatch.txt");
+    std::ofstream outFile("qqq_GainMatch.txt");
     if (!outFile.is_open())
     {
         std::cerr << "Error opening output file!" << std::endl;

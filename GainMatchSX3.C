@@ -208,14 +208,13 @@ Bool_t GainMatchSX3::Process(Long64_t entry)
                 auto key = std::make_tuple(sx3.id[i], sx3ChBk, sx3ChUp, sx3ChDn);
                 comboCounts[key]++;
                 // If we have a valid front and back channel, fill the histograms
-                hSX3->Fill(sx3ChDn+4, sx3ChBk);
+                hSX3->Fill(sx3ChDn + 4, sx3ChBk);
                 hSX3->Fill(sx3ChUp, sx3ChBk);
-    
+
                 // Fill the histogram for the front vs back
                 hSX3FvsB->Fill(sx3EUp + sx3EDn, sx3EBk);
             }
 
-            
             for (int i = 0; i < sx3.multi; i++)
             {
                 // if (sx3.id[i] == 4)
@@ -262,13 +261,10 @@ Bool_t GainMatchSX3::Process(Long64_t entry)
     return kTRUE;
 }
 
+const double GAIN_ACCEPTANCE_THRESHOLD = 0.3;
+
 void GainMatchSX3::Terminate()
 {
-    const int MAX_DET = 24;
-    const int MAX_UP = 4;
-    const int MAX_DOWN = 4;
-    const int MAX_BK = 4;
-
     double gainArray[MAX_DET][MAX_BK][MAX_UP][MAX_DOWN] = {{{{0}}}};
     bool gainValid[MAX_DET][MAX_BK][MAX_UP][MAX_DOWN] = {{{{false}}}};
     double fbgain[MAX_DET][MAX_BK][MAX_UP][MAX_DOWN] = {{{{0}}}};
@@ -334,7 +330,7 @@ void GainMatchSX3::Terminate()
 
             xVals.push_back(x);
             yVals.push_back(y);
-            exVals.push_back(fixedError); // error in front energy
+            // exVals.push_back(fixedError); // error in front energy
             eyVals.push_back(fixedError); // error in back energy
         }
 
@@ -352,7 +348,7 @@ void GainMatchSX3::Terminate()
             g.SetMarkerColor(kBlue);
             g.Draw("AP");
 
-            g.Fit(&f, interactiveMode ? "Q" : "QNR"); // 'R' avoids refit, 'N' skips drawing
+            g.Fit(&f, interactiveMode ? "Q" : "QNR"); // 'Q': suppress output, 'N': no fit stats box, 'R': avoid refit
 
             if (verboseFit)
             {
@@ -394,17 +390,18 @@ void GainMatchSX3::Terminate()
         //             for (int d = 0; d < MAX_DOWN; ++d)
         //             {
         //                 // Check if the gain is valid for this detector, back, up, and down
-        //                 if (gainValid[id][bk][u][d])
-        //                 {
-        if (TMath::Abs(gainArray[id][u][d][bk] - 1) < 0.3)
+        // Only accept gain values within 30% of unity (i.e., 0.7 < gain < 1.3) to filter out unphysical or poorly fitted results.
+        if (abs(gainArray[id][bk][u][d] - 1) < 0.3)
         {
-            printf("Gain match Det%d Up%dDn%d Backs%d → %.4f \n", id, u, d, bk, gainArray[id][u][d][bk]);
-            outFile << id << " " << bk << " " << u << " " << d << " " << gainArray[id][u][d][bk] << std::endl;
+            printf("Gain match Det%d Up%dDn%d Backs%d → %.4f \n", id, u, d, bk, gainArray[id][bk][u][d]);
+            outFile << id << " " << bk << " " << u << " " << d << " " << gainArray[id][bk][u][d] << std::endl;
         }
-        else if (gainArray[id][u][d][bk] != 0)
+        // outFile << id << " " << bk << " " << u << " " << d << " " << gainArray[id][bk][u][d] << std::endl;
+        // }
+        else if (gainArray[id][bk][u][d] != 0)
         {
             std::cerr << "Warning: Gain value out of range for Det " << id << " Up " << u << " Dn " << d << " Back " << bk << ": "
-                      << gainArray[id][u][d][bk] << std::endl;
+                      << gainArray[id][bk][u][d] << std::endl;
         }
     }
     //             }

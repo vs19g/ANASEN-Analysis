@@ -113,7 +113,9 @@
     "charconv": "cpp",
     "format": "cpp",
     "GainMatchSX3Front.C": "cpp",
-    "GainMatchSX3Front1.C": "cpp"
+    "GainMatchSX3Front1.C": "cpp",
+    "Calibration.C": "cpp",
+    "GainMatchQQQ.C": "cpp"
   },
   "github-enterprise.uri": "https://fsunuc.physics.fsu.edu"
 }
