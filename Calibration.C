@@ -292,23 +292,9 @@ Bool_t Calibration::Process(Long64_t entry)
                     calibEBack = backGain[sx3Id][bk_index][up_index][dn_index] * sx3EBk;
                 }
             }
-            else
-            {
-                // partial information: try best-effort per-channel checks
-                if (haveFrontPair && up_index >= 0 && dn_index >= 0 && sx3Id >= 0 && sx3Id < MAX_SX3)
-                {
-                    if (frontGainValid[sx3Id][0][(up_index % MAX_UP)][(dn_index % MAX_DOWN)])
-                    {
-                        // attempt with default bk=0 if that makes sense in your geometry
-                        calibEUp = frontGain[sx3Id][0][(up_index % MAX_UP)][(dn_index % MAX_DOWN)] * sx3EUp;
-                        // calibEDn = frontGain[sx3Id][0][(up_index % MAX_UP)][(dn_index % MAX_DOWN)] * sx3EDn;
-                    }
-                }
-                // keep calibEBack==0 if unavailable
-            }
 
             // Only call CalSX3Pos if we have reasonable energies (avoid calling with zeros/uninitialized)
-            if (haveFrontPair && (calibEUp > 0.0) && haveBack)
+            if (haveFrontPair && (calibEUp > 50.0) && haveBack && (calibEBack > 50.0))
             {
                 // find exact back energy value from sx3 entries if you tracked it above
                 float backEnergyRaw = 0.0f;
@@ -322,8 +308,7 @@ Bool_t Calibration::Process(Long64_t entry)
                         break;
                     }
                 }
-                // use calibrated back if available else raw
-                // double backEnergyToUse = (calibEBack > 0.0 ? calibEBack : backEnergyRaw);
+
                 hsx3IndexVE_gm->Fill(sx3.index[sx3ID[0].second], calibEUp);
                 hSX3->Fill(sx3ChDn + 4, sx3ChBk);
                 hSX3->Fill(sx3ChUp, sx3ChBk);
