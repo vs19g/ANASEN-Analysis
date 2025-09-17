@@ -34,8 +34,9 @@ TH2F *hSX3FvsB_g;
 TH2F *hSX3;
 TH1F *hZProj;
 TH2F *hsx3IndexVE;
+TH2F *hsx3IndexVE_gm;
 TH2F *hqqqIndexVE;
-TH2F *hqqqIndexVE_cal;
+TH2F *hqqqIndexVE_gm;
 TH2F *hsx3Coin;
 TH2F *hqqqCoin;
 TH2F *hqqqPolar;
@@ -70,8 +71,9 @@ void Calibration::Begin(TTree * /*tree*/)
     hSX3 = new TH2F("hSX3", "SX3 Front v Back; Fronts; Backs", 8, 0, 8, 4, 0, 4);
     hsx3Coin = new TH2F("hsx3Coin", "SX3 Coincident", 24 * 12, 0, 24 * 12, 24 * 12, 0, 24 * 12);
     hsx3IndexVE = new TH2F("hsx3IndexVE", "SX3 index vs Energy; sx3 index ; Energy", 24 * 12, 0, 24 * 12, 400, 0, 5000);
+    hsx3IndexVE_gm = new TH2F("hsx3IndexVE_cal", "SX3 index vs Energy (calibrated); SX3 index ; Energy", 24 * 12, 0, 24 * 12, 400, 0, 5000);
     hqqqIndexVE = new TH2F("hqqqIndexVE", "QQQ index vs Energy; QQQ index ; Energy", 4 * 2 * 16, 0, 4 * 2 * 16, 400, 0, 5000);
-    hqqqIndexVE_cal = new TH2F("hqqqIndexVE_cal", "QQQ index vs Energy (calibrated); QQQ index ; Energy", 4 * 2 * 16, 0, 4 * 2 * 16, 400, 0, 5000);
+    hqqqIndexVE_gm = new TH2F("hqqqIndexVE_cal", "QQQ index vs Energy (calibrated); QQQ index ; Energy", 4 * 2 * 16, 0, 4 * 2 * 16, 400, 0, 5000);
     hsx3Coin = new TH2F("hsx3Coin", "SX3 Coincident", 24 * 12, 0, 24 * 12, 24 * 12, 0, 24 * 12);
     hqqqCoin = new TH2F("hqqqCoin", "QQQ Coincident", 4 * 2 * 16, 0, 4 * 2 * 16, 4 * 2 * 16, 0, 4 * 2 * 16);
 
@@ -235,6 +237,7 @@ Bool_t Calibration::Process(Long64_t entry)
             int sx3ChBk = -1;
             float sx3EUp = 0.0f;
             float sx3EDn = 0.0f;
+            float sx3EBk = 0.0f;
 
             // collect channels/energies
             for (size_t i = 0; i < sx3ID.size(); i++)
@@ -260,6 +263,7 @@ Bool_t Calibration::Process(Long64_t entry)
                 else // back channels (assuming back channels are 8..11 or so)
                 {
                     sx3ChBk = ch; // store as raw channel number; adapt if you index bk differently
+                    sx3EBk = e;   // if you want to track back energy too
                 }
             }
 
@@ -268,32 +272,14 @@ Bool_t Calibration::Process(Long64_t entry)
             bool haveBack = (sx3ChBk >= 0);
 
             // convert raw channel numbers to array indices if needed:
-            // example: if back channels are stored with ch>=8 and bk index is ch-8:
             int bk_index = (haveBack ? (sx3ChBk - 8) : -1);
             int up_index = (haveFrontPair ? sx3ChUp : -1);
             int dn_index = (haveFrontPair ? sx3ChDn : -1);
-
-            // bounds checks against your array sizes
             auto sx3Id = sx3ID[0].first;
-            auto inRange = [&](int id, int bk, int up, int dn)
-            {
-                if (id < 0 || id >= MAX_SX3)
-                    return false;
-                if (bk < 0 || bk >= MAX_BK)
-                    return false;
-                if (up < 0 || up >= MAX_UP)
-                    return false;
-                if (dn < 0 || dn >= MAX_DOWN)
-                    return false;
-                return true;
-            };
 
-            // apply calibration safely, fallback to raw ADC if no valid gain
-            double calibEUp = sx3EUp;
-            double calibEDn = sx3EDn;
-            double calibEBack = 0.0;
+            double calibEUp, calibEDn, calibEBack = 0.0;
 
-            if (haveFrontPair && haveBack && inRange(sx3Id, bk_index, up_index, dn_index))
+            if (haveFrontPair && haveBack)
             {
                 // If you stored front gains indexed by [id][bk][up][down]
                 if (frontGainValid[sx3Id][bk_index][up_index][dn_index])
@@ -303,8 +289,7 @@ Bool_t Calibration::Process(Long64_t entry)
                 }
                 if (backGainValid[sx3Id][bk_index][up_index][dn_index])
                 {
-                    calibEBack = backGain[sx3Id][bk_index][up_index][dn_index] * sx3.e[sx3ID[0].second /* if you have back index */];
-                    // Note: if back is from different index in sx3ID vector, you should find the exact index for the back hit
+                    calibEBack = backGain[sx3Id][bk_index][up_index][dn_index] * sx3EBk;
                 }
             }
             else
@@ -338,7 +323,8 @@ Bool_t Calibration::Process(Long64_t entry)
                     }
                 }
                 // use calibrated back if available else raw
-                double backEnergyToUse = (calibEBack > 0.0 ? calibEBack : backEnergyRaw);
+                // double backEnergyToUse = (calibEBack > 0.0 ? calibEBack : backEnergyRaw);
+                hsx3IndexVE_gm->Fill(sx3.index[sx3ID[0].second], calibEUp);
                 hSX3->Fill(sx3ChDn + 4, sx3ChBk);
                 hSX3->Fill(sx3ChUp, sx3ChBk);
 
@@ -378,7 +364,7 @@ Bool_t Calibration::Process(Long64_t entry)
         }
         // for( int j = 0; j < pc.multi; j++){
         // if(pc.index[j]==4){
-        hqqqIndexVE_cal->Fill(qqq.index[i], Ecal);
+        hqqqIndexVE_gm->Fill(qqq.index[i], Ecal);
         hqqqIndexVE->Fill(qqq.index[i], qqq.e[i]);
 
         // }
