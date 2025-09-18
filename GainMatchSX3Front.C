@@ -37,8 +37,8 @@ const int MAX_DET = 24;
 const int MAX_UP = 4;
 const int MAX_DOWN = 4;
 const int MAX_BK = 4;
-double backGain[MAX_DET][MAX_BK][MAX_UP][MAX_DOWN] = {{{{0}}}};
-bool backGainValid[MAX_DET][MAX_BK][MAX_UP][MAX_DOWN] = {{{{false}}}};
+double backGain[MAX_DET][MAX_BK] = {{0}};
+bool backGainValid[MAX_DET][MAX_BK] = {{false}};
 double frontGain[MAX_DET][MAX_BK][MAX_UP][MAX_DOWN] = {{{{0}}}};
 bool frontGainValid[MAX_DET][MAX_BK][MAX_UP][MAX_DOWN] = {{{{false}}}};
 double uvdslope[MAX_DET][MAX_BK][MAX_UP][MAX_DOWN] = {{{{0}}}};
@@ -84,7 +84,29 @@ void GainMatchSX3Front::Begin(TTree * /*tree*/)
         return;
     }
     cut1->SetName("UvD");
-    std::string filename = "sx3_GainMatchback.txt";
+    // std::string filename = "sx3_GainMatchback.txt";
+
+    // std::ifstream infile(filename);
+    // if (!infile.is_open())
+    // {
+    //     std::cerr << "Error opening " << filename << "!" << std::endl;
+    //     return;
+    // }
+
+    // int id, bk, u, d;
+    // double gain;
+    // while (infile >> id >> bk >> u >> d >> gain)
+    // {
+    //     backGain[id][bk][u][d] = gain;
+    //     if (backGain[id][bk][u][d] > 0)
+    //         backGainValid[id][bk][u][d] = true;
+    //     else
+    //         backGainValid[id][bk][u][d] = false;
+    // }
+    // infile.close();
+    // std::cout << "Loaded back gains from " << filename << std::endl;
+
+    std::string filename = "sx3_BackGains.txt";
 
     std::ifstream infile(filename);
     if (!infile.is_open())
@@ -95,17 +117,15 @@ void GainMatchSX3Front::Begin(TTree * /*tree*/)
 
     int id, bk, u, d;
     double gain;
-    while (infile >> id >> bk >> u >> d >> gain)
+    while (infile >> id >> bk >> gain)
     {
-        backGain[id][bk][u][d] = gain;
-        if (backGain[id][bk][u][d] > 0)
-            backGainValid[id][bk][u][d] = true;
+        backGain[id][bk] = gain;
+        if (backGain[id][bk] > 0)
+            backGainValid[id][bk] = true;
         else
-            backGainValid[id][bk][u][d] = false;
+            backGainValid[id][bk] = false;
     }
-
-    infile.close();
-    std::cout << "Loaded back gains from " << filename << std::endl;
+    
     SX3 sx3_contr;
 }
 
@@ -234,9 +254,9 @@ Bool_t GainMatchSX3Front::Process(Long64_t entry)
                     if (cut && cut->IsInside(sx3EUp + sx3EDn, sx3EBk) && cut1 && cut1->IsInside(sx3EUp / sx3EBk, sx3EDn / sx3EBk))
                     {
 
-                        if (backGainValid[sx3.id[i]][sx3ChBk][sx3ChUp][sx3ChDn])
+                        if (backGainValid[sx3.id[i]][sx3ChBk])
                         {
-                            sx3EBk *= backGain[sx3.id[i]][sx3ChBk][sx3ChUp][sx3ChDn];
+                            sx3EBk *= backGain[sx3.id[i]][sx3ChBk];
                         }
                         // Accumulate data for gain matching
                         dataPoints[{sx3.id[i], sx3ChBk, sx3ChUp, sx3ChDn}].emplace_back(sx3EBk, sx3EUp, sx3EDn);

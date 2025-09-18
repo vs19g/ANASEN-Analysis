@@ -115,7 +115,8 @@
     "GainMatchSX3Front.C": "cpp",
     "GainMatchSX3Front1.C": "cpp",
     "Calibration.C": "cpp",
-    "GainMatchQQQ.C": "cpp"
+    "GainMatchQQQ.C": "cpp",
+    "UTF-8gainmatch.C": "cpp"
   },
   "github-enterprise.uri": "https://fsunuc.physics.fsu.edu"
 }
