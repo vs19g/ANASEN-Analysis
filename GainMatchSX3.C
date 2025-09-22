@@ -35,13 +35,14 @@ const int MAX_UP = 4;
 const int MAX_DOWN = 4;
 const int MAX_BK = 4;
 
-double frontGain[MAX_DET][MAX_BK][MAX_UP][MAX_DOWN] = {{{{0}}}};
-bool frontGainValid[MAX_DET][MAX_BK][MAX_UP][MAX_DOWN] = {{{{false}}}};
+// double frontGain[MAX_DET][MAX_BK][MAX_UP][MAX_DOWN] = {{{{0}}}};
+// bool frontGainValid[MAX_DET][MAX_BK][MAX_UP][MAX_DOWN] = {{{{false}}}};
 
 // ==== Configuration Flags ====
 const bool interactiveMode = false; // If true: show canvas + wait for user
 const bool verboseFit = true;       // If true: print fit summary and chi²
 const bool drawCanvases = false;     // If false: canvases won't be drawn at all
+const bool drawCanvases = false;    // If false: canvases won't be drawn at all
 
 void GainMatchSX3::Begin(TTree * /*tree*/)
 {
@@ -99,6 +100,13 @@ void GainMatchSX3::Begin(TTree * /*tree*/)
     //     frontGain[id][bk][u][d] = gain;
     //     frontGainValid[id][bk][u][d] = true;
     // }
+    // int id, bk, u, d;
+    // double gain;
+    // while (infile >> id >> bk >> u >> d >> gain)
+    // {
+    //     frontGain[id][bk][u][d] = gain;
+    //     frontGainValid[id][bk][u][d] = true;
+    // }
 }
 
 Bool_t GainMatchSX3::Process(Long64_t entry)
@@ -127,12 +135,6 @@ Bool_t GainMatchSX3::Process(Long64_t entry)
     std::vector<std::pair<int, int>> ID;
     for (int i = 0; i < sx3.multi; i++)
     {
-
-        // for (int j = i + 1; j < sx3.multi; j++)
-        // {
-        //     if (sx3.id[i] == 3)
-        //         hsx3Coin->Fill(sx3.index[i], sx3.index[j]);
-        // }
         if (sx3.e[i] > 100)
         {
             ID.push_back(std::pair<int, int>(sx3.id[i], i));
@@ -202,37 +204,52 @@ Bool_t GainMatchSX3::Process(Long64_t entry)
                     }
                 }
             }
-
-            // Only if we found all three channels do we proceed
-            if (sx3ChUp >= 0 && sx3ChDn >= 0 && sx3ChBk >= 0)
+            for (int i = 0; i < sx3.multi; i++)
             {
-                // Fill once per correlated set
+                auto key = std::make_tuple(sx3.id[i], sx3ChBk, sx3ChUp, sx3ChDn);
+                comboCounts[key]++;
+                // If we have a valid front and back channel, fill the histograms
                 hSX3->Fill(sx3ChDn + 4, sx3ChBk);
                 hSX3->Fill(sx3ChUp, sx3ChBk);
+
+                // Fill the histogram for the front vs back
                 hSX3FvsB->Fill(sx3EUp + sx3EDn, sx3EBk);
+            }
 
-                // Pick detector ID from one of the correlated hits (all same detector)
-                int detID = sx3ID[0].first;
-
-                TString histName = Form("hSX3FVB_id%d_U%d_D%d_B%d",
-                                        detID, sx3ChUp, sx3ChDn, sx3ChBk);
-                TH2F *hist2d = (TH2F *)gDirectory->Get(histName);
-                if (!hist2d)
+            for (int i = 0; i < sx3.multi; i++)
+            {
+                // if (sx3.id[i] == 4)
                 {
-                    hist2d = new TH2F(histName, histName,
-                                      400, 0, 16000, 400, 0, 16000);
-                }
+                    auto key = std::make_tuple(sx3.id[i], sx3ChBk, sx3ChUp, sx3ChDn);
 
-                if (sx3EBk > 100 || sx3EUp > 100 || sx3EDn > 100)
-                {
+                    // Only continue if this combo has enough entries
+                    if (comboCounts[key] < 100 || sx3EBk < 100 || sx3EUp < 100 || sx3EDn < 100)
+                        continue;
+                    // Fill the histogram for the front vs back with gain correction
                     hSX3FvsB_g->Fill(sx3EUp + sx3EDn, sx3EBk);
+                    // Fill the index vs energy histogram
+                    hsx3IndexVE_g->Fill(sx3.index[i], sx3.e[i]);
+                    // }
+                    // {
+                    TString histName = Form("hSX3FVB_id%d_U%d_D%d_B%d", sx3.id[i], sx3ChUp, sx3ChDn, sx3ChBk);
+                    TH2F *hist2d = (TH2F *)gDirectory->Get(histName);
+                    if (!hist2d)
+                    {
+                        hist2d = new TH2F(histName, Form("hSX3FVB_id%d_U%d_D%d_B%d", sx3.id[i], sx3ChUp, sx3ChDn, sx3ChBk), 400, 0, 16000, 400, 0, 16000);
+                    }
 
-                    // Use the correlated triplet directly
-                    dataPoints[{detID, sx3ChBk, sx3ChUp, sx3ChDn}]
-                        .emplace_back(sx3EBk, sx3EUp, sx3EDn);
+                    hist2d->Fill(sx3EUp + sx3EDn, sx3EBk);
+
+                    // if (cut && cut->IsInside(sx3EUp + sx3EDn, sx3EBk))// && cut1 && cut1->IsInside(sx3EUp / sx3EBk, sx3EDn / sx3EBk))
+                    {
+                        // Accumulate data for gain matching
+                        // if (frontGainValid[sx3.id[i]][sx3ChBk][sx3ChUp][sx3ChDn])
+                        // {
+                        //     sx3EUp *= frontGain[sx3.id[i]][sx3ChBk][sx3ChUp][sx3ChDn];
+                        // }
+                        dataPoints[{sx3.id[i], sx3ChBk, sx3ChUp, sx3ChDn}].emplace_back(sx3EBk, sx3EUp, sx3EDn);
+                    }
                 }
-
-                hist2d->Fill(sx3EUp + sx3EDn, sx3EBk);
             }
         }
     }
@@ -243,52 +260,67 @@ Bool_t GainMatchSX3::Process(Long64_t entry)
 const double GAIN_ACCEPTANCE_THRESHOLD = 0.3;
 void GainMatchSX3::Terminate()
 {
-    double backSlope[MAX_DET][MAX_BK] = {{0}};
-    bool backSlopeValid[MAX_DET][MAX_BK] = {{false}};
+    double gainArray[MAX_DET][MAX_BK][MAX_UP][MAX_DOWN] = {{{{0}}}};
+    bool gainValid[MAX_DET][MAX_BK][MAX_UP][MAX_DOWN] = {{{{false}}}};
+    std::map<int, double> upCorrFactor;
 
-    std::ofstream outFile("sx3_BackGains.txt");
+    // === Gain matching ===
+    std::ofstream outFile("sx3_GainMatchback.txt");
     if (!outFile.is_open())
     {
         std::cerr << "Error opening sx3_BackGains.txt for writing!" << std::endl;
         return;
     }
 
-    // === Gain fit: (Up+Dn) vs Back, grouped by [id][bk] ===
-    for (int id = 0; id < MAX_DET; id++)
+    // Gain fit using up+dn vs bk
+    for (const auto &kv : dataPoints)
     {
-        for (int bk = 0; bk < MAX_BK; bk++)
+        // kv.first is a tuple of (id, up, bk)
+        // kv.second is a vector of tuples (bkE, upE, dnE)
+        auto [id, bk, u, d] = kv.first;
+        const auto &pts = kv.second;
+        // Check if we have enough points for fitting
+        if (pts.size() < 5)
+            continue;
+
+        std::vector<double> bkE, udE;
+
+        for (const auto &pr : pts)
         {
-            std::vector<double> bkE, udE;
+            double eUp, eDn, eBk;
+            std::tie(eBk, eUp, eDn) = pr;
 
-            // Collect all (Up+Dn, Back) for this id,bk
-            for (const auto &kv : dataPoints)
-            {
-                auto [cid, cbk, u, d] = kv.first;
-                if (cid != id || cbk != bk)
-                    continue;
+            if ((eBk < 100) || (eUp < 100) || (eDn < 100))
+                continue; // Skip if any energy is less than 100
 
-                for (const auto &pr : kv.second)
-                {
-                    double eBk, eUp, eDn;
-                    std::tie(eBk, eUp, eDn) = pr;
-                    if ((eBk < 100) || (eUp < 100) || (eDn < 100))
-                        continue;
+            bkE.push_back(eBk);
+            udE.push_back(eUp + eDn);
+        }
 
-                    bkE.push_back(eBk);
-                    udE.push_back(eUp + eDn);
-                }
-            }
+        // Fill the TGraph with bkE and udE
+        // TGraph g(bkE.size(), bkE.data(), udE.data());
+        // Fit the graph to a linear function
+        if (bkE.size() < 5)
+            continue; // Ensure we have enough points for fitting
 
-            if (bkE.size() < 5)
-                continue; // not enough statistics
+        const double fixedError = 10.0; // in ADC channels
 
-            // Build graph with errors
-            const double fixedError = 10.0;                     // ADC channels
-            std::vector<double> exVals(udE.size(), 0.0);        // no x error
-            std::vector<double> eyVals(udE.size(), fixedError); // constant y error
+        std::vector<double> xVals, yVals, exVals, eyVals;
 
-            TGraphErrors g(udE.size(), udE.data(), bkE.data(),
-                           exVals.data(), eyVals.data());
+        // Build data with fixed error
+        for (size_t i = 0; i < udE.size(); ++i)
+        {
+            double x = udE[i]; // front energy
+            double y = bkE[i]; // back energy
+
+            xVals.push_back(x);
+            yVals.push_back(y);
+            exVals.push_back(fixedError); // error in front energy
+            // eyVals.push_back(fixedError); // error in back energy
+        }
+
+        // Build TGraphErrors with errors
+        TGraphErrors g(xVals.size(), xVals.data(), yVals.data(), exVals.data(), eyVals.data());
 
             TF1 f("f", "[0]*x", 0, 16000);
             f.SetParameter(0, 1.0); // initial slope
@@ -329,21 +361,39 @@ void GainMatchSX3::Terminate()
                 g.Fit(&f, "QNR");
             }
 
-            double slope = f.GetParameter(0);
-            if (std::abs(slope - 1.0) < 0.3) // sanity check
-            {
-                backSlope[id][bk] = slope;
-                backSlopeValid[id][bk] = true;
-                outFile << id << " " << bk << " " << slope << "\n";
-                printf("Back slope Det%d Bk%d → %.4f\n", id, bk, slope);
-            }
-            else
-            {
-                std::cerr << "Warning: Bad slope for Det" << id << " Bk" << bk
-                          << " slope=" << slope << std::endl;
-            }
+        gainArray[id][bk][u][d] = f.GetParameter(0);
+        gainValid[id][bk][u][d] = true;
+        // }
+
+        // // Output results
+        // for (int id = 0; id < MAX_DET; ++id)
+        // {
+        //     for (int bk = 0; bk < MAX_BK; ++bk)
+        //     {
+        //         for (int u = 0; u < MAX_UP; ++u)
+        //         {
+        //             for (int d = 0; d < MAX_DOWN; ++d)
+        //             {
+        //                 // Check if the gain is valid for this detector, back, up, and down
+        //                 if (gainValid[id][bk][u][d])
+        //                 {
+        // if (TMath::Abs(gainArray[id][u][d][bk] - 1) < 0.3)
+        {
+            printf("Gain match Det%d Up%dDn%d Backs%d → %.4f \n", id, u, d, bk, gainArray[id][u][d][bk]);
+            outFile << id << " " << bk << " " << u << " " << d << " " << gainArray[id][u][d][bk] << std::endl;
         }
+        // else if (gainArray[id][u][d][bk] != 0)
+        // {
+        //     std::cerr << "Warning: Gain value out of range for Det " << id << " Up " << u << " Dn " << d << " Back " << bk << ": "
+        //     << gainArray[id][u][d][bk] << std::endl;
+        //     outFile << id << " " << bk << " " << u << " " << d << " " << gainArray[id][u][d][bk] << std::endl;
+        // }
     }
+    //             }
+    //         }
+    //     }
+    // }
+    // }
 
     outFile.close();
     std::cout << "Back gain matching complete." << std::endl;

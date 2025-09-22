@@ -49,6 +49,15 @@ TVector3 hitPos;
 // TVector3 anodeIntersection;
 std::map<int, std::pair<double, double>> slopeInterceptMap;
 
+const int MAX_DET = 24;
+const int MAX_UP = 4;
+const int MAX_DOWN = 4;
+const int MAX_BK = 4;
+double backGain[MAX_DET][MAX_BK][MAX_UP][MAX_DOWN] = {{{{0}}}};
+bool backGainValid[MAX_DET][MAX_BK][MAX_UP][MAX_DOWN] = {{{{false}}}};
+double frontGain[MAX_DET][MAX_BK][MAX_UP][MAX_DOWN] = {{{{0}}}};
+bool frontGainValid[MAX_DET][MAX_BK][MAX_UP][MAX_DOWN] = {{{{false}}}};
+
 bool HitNonZero;
 bool sx3ecut;
 bool qqqEcut;
@@ -137,6 +146,46 @@ void Analyzer::Begin(TTree * /*tree*/)
   else
   {
     std::cerr << "Error opening slope_intercept.txt" << std::endl;
+  }
+
+  std::string filename = "sx3_GainMatchback.txt";
+
+  std::ifstream infile(filename);
+  if (!infile.is_open())
+  {
+    std::cerr << "Error opening " << filename << "!" << std::endl;
+    return;
+  }
+
+  int id, bk, u, d;
+  double gain;
+  while (infile >> id >> bk >> u >> d >> gain)
+  {
+    backGain[id][bk][u][d] = gain;
+    if (backGain[id][bk][u][d] > 0)
+      backGainValid[id][bk][u][d] = true;
+    else
+      backGainValid[id][bk][u][d] = false;
+  }
+
+  infile.close();
+  std::cout << "Loaded back gains from " << filename << std::endl;
+
+  std::string filename = "sx3_GainMatchfront.txt";
+
+  std::ifstream infile(filename);
+  if (!infile.is_open())
+  {
+    std::cerr << "Error opening " << filename << "!" << std::endl;
+    return;
+  }
+
+  int id, bk, u, d;
+  double gain;
+  while (infile >> id >> bk >> u >> d >> gain)
+  {
+    frontGain[id][bk][u][d] = gain;
+    frontGainValid[id][bk][u][d] = true;
   }
 }
 
@@ -581,8 +630,9 @@ Bool_t Analyzer::Process(Long64_t entry)
     anodeIntersection = TVector3(x, y, z);
     // std::cout << "Anode Intersection " << anodeIntersection.Z() << " " << x << " " << y << " " << z << std::endl;
   }
-  
-  if(anodeIntersection.Z() != 0){
+
+  if (anodeIntersection.Z() != 0)
+  {
     hPCZProj->Fill(anodeIntersection.Z());
   }
   // Filling the PC Z projection histogram
