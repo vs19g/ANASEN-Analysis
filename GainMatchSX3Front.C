@@ -254,10 +254,10 @@ Bool_t GainMatchSX3Front::Process(Long64_t entry)
                     if (cut && cut->IsInside(sx3EUp + sx3EDn, sx3EBk) && cut1 && cut1->IsInside(sx3EUp / sx3EBk, sx3EDn / sx3EBk))
                     {
 
-                        if (backGainValid[sx3.id[i]][sx3ChBk])
-                        {
-                            sx3EBk *= backGain[sx3.id[i]][sx3ChBk];
-                        }
+                        // if (backGainValid[sx3.id[i]][sx3ChBk])
+                        // {
+                        //     sx3EBk *= backGain[sx3.id[i]][sx3ChBk];
+                        // }
                         // Accumulate data for gain matching
                         dataPoints[{sx3.id[i], sx3ChBk, sx3ChUp, sx3ChDn}].emplace_back(sx3EBk, sx3EUp, sx3EDn);
                     }

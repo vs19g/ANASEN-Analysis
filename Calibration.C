@@ -53,13 +53,15 @@ const int MAX_BK = 4;
 const int MAX_QQQ = 4;
 const int MAX_RING = 16;
 const int MAX_WEDGE = 16;
-double backGain[MAX_SX3][MAX_BK][MAX_UP][MAX_DOWN] = {{{{0}}}};
-bool backGainValid[MAX_SX3][MAX_BK][MAX_UP][MAX_DOWN] = {{{{false}}}};
+// double backGain[MAX_SX3][MAX_BK][MAX_UP][MAX_DOWN] = {{{{0}}}};
+// bool backGainValid[MAX_SX3][MAX_BK][MAX_UP][MAX_DOWN] = {{{{false}}}};
 double frontGain[MAX_SX3][MAX_BK][MAX_UP][MAX_DOWN] = {{{{0}}}};
 bool frontGainValid[MAX_SX3][MAX_BK][MAX_UP][MAX_DOWN] = {{{{false}}}};
 double uvdslope[MAX_SX3][MAX_BK][MAX_UP][MAX_DOWN] = {{{{0}}}};
 double qqqGain[MAX_QQQ][MAX_BK][MAX_UP] = {{{0}}};
 bool qqqGainValid[MAX_QQQ][MAX_BK][MAX_UP] = {{{false}}};
+TH1F *hSX3Spectra[MAX_SX3][MAX_BK][MAX_UP][MAX_DOWN];
+TH1F *hQQQSpectra[MAX_QQQ][MAX_RING][MAX_WEDGE];
 
 void Calibration::Begin(TTree * /*tree*/)
 {
@@ -82,26 +84,26 @@ void Calibration::Begin(TTree * /*tree*/)
     sx3_contr.ConstructGeo();
     pw_contr.ConstructGeo();
     // ----------------------- Load Back Gains
-    {
-        std::string filename = "sx3_GainMatchback.txt";
-        std::ifstream infile(filename);
-        if (!infile.is_open())
-        {
-            std::cerr << "Error opening " << filename << "!" << std::endl;
-        }
-        else
-        {
-            int id, bk, u, d;
-            double gain;
-            while (infile >> id >> bk >> u >> d >> gain)
-            {
-                backGain[id][bk][u][d] = gain;
-                backGainValid[id][bk][u][d] = (gain > 0);
-            }
-            infile.close();
-            std::cout << "Loaded back gains from " << filename << std::endl;
-        }
-    }
+    // {
+    //     std::string filename = "sx3_GainMatchback.txt";
+    //     std::ifstream infile(filename);
+    //     if (!infile.is_open())
+    //     {
+    //         std::cerr << "Error opening " << filename << "!" << std::endl;
+    //     }
+    //     else
+    //     {
+    //         int id, bk, u, d;
+    //         double gain;
+    //         while (infile >> id >> bk >> u >> d >> gain)
+    //         {
+    //             backGain[id][bk][u][d] = gain;
+    //             backGainValid[id][bk][u][d] = (gain > 0);
+    //         }
+    //         infile.close();
+    //         std::cout << "Loaded back gains from " << filename << std::endl;
+    //     }
+    // }
 
     // ----------------------- Load Front Gains
     {
@@ -147,19 +149,42 @@ void Calibration::Begin(TTree * /*tree*/)
         }
     }
 
+    for (int id = 0; id < MAX_SX3; id++)
+    {
+        for (int bk = 0; bk < MAX_BK; bk++)
+        {
+            for (int up = 0; up < MAX_UP; up++)
+            {
+                for (int dn = 0; dn < MAX_DOWN; dn++)
+                {
+                    TString hname = Form("hCal_id%d_bk%d_up%d_dn%d", id, bk, up, dn);
+                    TString htitle = Form("SX3 id%d bk%d up%d dn%d; Energy (arb); Counts", id, bk, up, dn);
+                    hSX3Spectra[id][bk][up][dn] = new TH1F(hname, htitle, 4000, 0, 16000);
+                }
+            }
+        }
+    }
+    for (int det = 0; det < MAX_QQQ; det++)
+    {
+        for (int ring = 0; ring < MAX_RING; ring++)
+        {
+            for (int wedge = 0; wedge < MAX_WEDGE; wedge++)
+            {
+                TString hname = Form("hCal_qqq%d_ring%d_wedge%d", det, ring, wedge);
+                TString htitle = Form("QQQ det%d ring%d wedge%d; Energy (arb); Counts", det, ring, wedge);
+                hQQQSpectra[det][ring][wedge] = new TH1F(hname, htitle, 4000, 0, 16000);
+            }
+        }
+    }
+
     SX3 sx3_contr;
 }
 Bool_t Calibration::Process(Long64_t entry)
 {
-
-    // if ( entry > 100 ) return kTRUE;
-
     hitPos.Clear();
     HitNonZero = false;
 
-    // if( entry > 1) return kTRUE;
-    // printf("################### ev : %llu \n", entry);
-
+    // Load branches
     b_sx3Multi->GetEntry(entry);
     b_sx3ID->GetEntry(entry);
     b_sx3Ch->GetEntry(entry);
@@ -177,46 +202,38 @@ Bool_t Calibration::Process(Long64_t entry)
     qqq.CalIndex();
     pc.CalIndex();
 
-    // sx3.Print();
-
     // ########################################################### Raw data
-    //  //======================= SX3
     sx3ecut = false;
     std::vector<std::pair<int, int>> ID; // first = id, 2nd = index
     for (int i = 0; i < sx3.multi; i++)
     {
-        ID.push_back(std::pair<int, int>(sx3.id[i], i));
+        ID.emplace_back(sx3.id[i], i);
         hsx3IndexVE->Fill(sx3.index[i], sx3.e[i]);
 
         if (sx3.e[i] > 100)
-        {
             sx3ecut = true;
-        }
 
         for (int j = i + 1; j < sx3.multi; j++)
-        {
             hsx3Coin->Fill(sx3.index[i], sx3.index[j]);
-        }
     }
 
-    // --- safe SX3 handling (replace your existing block that builds sx3ID) ---
-    if (ID.size() > 0)
+    // --- SX3 safe handling ---
+    if (!ID.empty())
     {
-        std::sort(ID.begin(), ID.end(), [](const std::pair<int, int> &a, const std::pair<int, int> &b)
+        std::sort(ID.begin(), ID.end(), [](auto &a, auto &b)
                   { return a.first < b.first; });
 
         std::vector<std::pair<int, int>> sx3ID;
         sx3ID.push_back(ID[0]);
         bool found = false;
+
         for (size_t i = 1; i < ID.size(); i++)
         {
             if (ID[i].first == sx3ID.back().first)
             {
                 sx3ID.push_back(ID[i]);
                 if (sx3ID.size() >= 3)
-                {
                     found = true;
-                }
             }
             else
             {
@@ -224,141 +241,101 @@ Bool_t Calibration::Process(Long64_t entry)
                 {
                     sx3ID.clear();
                     sx3ID.push_back(ID[i]);
-                    found = false;
                 }
             }
         }
-
         if (found)
         {
-            // initialize to sentinel values
-            int sx3ChUp = -1;
-            int sx3ChDn = -1;
-            int sx3ChBk = -1;
-            float sx3EUp = 0.0f;
-            float sx3EDn = 0.0f;
-            float sx3EBk = 0.0f;
+            int sx3ChUp = -1, sx3ChDn = -1, sx3ChBk = -1;
+            float sx3EUp = 0.0f, sx3EDn = 0.0f, sx3EBk = 0.0f;
 
-            // collect channels/energies
-            for (size_t i = 0; i < sx3ID.size(); i++)
+            for (auto &p : sx3ID)
             {
-                int index = sx3ID[i].second;
+                int index = p.second;
                 int ch = sx3.ch[index];
                 float e = sx3.e[index];
 
-                if (ch < 8) // front channels
+                if (ch < 8)
                 {
-                    // you used even/odd to denote down/up — keep that convention
-                    if ((ch % 2) == 0) // down
+                    if ((ch % 2) == 0) // even -> down
                     {
                         sx3ChDn = ch;
                         sx3EDn = e;
                     }
-                    else // up
+                    else // odd -> up
                     {
                         sx3ChUp = ch;
                         sx3EUp = e;
                     }
                 }
-                else // back channels (assuming back channels are 8..11 or so)
+                else
                 {
-                    sx3ChBk = ch; // store as raw channel number; adapt if you index bk differently
-                    sx3EBk = e;   // if you want to track back energy too
+                    sx3ChBk = ch;
+                    sx3EBk = e;
                 }
             }
 
-            // Basic sanity checks before using indices:
-            bool haveFrontPair = (sx3ChUp >= 0 && sx3ChDn >= 0);
+            bool haveFrontPair = (sx3ChUp >= 0 || sx3ChDn >= 0);
             bool haveBack = (sx3ChBk >= 0);
+            int sx3Id = sx3ID[0].first;
 
-            // convert raw channel numbers to array indices if needed:
-            int bk_index = (haveBack ? (sx3ChBk - 8) : -1);
-            int up_index = (haveFrontPair ? sx3ChUp : -1);
-            int dn_index = (haveFrontPair ? sx3ChDn : -1);
-            auto sx3Id = sx3ID[0].first;
+            // CORRECTED: map channel (0..7) to front-index (0..3)
+            int bk_index = (haveBack ? sx3ChBk - 8 : -1);
+            int up_index = (sx3ChUp >= 0 ? sx3ChUp / 2 : -1); // <<-- IMPORTANT FIX
+            int dn_index = (sx3ChDn >= 0 ? sx3ChDn / 2 : -1); // <<-- IMPORTANT FIX
 
-            double calibEUp, calibEDn, calibEBack = 0.0;
+            double GM_EUp = 0.0, GM_EDn = 0.0, calibEBack = 0.0;
 
-            if (haveFrontPair && haveBack)
+            if (haveBack)
             {
-                // If you stored front gains indexed by [id][bk][up][down]
+                // --- ALWAYS fill raw ADC for diagnostics
+                // (temporarily use the existing spectrum to confirm fills)
+                // If you don't want raw values mixed with calibrated later, create a separate _raw array.
+                hSX3Spectra[sx3Id][bk_index][up_index][dn_index]->Fill(sx3EUp);
+
+                // --- If gain is available, also fill calibrated energy
                 if (frontGainValid[sx3Id][bk_index][up_index][dn_index])
                 {
-                    calibEUp = frontGain[sx3Id][bk_index][up_index][dn_index] * sx3EUp;
-                    // calibEDn = frontGain[sx3Id][bk_index][up_index][dn_index] * sx3EDn;
-                }
-                if (backGainValid[sx3Id][bk_index][up_index][dn_index])
-                {
-                    calibEBack = backGain[sx3Id][bk_index][up_index][dn_index] * sx3EBk;
-                }
-            }
-
-            // Only call CalSX3Pos if we have reasonable energies (avoid calling with zeros/uninitialized)
-            if (haveFrontPair && (calibEUp > 50.0) && haveBack && (calibEBack > 50.0))
-            {
-                // find exact back energy value from sx3 entries if you tracked it above
-                float backEnergyRaw = 0.0f;
-                // locate the back index in sx3ID if needed
-                for (size_t k = 0; k < sx3ID.size(); ++k)
-                {
-                    int idx = sx3ID[k].second;
-                    if (sx3.ch[idx] >= 8)
-                    {
-                        backEnergyRaw = sx3.e[idx];
-                        break;
-                    }
+                    GM_EUp = frontGain[sx3Id][bk_index][up_index][dn_index] * sx3EUp;
+                    if (GM_EUp > 50.0)
+                        hSX3Spectra[sx3Id][bk_index][up_index][dn_index]->Fill(GM_EUp); // optional: mixes raw+calib
                 }
 
-                hsx3IndexVE_gm->Fill(sx3.index[sx3ID[0].second], calibEUp);
+                // Keep the other diagnostic plots
+                hsx3IndexVE_gm->Fill(sx3.index[sx3ID[0].second], GM_EUp);
                 hSX3->Fill(sx3ChDn + 4, sx3ChBk);
                 hSX3->Fill(sx3ChUp, sx3ChBk);
+                hSX3FvsB->Fill(sx3EUp + sx3EDn, sx3EBk);
 
-                // Fill the histogram for the front vs back
-                hSX3FvsB->Fill(sx3EUp + sx3EDn, calibEBack);
-
-                sx3_contr.CalSX3Pos(sx3Id, sx3ChUp, sx3ChDn, sx3ChBk, static_cast<float>(calibEUp), static_cast<float>(calibEDn));
-                hitPos = sx3_contr.GetHitPos();
-                HitNonZero = true;
+                if (GM_EUp > 50.0 && sx3EBk > 50.0)
+                {
+                    sx3_contr.CalSX3Pos(sx3Id, sx3ChUp, sx3ChDn, sx3ChBk, GM_EUp, sx3EDn);
+                    hitPos = sx3_contr.GetHitPos();
+                    HitNonZero = true;
+                }
             }
-        } // found
+            else
+            {
+                // Debug print for channels that didn't pass validation -- helps find indexing problems
+                static int dbgCount = 0;
+                if (dbgCount < 20) // only print first few to avoid flood
+                {
+                    std::cout << Form("DEBUG SX3 skip: id=%d chUp=%d chDn=%d chBk=%d -> up_idx=%d dn_idx=%d bk_idx=%d",
+                                      sx3Id, sx3ChUp, sx3ChDn, sx3ChBk, up_index, dn_index, bk_index)
+                              << std::endl;
+                    dbgCount++;
+                }
+            }
+        }
     }
 
-    // //======================= QQQ
+    // ======================= QQQ =======================
     for (int i = 0; i < qqq.multi; i++)
     {
-
-        int det = qqq.id[i]; // detector ID (0–3)
-        int ch = qqq.ch[i];  // raw channel (0–31)
-
-        // Separate ring vs wedge channel
-        int ring = -1;
-        int wedge = -1;
-        if (ch < 16)
-        { // wedge
-            wedge = ch;
-        }
-        else
-        { // ring
-            ring = ch - 16;
-        }
-
-        double Ecal = qqq.e[i]; // default = raw
-        if (ring >= 0 && wedge >= 0 && qqqGainValid[det][ring][wedge])
-        {
-            Ecal *= qqqGain[det][ring][wedge];
-        }
-        // for( int j = 0; j < pc.multi; j++){
-        // if(pc.index[j]==4){
-        hqqqIndexVE_gm->Fill(qqq.index[i], Ecal);
-        hqqqIndexVE->Fill(qqq.index[i], qqq.e[i]);
-
-        // }
-        // printf("QQQ ID : %d, ch : %d, e : %d \n", qqq.id[i], qqq.ch[i], qqq.e[i]);
+        int det = qqq.id[i];
         if (qqq.e[i] > 100)
-        {
             qqqEcut = true;
-        }
-        // }
+
         for (int j = 0; j < qqq.multi; j++)
         {
             if (j == i)
@@ -366,18 +343,11 @@ Bool_t Calibration::Process(Long64_t entry)
             hqqqCoin->Fill(qqq.index[i], qqq.index[j]);
         }
 
-        // }
-
         for (int j = i + 1; j < qqq.multi; j++)
         {
-            // if( qqq.used[i] == true ) continue;
-
-            // if( qqq.id[i] == qqq.id[j] && (16 - qqq.ch[i]) * (16 - qqq.ch[j]) < 0  ){ // must be same detector and wedge and ring
             if (qqq.id[i] == qqq.id[j])
-            { // must be same detector
-
-                int chWedge = -1;
-                int chRing = -1;
+            {
+                int chWedge = -1, chRing = -1;
                 if (qqq.ch[i] < qqq.ch[j])
                 {
                     chRing = qqq.ch[j] - 16;
@@ -388,15 +358,29 @@ Bool_t Calibration::Process(Long64_t entry)
                     chRing = qqq.ch[i];
                     chWedge = qqq.ch[j] - 16;
                 }
-                // printf(" ID : %d , chWedge : %d, chRing : %d \n", qqq.id[i], chWedge, chRing);
+
+                double Ecal = qqq.e[i];
+                if (det >= 0 && det < MAX_QQQ &&
+                    chRing >= 0 && chRing < MAX_RING &&
+                    chWedge >= 0 && chWedge < MAX_WEDGE)
+                {
+                    // ALWAYS fill raw energy for diagnostics
+                    hQQQSpectra[det][chRing][chWedge]->Fill(qqq.e[i]);
+
+                    // If calibrated gain is present, also fill calibrated energy
+                    if (qqqGainValid[det][chRing][chWedge])
+                    {
+                        double Ecal = qqq.e[i] * qqqGain[det][chRing][chWedge];
+                        hQQQSpectra[det][chRing][chWedge]->Fill(Ecal); // optional: mixes raw+calib
+                    }
+                }
+
+                hqqqIndexVE_gm->Fill(qqq.index[i], Ecal);
+                hqqqIndexVE->Fill(qqq.index[i], qqq.e[i]);
 
                 double theta = -TMath::Pi() / 2 + 2 * TMath::Pi() / 16 / 4. * (qqq.id[i] * 16 + chWedge + 0.5);
                 double rho = 50. + 40. / 16. * (chRing + 0.5);
-                // if(qqq.e[i]>50){
                 hqqqPolar->Fill(theta, rho);
-                // }
-                // qqq.used[i] = true;
-                // qqq.used[j] = true;
 
                 if (!HitNonZero)
                 {
@@ -413,4 +397,75 @@ Bool_t Calibration::Process(Long64_t entry)
 }
 void Calibration::Terminate()
 {
+    const double AM241_ALPHA = 5486.0; // keV
+
+    // ----------------------- Summary Plots
+    TH2F *hSX3Summary = new TH2F("hSX3Summary", "SX3 Channel Means;Channel Index;Mean (ADC)",
+                                 MAX_SX3 * MAX_BK * MAX_UP * MAX_DOWN, 0, MAX_SX3 * MAX_BK * MAX_UP * MAX_DOWN,
+                                 200, 0, 10000);
+
+    TH2F *hQQQSummary = new TH2F("hQQQSummary", "QQQ Channel Means;Channel Index;Mean (ADC)",
+                                 MAX_QQQ * MAX_RING * MAX_WEDGE, 0, MAX_QQQ * MAX_RING * MAX_WEDGE,
+                                 200, 0, 10000);
+
+    // ----------------------- SX3 Calibration (quick check with mean)
+    for (int id = 0; id < MAX_SX3; id++)
+    {
+        for (int bk = 0; bk < MAX_BK; bk++)
+        {
+            for (int up = 0; up < MAX_UP; up++)
+            {
+                for (int dn = 0; dn < MAX_DOWN; dn++)
+                {
+                    TH1F *hSpec = hSX3Spectra[id][bk][up][dn];
+                    if (!hSpec || hSpec->GetEntries() < 200)
+                        continue;
+
+                    double mean = hSpec->GetMean();
+
+                    int sx3Index = (((id * MAX_BK + bk) * MAX_UP + up) * MAX_DOWN + dn);
+                    hSX3Summary->Fill(sx3Index, mean);
+
+                    std::cout << Form("SX3 id%d bk%d up%d dn%d → mean %.1f",
+                                      id, bk, up, dn, mean)
+                              << std::endl;
+                }
+            }
+        }
+    }
+
+    // ----------------------- QQQ Calibration (quick check with mean)
+    for (int det = 0; det < MAX_QQQ; det++)
+    {
+        for (int ring = 0; ring < MAX_RING; ring++)
+        {
+            for (int wedge = 0; wedge < MAX_WEDGE; wedge++)
+            {
+                TH1F *hSpec = hQQQSpectra[det][ring][wedge];
+                if (!hSpec || hSpec->GetEntries() < 200)
+                    continue;
+
+                double mean = hSpec->GetMean();
+
+                int qqqIndex = ((det * MAX_RING + ring) * MAX_WEDGE + wedge);
+                hQQQSummary->Fill(qqqIndex, mean);
+
+                std::cout << Form("QQQ det%d ring%d wedge%d → mean %.1f",
+                                  det, ring, wedge, mean)
+                          << std::endl;
+            }
+        }
+    }
+
+    // ----------------------- Draw Summary
+    TCanvas *cSum = new TCanvas("cSum", "Calibration Summary (Means)", 1200, 600);
+    cSum->Divide(2, 1);
+
+    cSum->cd(1);
+    hSX3Summary->Draw("COLZ");
+
+    cSum->cd(2);
+    hQQQSummary->Draw("COLZ");
+
+    cSum->Update();
 }
