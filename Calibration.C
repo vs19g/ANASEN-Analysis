@@ -40,6 +40,8 @@ TH2F *hqqqIndexVE_gm;
 TH2F *hsx3Coin;
 TH2F *hqqqCoin;
 TH2F *hqqqPolar;
+TH1F *hsx3E_raw;
+TH1F *hsx3E_calib;
 
 TCutG *cut;
 TCutG *cut1;
@@ -53,8 +55,8 @@ const int MAX_BK = 4;
 const int MAX_QQQ = 4;
 const int MAX_RING = 16;
 const int MAX_WEDGE = 16;
-// double backGain[MAX_SX3][MAX_BK][MAX_UP][MAX_DOWN] = {{{{0}}}};
-// bool backGainValid[MAX_SX3][MAX_BK][MAX_UP][MAX_DOWN] = {{{{false}}}};
+double backGain[MAX_SX3][MAX_BK] = {{0}};
+bool backGainValid[MAX_SX3][MAX_BK] = {{false}};
 double frontGain[MAX_SX3][MAX_BK][MAX_UP][MAX_DOWN] = {{{{0}}}};
 bool frontGainValid[MAX_SX3][MAX_BK][MAX_UP][MAX_DOWN] = {{{{false}}}};
 double uvdslope[MAX_SX3][MAX_BK][MAX_UP][MAX_DOWN] = {{{{0}}}};
@@ -74,6 +76,8 @@ void Calibration::Begin(TTree * /*tree*/)
     hsx3Coin = new TH2F("hsx3Coin", "SX3 Coincident", 24 * 12, 0, 24 * 12, 24 * 12, 0, 24 * 12);
     hsx3IndexVE = new TH2F("hsx3IndexVE", "SX3 index vs Energy; sx3 index ; Energy", 24 * 12, 0, 24 * 12, 400, 0, 5000);
     hsx3IndexVE_gm = new TH2F("hsx3IndexVE_cal", "SX3 index vs Energy (calibrated); SX3 index ; Energy", 24 * 12, 0, 24 * 12, 400, 0, 5000);
+    hsx3E_raw = new TH1F("hsx3E_raw", "SX3 Back Energy (raw); Energy (arb); Counts", 4000, 0, 16000);
+    hsx3E_calib = new TH1F("hsx3E_calib", "SX3 Back Energy (gm); Energy (kev); Counts", 4000, 0, 16000);
     hqqqIndexVE = new TH2F("hqqqIndexVE", "QQQ index vs Energy; QQQ index ; Energy", 4 * 2 * 16, 0, 4 * 2 * 16, 400, 0, 5000);
     hqqqIndexVE_gm = new TH2F("hqqqIndexVE_cal", "QQQ index vs Energy (calibrated); QQQ index ; Energy", 4 * 2 * 16, 0, 4 * 2 * 16, 400, 0, 5000);
     hsx3Coin = new TH2F("hsx3Coin", "SX3 Coincident", 24 * 12, 0, 24 * 12, 24 * 12, 0, 24 * 12);
@@ -84,26 +88,26 @@ void Calibration::Begin(TTree * /*tree*/)
     sx3_contr.ConstructGeo();
     pw_contr.ConstructGeo();
     // ----------------------- Load Back Gains
-    // {
-    //     std::string filename = "sx3_GainMatchback.txt";
-    //     std::ifstream infile(filename);
-    //     if (!infile.is_open())
-    //     {
-    //         std::cerr << "Error opening " << filename << "!" << std::endl;
-    //     }
-    //     else
-    //     {
-    //         int id, bk, u, d;
-    //         double gain;
-    //         while (infile >> id >> bk >> u >> d >> gain)
-    //         {
-    //             backGain[id][bk][u][d] = gain;
-    //             backGainValid[id][bk][u][d] = (gain > 0);
-    //         }
-    //         infile.close();
-    //         std::cout << "Loaded back gains from " << filename << std::endl;
-    //     }
-    // }
+    {
+        std::string filename = "sx3_GainMatchback.txt";
+        std::ifstream infile(filename);
+        if (!infile.is_open())
+        {
+            std::cerr << "Error opening " << filename << "!" << std::endl;
+        }
+        else
+        {
+            int id, bk, u, d;
+            double gain;
+            while (infile >> id >> bk >> u >> d >> gain)
+            {
+                backGain[id][bk] = gain;
+                backGainValid[id][bk] = (gain > 0);
+            }
+            infile.close();
+            std::cout << "Loaded back gains from " << filename << std::endl;
+        }
+    }
 
     // ----------------------- Load Front Gains
     {
@@ -277,13 +281,6 @@ Bool_t Calibration::Process(Long64_t entry)
 
             bool haveFrontPair = (sx3ChUp >= 0 || sx3ChDn >= 0);
             bool haveBack = (sx3ChBk >= 0);
-            int sx3Id = sx3ID[0].first;
-
-            // CORRECTED: map channel (0..7) to front-index (0..3)
-            int bk_index = (haveBack ? sx3ChBk - 8 : -1);
-            int up_index = (sx3ChUp >= 0 ? sx3ChUp / 2 : -1); // <<-- IMPORTANT FIX
-            int dn_index = (sx3ChDn >= 0 ? sx3ChDn / 2 : -1); // <<-- IMPORTANT FIX
-
             double GM_EUp = 0.0, GM_EDn = 0.0, calibEBack = 0.0;
 
             if (haveBack)
@@ -291,14 +288,23 @@ Bool_t Calibration::Process(Long64_t entry)
                 // --- ALWAYS fill raw ADC for diagnostics
                 // (temporarily use the existing spectrum to confirm fills)
                 // If you don't want raw values mixed with calibrated later, create a separate _raw array.
-                hSX3Spectra[sx3Id][bk_index][up_index][dn_index]->Fill(sx3EUp);
+                hSX3Spectra[sx3ID[0].first][sx3ChBk][sx3ChUp][sx3ChDn]->Fill(sx3EUp);
 
                 // --- If gain is available, also fill calibrated energy
-                if (frontGainValid[sx3Id][bk_index][up_index][dn_index])
+                if (frontGainValid[sx3ID[0].first][sx3ChBk][sx3ChUp][sx3ChDn])
                 {
-                    GM_EUp = frontGain[sx3Id][bk_index][up_index][dn_index] * sx3EUp;
+                    GM_EUp = frontGain[sx3ID[0].first][sx3ChBk][sx3ChUp][sx3ChDn] * sx3EUp;
                     if (GM_EUp > 50.0)
-                        hSX3Spectra[sx3Id][bk_index][up_index][dn_index]->Fill(GM_EUp); // optional: mixes raw+calib
+                        hSX3Spectra[sx3ID[0].first][sx3ChBk][sx3ChUp][sx3ChDn]->Fill(GM_EUp); // optional: mixes raw+calib
+                }
+                // --- If back gain is available, also fill calibrated energy
+                hsx3E_raw->Fill(sx3EBk);
+
+                if (backGainValid[sx3ID[0].first][sx3ChBk])
+                {
+                    calibEBack = backGain[sx3ID[0].first][sx3ChBk] * sx3EBk;
+                    if (calibEBack > 50.0)
+                        hsx3E_calib->Fill(calibEBack); // optional: mixes raw+calib
                 }
 
                 // Keep the other diagnostic plots
@@ -309,21 +315,9 @@ Bool_t Calibration::Process(Long64_t entry)
 
                 if (GM_EUp > 50.0 && sx3EBk > 50.0)
                 {
-                    sx3_contr.CalSX3Pos(sx3Id, sx3ChUp, sx3ChDn, sx3ChBk, GM_EUp, sx3EDn);
+                    sx3_contr.CalSX3Pos(sx3ID[0].first, sx3ChUp, sx3ChDn, sx3ChBk, GM_EUp, sx3EDn);
                     hitPos = sx3_contr.GetHitPos();
                     HitNonZero = true;
-                }
-            }
-            else
-            {
-                // Debug print for channels that didn't pass validation -- helps find indexing problems
-                static int dbgCount = 0;
-                if (dbgCount < 20) // only print first few to avoid flood
-                {
-                    std::cout << Form("DEBUG SX3 skip: id=%d chUp=%d chDn=%d chBk=%d -> up_idx=%d dn_idx=%d bk_idx=%d",
-                                      sx3Id, sx3ChUp, sx3ChDn, sx3ChBk, up_index, dn_index, bk_index)
-                              << std::endl;
-                    dbgCount++;
                 }
             }
         }
