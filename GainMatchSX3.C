@@ -283,7 +283,7 @@ void GainMatchSX3::Terminate()
                 continue; // not enough statistics
 
             // Build graph with errors
-            const double fixedError = 10.0;                     // ADC channels
+            const double fixedError = 0.0;                     // ADC channels
             std::vector<double> exVals(udE.size(), 0.0);        // no x error
             std::vector<double> eyVals(udE.size(), fixedError); // constant y error
 
@@ -291,7 +291,7 @@ void GainMatchSX3::Terminate()
                            exVals.data(), eyVals.data());
 
             TF1 f("f", "[0]*x", 0, 16000);
-            f.SetParameter(0, 1.0); // initial slope
+            // f.SetParameter(0, 1.0); // initial slope
 
             if (drawCanvases)
             {
@@ -329,7 +329,7 @@ void GainMatchSX3::Terminate()
                 g.Fit(&f, "QNR");
             }
 
-            double slope = f.GetParameter(0);
+            double slope = 1/f.GetParameter(0);
             if (std::abs(slope - 1.0) < 0.3) // sanity check
             {
                 backSlope[id][bk] = slope;

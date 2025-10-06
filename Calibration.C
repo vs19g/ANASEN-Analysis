@@ -97,9 +97,9 @@ void Calibration::Begin(TTree * /*tree*/)
         }
         else
         {
-            int id, bk, u, d;
+            int id, bk;
             double gain;
-            while (infile >> id >> bk >> u >> d >> gain)
+            while (infile >> id >> bk >> gain)
             {
                 backGain[id][bk] = gain;
                 backGainValid[id][bk] = (gain > 0);
@@ -253,71 +253,69 @@ Bool_t Calibration::Process(Long64_t entry)
             int sx3ChUp = -1, sx3ChDn = -1, sx3ChBk = -1;
             float sx3EUp = 0.0f, sx3EDn = 0.0f, sx3EBk = 0.0f;
 
-            for (auto &p : sx3ID)
+            for (size_t i = 0; i < sx3ID.size(); i++)
             {
-                int index = p.second;
-                int ch = sx3.ch[index];
-                float e = sx3.e[index];
+                int index = sx3ID[i].second;
 
-                if (ch < 8)
+                if (sx3.ch[index] < 8)
                 {
-                    if ((ch % 2) == 0) // even -> down
+                    if ((sx3.ch[index] % 2) == 0) // even -> down
                     {
-                        sx3ChDn = ch;
-                        sx3EDn = e;
+                        sx3ChDn = sx3.ch[index];
+                        sx3EDn = sx3.e[index];
                     }
                     else // odd -> up
                     {
-                        sx3ChUp = ch;
-                        sx3EUp = e;
+                        sx3ChUp = sx3.ch[index];
+                        sx3EUp = sx3.e[index];
                     }
                 }
                 else
                 {
-                    sx3ChBk = ch;
-                    sx3EBk = e;
-                }
-            }
-
-            bool haveFrontPair = (sx3ChUp >= 0 || sx3ChDn >= 0);
-            bool haveBack = (sx3ChBk >= 0);
-            double GM_EUp = 0.0, GM_EDn = 0.0, calibEBack = 0.0;
-
-            if (haveBack)
-            {
-                // --- ALWAYS fill raw ADC for diagnostics
-                // (temporarily use the existing spectrum to confirm fills)
-                // If you don't want raw values mixed with calibrated later, create a separate _raw array.
-                hSX3Spectra[sx3ID[0].first][sx3ChBk][sx3ChUp][sx3ChDn]->Fill(sx3EUp);
-
-                // --- If gain is available, also fill calibrated energy
-                if (frontGainValid[sx3ID[0].first][sx3ChBk][sx3ChUp][sx3ChDn])
-                {
-                    GM_EUp = frontGain[sx3ID[0].first][sx3ChBk][sx3ChUp][sx3ChDn] * sx3EUp;
-                    if (GM_EUp > 50.0)
-                        hSX3Spectra[sx3ID[0].first][sx3ChBk][sx3ChUp][sx3ChDn]->Fill(GM_EUp); // optional: mixes raw+calib
-                }
-                // --- If back gain is available, also fill calibrated energy
-                hsx3E_raw->Fill(sx3EBk);
-
-                if (backGainValid[sx3ID[0].first][sx3ChBk])
-                {
-                    calibEBack = backGain[sx3ID[0].first][sx3ChBk] * sx3EBk;
-                    if (calibEBack > 50.0)
-                        hsx3E_calib->Fill(calibEBack); // optional: mixes raw+calib
+                    sx3ChBk = sx3.ch[index];
+                    sx3EBk = sx3.e[index];
                 }
 
-                // Keep the other diagnostic plots
-                hsx3IndexVE_gm->Fill(sx3.index[sx3ID[0].second], GM_EUp);
-                hSX3->Fill(sx3ChDn + 4, sx3ChBk);
-                hSX3->Fill(sx3ChUp, sx3ChBk);
-                hSX3FvsB->Fill(sx3EUp + sx3EDn, sx3EBk);
+                bool haveFrontPair = (sx3ChUp >= 0 || sx3ChDn >= 0);
+                bool haveBack = (sx3ChBk >= 0);
+                double GM_EUp = 0.0, GM_EDn = 0.0, calibEBack = 0.0;
 
-                if (GM_EUp > 50.0 && sx3EBk > 50.0)
+                if (haveBack)
                 {
-                    sx3_contr.CalSX3Pos(sx3ID[0].first, sx3ChUp, sx3ChDn, sx3ChBk, GM_EUp, sx3EDn);
-                    hitPos = sx3_contr.GetHitPos();
-                    HitNonZero = true;
+                    // --- ALWAYS fill raw ADC for diagnostics
+                    // (temporarily use the existing spectrum to confirm fills)
+                    // If you don't want raw values mixed with calibrated later, create a separate _raw array.
+                    hSX3Spectra[sx3ID[i].first][sx3ChBk][sx3ChUp][sx3ChDn]->Fill(sx3EUp);
+
+                    // --- If gain is available, also fill calibrated energy
+                    if (frontGainValid[sx3ID[i].first][sx3ChBk][sx3ChUp][sx3ChDn])
+                    {
+                        GM_EUp = frontGain[sx3ID[i].first][sx3ChBk][sx3ChUp][sx3ChDn] * sx3EUp;
+                        if (GM_EUp > 50.0)
+                            hSX3Spectra[sx3ID[i].first][sx3ChBk][sx3ChUp][sx3ChDn]->Fill(GM_EUp); // optional: mixes raw+calib
+                    }
+                    // --- If back gain is available, also fill calibrated energy
+                    hsx3E_raw->Fill(sx3EBk);
+
+                    if (backGainValid[sx3ID[i].first][sx3ChBk])
+                    {
+                        calibEBack = backGain[sx3ID[i].first][sx3ChBk] * sx3EBk;
+                        if (calibEBack > 50.0)
+                            hsx3E_calib->Fill(calibEBack); // optional: mixes raw+calib
+                    }
+
+                    // Keep the other diagnostic plots
+                    hsx3IndexVE_gm->Fill(sx3.index[sx3ID[i].second], GM_EUp);
+                    hSX3->Fill(sx3ChDn + 4, sx3ChBk);
+                    hSX3->Fill(sx3ChUp, sx3ChBk);
+                    hSX3FvsB->Fill(sx3EUp + sx3EDn, sx3EBk);
+
+                    if (GM_EUp > 50.0 && sx3EBk > 50.0)
+                    {
+                        sx3_contr.CalSX3Pos(sx3ID[i].first, sx3ChUp, sx3ChDn, sx3ChBk, GM_EUp, sx3EDn);
+                        hitPos = sx3_contr.GetHitPos();
+                        HitNonZero = true;
+                    }
                 }
             }
         }

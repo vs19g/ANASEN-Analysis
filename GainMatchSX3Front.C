@@ -44,17 +44,15 @@ bool frontGainValid[MAX_DET][MAX_BK][MAX_UP][MAX_DOWN] = {{{{false}}}};
 double uvdslope[MAX_DET][MAX_BK][MAX_UP][MAX_DOWN] = {{{{0}}}};
 // ==== Configuration Flags ====
 const bool interactiveMode = false; // If true: show canvas + wait for user
-const bool interactiveMode1 = false; // If true: show canvas + wait for user
 const bool verboseFit = true;       // If true: print fit summary and chi²
 const bool drawCanvases = false;    // If false: canvases won't be drawn at all
-const bool drawCanvases1 = false;    // If false: canvases won't be drawn at all
 
 void GainMatchSX3Front::Begin(TTree * /*tree*/)
 {
     TString option = GetOption();
 
-    hSX3FvsB = new TH2F("hSX3FvsB", "SX3 Front vs Back; Front E; Back E", 400, 0, 16000, 400, 0, 16000);
-    hSX3FvsB_g = new TH2F("hSX3FvsB_g", "SX3 Front vs Back; Front E; Back E", 400, 0, 16000, 400, 0, 16000);
+    hSX3FvsB = new TH2F("hSX3FvsB", "SX3 Front vs Back; Front E; Back E", 800, 0, 16000, 800, 0, 16000);
+    hSX3FvsB_g = new TH2F("hSX3FvsB_g", "SX3 Front vs Back; Front E; Back E", 800, 0, 16000, 800, 0, 16000);
     hsx3IndexVE = new TH2F("hsx3IndexVE", "SX3 index vs Energy; sx3 index ; Energy", 24 * 12, 0, 24 * 12, 400, 0, 5000);
     hsx3IndexVE_g = new TH2F("hsx3IndexVE_g", "SX3 index vs Energy; sx3 index ; Energy", 24 * 12, 0, 24 * 12, 400, 0, 5000);
     hSX3 = new TH2F("hSX3", "SX3 Front v Back; Fronts; Backs", 8, 0, 8, 4, 0, 4);
@@ -84,27 +82,6 @@ void GainMatchSX3Front::Begin(TTree * /*tree*/)
         return;
     }
     cut1->SetName("UvD");
-    // std::string filename = "sx3_GainMatchback.txt";
-
-    // std::ifstream infile(filename);
-    // if (!infile.is_open())
-    // {
-    //     std::cerr << "Error opening " << filename << "!" << std::endl;
-    //     return;
-    // }
-
-    // int id, bk, u, d;
-    // double gain;
-    // while (infile >> id >> bk >> u >> d >> gain)
-    // {
-    //     backGain[id][bk][u][d] = gain;
-    //     if (backGain[id][bk][u][d] > 0)
-    //         backGainValid[id][bk][u][d] = true;
-    //     else
-    //         backGainValid[id][bk][u][d] = false;
-    // }
-    // infile.close();
-    // std::cout << "Loaded back gains from " << filename << std::endl;
 
     std::string filename = "sx3_BackGains.txt";
 
@@ -115,7 +92,7 @@ void GainMatchSX3Front::Begin(TTree * /*tree*/)
         return;
     }
 
-    int id, bk, u, d;
+    int id, bk;
     double gain;
     while (infile >> id >> bk >> gain)
     {
@@ -254,10 +231,10 @@ Bool_t GainMatchSX3Front::Process(Long64_t entry)
                     if (cut && cut->IsInside(sx3EUp + sx3EDn, sx3EBk) && cut1 && cut1->IsInside(sx3EUp / sx3EBk, sx3EDn / sx3EBk))
                     {
 
-                        // if (backGainValid[sx3.id[i]][sx3ChBk])
-                        // {
-                        //     sx3EBk *= backGain[sx3.id[i]][sx3ChBk];
-                        // }
+                        if (backGainValid[sx3.id[i]][sx3ChBk])
+                        {
+                            sx3EBk *= backGain[sx3.id[i]][sx3ChBk];
+                        }
                         // Accumulate data for gain matching
                         dataPoints[{sx3.id[i], sx3ChBk, sx3ChUp, sx3ChDn}].emplace_back(sx3EBk, sx3EUp, sx3EDn);
                     }
@@ -290,7 +267,7 @@ void GainMatchSX3Front::Terminate()
         auto [id, bk, u, d] = kv.first;
         const auto &pts = kv.second;
 
-        if (pts.size() < 500)
+        if (pts.size() < 50)
             continue;
 
         std::vector<double> uE, dE, udE, corrBkE;
@@ -322,20 +299,20 @@ void GainMatchSX3Front::Terminate()
         // Build data with fixed error
         for (size_t i = 0; i < udE.size(); ++i)
         {
-            double x = udE[i];     // front energy
-            double y = corrBkE[i]; // back energy
+            double x = uE[i];     // front energy
+            double y = dE[i]; // back energy
 
             xVals.push_back(x);
             yVals.push_back(y);
-            // exVals.push_back(fixedError); // error in front energy
-            eyVals.push_back(fixedError); // error in back energy
+            exVals.push_back(fixedError); // error in up energy
+            // eyVals.push_back(fixedError); // error in down energy
         }
 
         // Build TGraphErrors with errors
         TGraphErrors g(xVals.size(), xVals.data(), yVals.data(), exVals.data(), eyVals.data());
 
         TF1 f("f", "[0]*x", 0, 16000);
-        f.SetParameter(0, 1.0); // Initial guess
+        f.SetParameter(0, -1.0); // Initial guess
 
         if (drawCanvases)
         {
@@ -353,9 +330,9 @@ void GainMatchSX3Front::Terminate()
                 int ndf = f.GetNDF();
                 double reducedChi2 = (ndf != 0) ? chi2 / ndf : -1;
 
-                // std::cout << Form("Det%d U%d D%d B%d → Gain: %.4f | χ²/ndf = %.2f/%d = %.2f",
-                //                   id, u, d, bk, f.GetParameter(0), chi2, ndf, reducedChi2)
-                //           << std::endl;
+                std::cout << Form("Det%d U%d D%d B%d → Gain: %.4f | χ²/ndf = %.2f/%d = %.2f",
+                                  id, u, d, bk, f.GetParameter(0), chi2, ndf, reducedChi2)
+                          << std::endl;
             }
 
             if (interactiveMode)
@@ -378,87 +355,6 @@ void GainMatchSX3Front::Terminate()
 
         outFile << id << " " << bk << " " << u << " " << d << " " << frontGain[id][bk][u][d] << std::endl;
         // printf("Front gain Det%d Back%d Up%dDn%d → %.4f\n", id, bk, u, d, frontGain[id][bk][u][d]);
-    }
-
-    for (const auto &kv : dataPoints)
-    {
-        auto [id, bk, u, d] = kv.first;
-        const auto &pts = kv.second;
-        std::vector<double> uvals, dvals;
-        double front = frontGain[id][bk][u][d];
-
-        if (pts.size() < 5)
-            continue;
-
-        std::vector<double> uE, dE, udE, corrBkE;
-
-        for (const auto &pr : pts)
-        {
-            double eBkCorr, eUp, eDn;
-            std::tie(eBkCorr, eUp, eDn) = pr;
-            if ((eBkCorr < 100) || (eUp < 100) || (eDn < 100))
-                continue; // Skip if any energy is zero
-            eUp *= front;
-            // eDn *= frontGain[id][bk][u][d];
-
-            uE.push_back(eUp / eBkCorr);
-            dE.push_back(eDn / eBkCorr);
-            corrBkE.push_back(eBkCorr);
-        }
-        for (size_t i = 0; i < uE.size(); ++i)
-        {
-            uvals.push_back(uE[i]);
-            dvals.push_back(dE[i]);
-        }
-
-        TGraph g1(uvals.size(), uvals.data(), dvals.data());
-        g1.SetMarkerStyle(20);
-        g1.SetMarkerColor(kBlue);
-        g1.SetTitle(Form("Det %d: U%d D%d B%d", id, u, d, bk));
-
-        // Fit function (straight line through origin)
-        TF1 f1("f1", "[0]*x+[1]", 0, 16000);
-        f1.SetParameter(0, -1.0);
-
-        if (drawCanvases1)
-        {
-            TCanvas *c1 = new TCanvas(Form("c_%d_%d_%d_%d", id, bk, u, d), "Fit", 800, 600);
-            g1.SetTitle(Form("Detector %d: U%d D%d B%d", id, u, d, bk));
-            g1.SetMarkerStyle(20);
-            g1.SetMarkerColor(kBlue);
-            g1.Draw("AP");
-
-            g1.Fit(&f1, interactiveMode1 ? "Q" : "QNR"); // 'R' avoids refit, 'N' skips drawing
-
-            if (verboseFit)
-            {
-                double chi2 = f1.GetChisquare();
-                int ndf1 = f1.GetNDF();
-                double reducedChi2 = (ndf1 != 0) ? chi2 / ndf1 : -1;
-
-                std::cout << Form("Det%d U%d D%d B%d → Gain: %.4f | χ²/ndf = %.2f/%d = %.2f",
-                                  id, u, d, bk, f1.GetParameter(0), chi2, ndf1, reducedChi2)
-                          << std::endl;
-            }
-
-            if (interactiveMode1)
-            {
-                c1->Update();
-                gPad->WaitPrimitive();
-            }
-            else
-            {
-                c1->Close(); // Optionally avoid clutter in batch
-            }
-        }
-        else
-        {
-            g1.Fit(&f1, "QNR");
-        }
-
-        // Save slope
-        uvdslope[id][bk][u][d] = f1.GetParameter(0);
-        printf("UvD slope Det%d Back%d Up%dDn%d → %.4f\n", id, bk, u, d, uvdslope[id][bk][u][d]);
     }
 
     outFile.close();
