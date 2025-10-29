@@ -53,8 +53,8 @@ const int MAX_DET = 24;
 const int MAX_UP = 4;
 const int MAX_DOWN = 4;
 const int MAX_BK = 4;
-double backGain[MAX_DET][MAX_BK][MAX_UP][MAX_DOWN] = {{{{0}}}};
-bool backGainValid[MAX_DET][MAX_BK][MAX_UP][MAX_DOWN] = {{{{false}}}};
+double backGain[MAX_DET][MAX_BK] = {{0}};
+bool backGainValid[MAX_DET][MAX_BK] = {{false}};
 double frontGain[MAX_DET][MAX_BK][MAX_UP][MAX_DOWN] = {{{{0}}}};
 bool frontGainValid[MAX_DET][MAX_BK][MAX_UP][MAX_DOWN] = {{{{false}}}};
 
@@ -157,35 +157,35 @@ void Analyzer::Begin(TTree * /*tree*/)
     return;
   }
 
-  int id, bk, u, d;
+  int id, bk;
   double gain;
-  while (infile >> id >> bk >> u >> d >> gain)
+  while (infile >> id >> bk >> gain)
   {
-    backGain[id][bk][u][d] = gain;
-    if (backGain[id][bk][u][d] > 0)
-      backGainValid[id][bk][u][d] = true;
+    backGain[id][bk] = gain;
+    if (backGain[id][bk] > 0)
+      backGainValid[id][bk] = true;
     else
-      backGainValid[id][bk][u][d] = false;
+      backGainValid[id][bk] = false;
   }
 
   infile.close();
   std::cout << "Loaded back gains from " << filename << std::endl;
 
-  std::string filename = "sx3_GainMatchfront.txt";
+  std::string filename1 = "sx3_GainMatchfront.txt";
 
-  std::ifstream infile(filename);
-  if (!infile.is_open())
+  std::ifstream infile1(filename1);
+  if (!infile1.is_open())
   {
-    std::cerr << "Error opening " << filename << "!" << std::endl;
+    std::cerr << "Error opening " << filename1 << "!" << std::endl;
     return;
   }
 
-  int id, bk, u, d;
-  double gain;
-  while (infile >> id >> bk >> u >> d >> gain)
+  int idf, bkf, uf, df;
+  double fgain;
+  while (infile1 >> idf >> bkf >> uf >> df >> fgain)
   {
-    frontGain[id][bk][u][d] = gain;
-    frontGainValid[id][bk][u][d] = true;
+    frontGain[idf][bkf][uf][df] = fgain;
+    frontGainValid[idf][bkf][uf][df] = true;
   }
 }
 

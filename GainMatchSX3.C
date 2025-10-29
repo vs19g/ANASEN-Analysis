@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <TProfile.h>
 #include "Armory/ClassSX3.h"
+#include "Armory/HistPlotter.h"
 #include <TGraphErrors.h>
 #include "TVector3.h"
 
@@ -35,13 +36,18 @@ const int MAX_UP = 4;
 const int MAX_DOWN = 4;
 const int MAX_BK = 4;
 
-double frontGain[MAX_DET][MAX_BK][MAX_UP][MAX_DOWN] = {{{{0}}}};
+double frontGainUp[MAX_DET][MAX_BK][MAX_UP][MAX_DOWN] = {{{{0}}}};
+double frontGainDown[MAX_DET][MAX_BK][MAX_UP][MAX_DOWN] = {{{{0}}}};
 bool frontGainValid[MAX_DET][MAX_BK][MAX_UP][MAX_DOWN] = {{{{false}}}};
+TCanvas c("canvas","canvas", 800, 600);
+
 
 // ==== Configuration Flags ====
-const bool interactiveMode = false; // If true: show canvas + wait for user
-const bool verboseFit = true;       // If true: print fit summary and chi²
-const bool drawCanvases = false;     // If false: canvases won't be drawn at all
+const bool interactiveMode = true; // If true: show canvas + wait for user
+const bool verboseFit = true;      // If true: print fit summary and chi²
+const bool drawCanvases = true;   // If false: canvases won't be drawn at all
+
+// HistPlotter plotter("SX3GainMatchBack.root");
 
 void GainMatchSX3::Begin(TTree * /*tree*/)
 {
@@ -83,22 +89,26 @@ void GainMatchSX3::Begin(TTree * /*tree*/)
     }
     cut1->SetName("UvD");
 
-    // std::string filename = "sx3_GainMatchfront.txt";
+    // plotter.ReadCuts("cuts.txt");
 
-    // std::ifstream infile(filename);
-    // if (!infile.is_open())
-    // {
-    //     std::cerr << "Error opening " << filename << "!" << std::endl;
-    //     return;
-    // }
+    std::string filename = "sx3_GainMatchfront0.txt";
+    //std::string filename = "sx3_GainMatchfront.txt";
 
-    // int id, bk, u, d;
-    // double gain;
-    // while (infile >> id >> bk >> u >> d >> gain)
-    // {
-    //     frontGain[id][bk][u][d] = gain;
-    //     frontGainValid[id][bk][u][d] = true;
-    // }
+    std::ifstream infile(filename);
+    if (!infile.is_open())
+    {
+        std::cerr << "Error opening " << filename << "!" << std::endl;
+        return;
+    }
+
+    int id, bk, u, d;
+    double gainup,gaindown;
+    while (infile >> id >> bk >> u >> d >> gainup >> gaindown)
+    {
+        frontGainUp[id][bk][u][d] = gainup;
+        frontGainDown[id][bk][u][d] = gaindown;
+        frontGainValid[id][bk][u][d] = true;
+    }
 }
 
 Bool_t GainMatchSX3::Process(Long64_t entry)
@@ -188,6 +198,7 @@ Bool_t GainMatchSX3::Process(Long64_t entry)
                         {
                             sx3ChDn = sx3.ch[index];
                             sx3EDn = sx3.e[index];
+                            // 
                         }
                         else
                         {
@@ -201,8 +212,9 @@ Bool_t GainMatchSX3::Process(Long64_t entry)
                         sx3EBk = sx3.e[index];
                     }
                 }
+                sx3EUp*=frontGainUp[sx3ID[i].first][sx3ChBk][sx3ChUp / 2][sx3ChDn / 2];
+                sx3EDn*=frontGainDown[sx3ID[i].first][sx3ChBk][sx3ChUp / 2][sx3ChDn / 2];
             }
-
             // Only if we found all three channels do we proceed
             if (sx3ChUp >= 0 && sx3ChDn >= 0 && sx3ChBk >= 0)
             {
@@ -210,17 +222,25 @@ Bool_t GainMatchSX3::Process(Long64_t entry)
                 hSX3->Fill(sx3ChDn + 4, sx3ChBk);
                 hSX3->Fill(sx3ChUp, sx3ChBk);
                 hSX3FvsB->Fill(sx3EUp + sx3EDn, sx3EBk);
+                // plotter.Fill2D("hSX3F", 400, 0, 16000, 400, 0, 16000, sx3EUp + sx3EDn, sx3EBk);
 
                 // Pick detector ID from one of the correlated hits (all same detector)
                 int detID = sx3ID[0].first;
 
-                TString histName = Form("hSX3FVB_id%d_U%d_D%d_B%d",
-                                        detID, sx3ChUp, sx3ChDn, sx3ChBk);
+                TString histName = Form("hSX3FVB_id%d_U%d_D%d_B%d", detID, sx3ChUp, sx3ChDn, sx3ChBk);
+                TString histName1 = Form("UnCorr_id%d_U%d-D%dvsB%d", detID, sx3ChUp, sx3ChDn, sx3ChBk);
+
                 TH2F *hist2d = (TH2F *)gDirectory->Get(histName);
+                TH2F *hist2d1 = (TH2F *)gDirectory->Get(histName1);
                 if (!hist2d)
                 {
                     hist2d = new TH2F(histName, histName,
                                       400, 0, 16000, 400, 0, 16000);
+                }
+                if (!hist2d1)
+                {
+                    hist2d1 = new TH2F(histName1, histName1,
+                                       800, -1, 1, 800, 0, 4000);
                 }
 
                 if (sx3EBk > 100 || sx3EUp > 100 || sx3EDn > 100)
@@ -233,6 +253,8 @@ Bool_t GainMatchSX3::Process(Long64_t entry)
                 }
 
                 hist2d->Fill(sx3EUp + sx3EDn, sx3EBk);
+                hist2d1->Fill((sx3EUp - sx3EDn) / (sx3EUp + sx3EDn), sx3EBk);
+
             }
         }
     }
@@ -246,7 +268,7 @@ void GainMatchSX3::Terminate()
     double backSlope[MAX_DET][MAX_BK] = {{0}};
     bool backSlopeValid[MAX_DET][MAX_BK] = {{false}};
 
-    std::ofstream outFile("sx3_BackGains.txt");
+    std::ofstream outFile("sx3_BackGains1.txt");
     if (!outFile.is_open())
     {
         std::cerr << "Error opening sx3_BackGains.txt for writing!" << std::endl;
@@ -283,7 +305,7 @@ void GainMatchSX3::Terminate()
                 continue; // not enough statistics
 
             // Build graph with errors
-            const double fixedError = 0.0;                     // ADC channels
+            const double fixedError = 0.0;                      // ADC channels
             std::vector<double> exVals(udE.size(), 0.0);        // no x error
             std::vector<double> eyVals(udE.size(), fixedError); // constant y error
 
@@ -295,7 +317,6 @@ void GainMatchSX3::Terminate()
 
             if (drawCanvases)
             {
-                TCanvas *c = new TCanvas(Form("c_%d_%d", id, bk), "Back Fit", 800, 600);
                 g.SetTitle(Form("Detector %d Back %d: (Up+Dn) vs Back", id, bk));
                 g.SetMarkerStyle(20);
                 g.SetMarkerColor(kBlue);
@@ -316,12 +337,12 @@ void GainMatchSX3::Terminate()
 
                 if (interactiveMode)
                 {
-                    c->Update();
+                    c.Update();
                     gPad->WaitPrimitive();
                 }
                 else
                 {
-                    c->Close();
+                    c.Close();
                 }
             }
             else
@@ -329,7 +350,7 @@ void GainMatchSX3::Terminate()
                 g.Fit(&f, "QNR");
             }
 
-            double slope = 1/f.GetParameter(0);
+            double slope = 1 / f.GetParameter(0);
             if (std::abs(slope - 1.0) < 0.3) // sanity check
             {
                 backSlope[id][bk] = slope;
@@ -353,6 +374,9 @@ void GainMatchSX3::Terminate()
                           600, 0, 16000, 600, 0, 16000);
     TH2F *hAsym = new TH2F("hAsym", "Up vs Dn divide corrected back;Up/Back E;Dn/Back E",
                            400, 0.0, 1.0, 400, 0.0, 1.0);
+    TH2F *hAsymUnorm = new TH2F("hAsymUnorm", "Up vs Dn;Up E;Dn E",
+                                800, 0.0, 4000.0, 800, 0.0, 4000.0);
+
 
     // Fill histograms using corrected back energies
     for (const auto &kv : dataPoints)
@@ -375,8 +399,20 @@ void GainMatchSX3::Terminate()
             double correctedBack = eBk * slope;
             double asym = (eUp - eDn) / updn;
 
-            hFVB->Fill(updn,correctedBack );
+            hFVB->Fill(updn, correctedBack);
             hAsym->Fill(eUp / correctedBack, eDn / correctedBack);
+            hAsymUnorm->Fill(eUp, eDn);
+            TString histNamex = Form("CorrBack_id%d_U%d-D%dvsB%d", id, u, d, bk);
+
+            TH2F *hist2dx = (TH2F *)gDirectory->Get(histNamex);
+            if (!hist2dx)
+            {
+                hist2dx = new TH2F(histNamex, histNamex,
+                                   800, -1, 1, 800, 0, 4000);
+            }
+
+            hist2dx->Fill((eUp - eDn) / (eUp + eDn), correctedBack);
         }
     }
+    // plotter.FlushToDisk();
 }

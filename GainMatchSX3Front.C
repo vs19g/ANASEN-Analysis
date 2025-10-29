@@ -30,6 +30,7 @@ SX3 sx3_contr;
 TCutG *cut;
 TCutG *cut1;
 std::map<std::tuple<int, int, int, int>, std::vector<std::tuple<double, double, double>>> dataPoints;
+TCanvas c(Form("canvas"), "Fit", 800, 600);
 
 // Gain arrays
 
@@ -43,9 +44,9 @@ double frontGain[MAX_DET][MAX_BK][MAX_UP][MAX_DOWN] = {{{{0}}}};
 bool frontGainValid[MAX_DET][MAX_BK][MAX_UP][MAX_DOWN] = {{{{false}}}};
 double uvdslope[MAX_DET][MAX_BK][MAX_UP][MAX_DOWN] = {{{{0}}}};
 // ==== Configuration Flags ====
-const bool interactiveMode = false; // If true: show canvas + wait for user
-const bool verboseFit = true;       // If true: print fit summary and chi²
-const bool drawCanvases = false;    // If false: canvases won't be drawn at all
+const bool interactiveMode = true; // If true: show canvas + wait for user
+const bool verboseFit = true;      // If true: print fit summary and chi²
+const bool drawCanvases = true;    // If false: canvases won't be drawn at all
 
 void GainMatchSX3Front::Begin(TTree * /*tree*/)
 {
@@ -102,7 +103,7 @@ void GainMatchSX3Front::Begin(TTree * /*tree*/)
         else
             backGainValid[id][bk] = false;
     }
-    
+
     SX3 sx3_contr;
 }
 
@@ -204,14 +205,14 @@ Bool_t GainMatchSX3Front::Process(Long64_t entry)
                 // Fill the histogram for the front vs back
                 hSX3FvsB->Fill(sx3EUp + sx3EDn, sx3EBk);
 
-                if (sx3.e[i] > 100) // && sx3.id[i] == 4)
+                if (sx3.e[i] > 100 && sx3.id[i] == 3)
                 {
                     // back gain correction
 
                     // Fill the histogram for the front vs back with gain correction
-                    hSX3FvsB_g->Fill(sx3EUp + sx3EDn, sx3EBk);
-                    // Fill the index vs energy histogram
-                    hsx3IndexVE_g->Fill(sx3.index[i], sx3.e[i]);
+                    // hSX3FvsB_g->Fill(sx3EUp + sx3EDn, sx3EBk);
+                    // // Fill the index vs energy histogram
+                    // hsx3IndexVE_g->Fill(sx3.index[i], sx3.e[i]);
                     // }
                     // {
                     TString histName = Form("hSX3FVB_id%d_U%d_D%d_B%d", sx3.id[i], sx3ChUp, sx3ChDn, sx3ChBk);
@@ -223,8 +224,8 @@ Bool_t GainMatchSX3Front::Process(Long64_t entry)
 
                     // if (sx3ChBk == 2)
                     //     printf("Found back channel Det %d Back %d \n", sx3.id[i], sx3ChBk);
-                    // hsx3IndexVE_g->Fill(sx3.index[i], sx3.e[i]);
-                    // hSX3FvsB_g->Fill(sx3EUp + sx3EDn, sx3EBk);
+                    hsx3IndexVE_g->Fill(sx3.index[i], sx3.e[i]);
+                    hSX3FvsB_g->Fill(sx3EUp + sx3EDn, sx3EBk);
 
                     hist2d->Fill(sx3EUp + sx3EDn, sx3EBk);
 
@@ -292,31 +293,30 @@ void GainMatchSX3Front::Terminate()
         // f.SetParameter(0, 1.0); // Initial guess for the gain
         // g.Fit(&f, "R");
 
-        const double fixedError = 20.0; // in ADC channels
+        const double fixedError = 0.0; // in ADC channels
 
         std::vector<double> xVals, yVals, exVals, eyVals;
 
         // Build data with fixed error
         for (size_t i = 0; i < udE.size(); ++i)
         {
-            double x = uE[i];     // front energy
+            double x = uE[i]; // front energy
             double y = dE[i]; // back energy
 
             xVals.push_back(x);
             yVals.push_back(y);
             exVals.push_back(fixedError); // error in up energy
-            // eyVals.push_back(fixedError); // error in down energy
+            eyVals.push_back(0.);         // error in down energy
         }
 
         // Build TGraphErrors with errors
         TGraphErrors g(xVals.size(), xVals.data(), yVals.data(), exVals.data(), eyVals.data());
 
-        TF1 f("f", "[0]*x", 0, 16000);
+        TF1 f("f", "[0]*x+[1]", 0, 16000);
         f.SetParameter(0, -1.0); // Initial guess
 
         if (drawCanvases)
         {
-            TCanvas *c = new TCanvas(Form("c_%d_%d_%d_%d", id, bk, u, d), "Fit", 800, 600);
             g.SetTitle(Form("Detector %d: U%d D%d B%d", id, u, d, bk));
             g.SetMarkerStyle(20);
             g.SetMarkerColor(kBlue);
@@ -337,12 +337,12 @@ void GainMatchSX3Front::Terminate()
 
             if (interactiveMode)
             {
-                c->Update();
+                c.Update();
                 gPad->WaitPrimitive();
             }
             else
             {
-                c->Close(); // Optionally avoid clutter in batch
+                c.Close(); // Optionally avoid clutter in batch
             }
         }
         else
@@ -350,11 +350,23 @@ void GainMatchSX3Front::Terminate()
             g.Fit(&f, "QNR");
         }
 
-        frontGain[id][bk][u][d] = f.GetParameter(0);
-        frontGainValid[id][bk][u][d] = true;
+        double slope = f.GetParameter(0);
+        double intercept = f.GetParameter(1);   
 
-        outFile << id << " " << bk << " " << u << " " << d << " " << frontGain[id][bk][u][d] << std::endl;
         // printf("Front gain Det%d Back%d Up%dDn%d → %.4f\n", id, bk, u, d, frontGain[id][bk][u][d]);
+        if (std::abs(slope + 1.0) < 0.3) // sanity check
+        {
+            frontGain[id][bk][u][d] = slope;
+
+            frontGainValid[id][bk][u][d] = true;
+            outFile << id << " " << bk << " " << u << " " << d << " " << TMath::Abs(slope)/intercept << " " << 1.0/intercept << std::endl;
+            printf("Back slope Det%d Bk%d → %.4f\n", id, bk, slope);
+        }
+        else
+        {
+            std::cerr << "Warning: Bad slope for Det" << id << " Bk" << bk
+                      << " slope=" << f.GetParameter(0) << std::endl;
+        }
     }
 
     outFile.close();
@@ -369,12 +381,10 @@ void GainMatchSX3Front::Terminate()
 
         auto [id, bk, u, d] = kv.first;
         double front;
-        if (abs((uvdslope[id][bk][u][d] + 1) < 0.2))
-        {
+        if (frontGainValid[id][bk][u][d])
             front = frontGain[id][bk][u][d];
-        }
         else
-            front=0.;
+            continue;
         for (const auto &pr : kv.second)
         {
             double eBk, eUp, eDn;
