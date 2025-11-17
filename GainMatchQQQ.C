@@ -25,7 +25,7 @@ void GainMatchQQQ::Begin(TTree * /*tree*/)
 {
     TString option = GetOption();
 
-    hQQQFVB = new TH2F("hQQQFVB", "QQQ Front vs Back; Front E; Back E", 400, 0, 16000, 400, 0, 16000);
+    hQQQFVB = new TH2F("hQQQFVB", "QQQ Front vs Back; Front E; Back E", 800, 0, 16000, 800, 0, 16000);
 
 
     // Load the TCutG object
@@ -160,7 +160,7 @@ void GainMatchQQQ::Terminate()
 
     // === Plot all gain-matched QQQ points together with a 2D histogram ===
     TH2F *hAll = new TH2F("hAll", "All QQQ Gain-Matched;Corrected Wedge E;Ring E",
-                          400, 0, 16000, 400, 0, 16000);
+                          800, 0, 16000, 800, 0, 16000);
 
     // Fill the combined TH2F with corrected data
     for (auto &kv : dataPoints)

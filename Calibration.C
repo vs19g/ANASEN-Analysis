@@ -1,3 +1,4 @@
+
 #define Calibration_cxx
 
 #include <TH2.h>
@@ -9,128 +10,29 @@
 #include <fstream>
 #include <utility>
 #include <algorithm>
-#include <TProfile.h>
-#include <TVector3.h>
-#include "Armory/ClassSX3.h"
-#include "Armory/ClassPW.h"
-#include "TGraphErrors.h"
+#include "Armory/HistPlotter.h"
+#include "TVector3.h"
 #include "Calibration.h"
 
+TH2F *hQQQFVB;
+HistPlotter *plotter;
 int padID = 0;
 
-SX3 sx3_contr;
-PW pw_contr;
-PW pwinstance;
-TVector3 hitPos;
-// TVector3 anodeIntersection;
-std::map<int, std::pair<double, double>> slopeInterceptMap;
-
-bool HitNonZero;
-bool sx3ecut;
-bool qqqEcut;
-
-TH2F *hSX3FvsB;
-TH2F *hSX3FvsB_g;
-TH2F *hSX3;
-TH1F *hZProj;
-TH2F *hsx3IndexVE;
-TH2F *hsx3IndexVE_gm;
-TH2F *hqqqIndexVE;
-TH2F *hqqqIndexVE_gm;
-TH2F *hsx3Coin;
-TH2F *hqqqCoin;
-TH2F *hqqqPolar;
-TH1F *hsx3E_raw;
-TH1F *hsx3E_calib;
-
 TCutG *cut;
-TCutG *cut1;
+std::map<std::tuple<int, int, int>, std::vector<std::pair<double, double>>> dataPoints;
 
-// Gain arrays
+bool qqqEcut = false;
 
-const int MAX_SX3 = 24;
-const int MAX_UP = 4;
-const int MAX_DOWN = 4;
-const int MAX_BK = 4;
+// Gain Arrays
 const int MAX_QQQ = 4;
 const int MAX_RING = 16;
 const int MAX_WEDGE = 16;
-double backGain[MAX_SX3][MAX_BK] = {{0}};
-bool backGainValid[MAX_SX3][MAX_BK] = {{false}};
-double frontGain[MAX_SX3][MAX_BK][MAX_UP][MAX_DOWN] = {{{{0}}}};
-bool frontGainValid[MAX_SX3][MAX_BK][MAX_UP][MAX_DOWN] = {{{{false}}}};
-double uvdslope[MAX_SX3][MAX_BK][MAX_UP][MAX_DOWN] = {{{{0}}}};
-double qqqGain[MAX_QQQ][MAX_BK][MAX_UP] = {{{0}}};
-bool qqqGainValid[MAX_QQQ][MAX_BK][MAX_UP] = {{{false}}};
-TH1F *hSX3Spectra[MAX_SX3][MAX_BK][MAX_UP][MAX_DOWN];
-TH1F *hQQQSpectra[MAX_QQQ][MAX_RING][MAX_WEDGE];
+double qqqGain[MAX_QQQ][MAX_RING][MAX_WEDGE] = {{{0}}};
+bool qqqGainValid[MAX_QQQ][MAX_RING][MAX_WEDGE] = {{{false}}};
 
 void Calibration::Begin(TTree * /*tree*/)
 {
-    TString option = GetOption();
-
-    hSX3FvsB = new TH2F("hSX3FvsB", "SX3 Front vs Back; Front E; Back E", 400, 0, 16000, 400, 0, 16000);
-    hSX3FvsB_g = new TH2F("hSX3FvsB_g", "SX3 Front vs Back; Front E; Back E", 400, 0, 16000, 400, 0, 16000);
-    hsx3IndexVE = new TH2F("hsx3IndexVE", "SX3 index vs Energy; sx3 index ; Energy", 24 * 12, 0, 24 * 12, 400, 0, 5000);
-    hSX3 = new TH2F("hSX3", "SX3 Front v Back; Fronts; Backs", 8, 0, 8, 4, 0, 4);
-    hsx3Coin = new TH2F("hsx3Coin", "SX3 Coincident", 24 * 12, 0, 24 * 12, 24 * 12, 0, 24 * 12);
-    hsx3IndexVE = new TH2F("hsx3IndexVE", "SX3 index vs Energy; sx3 index ; Energy", 24 * 12, 0, 24 * 12, 400, 0, 5000);
-    hsx3IndexVE_gm = new TH2F("hsx3IndexVE_cal", "SX3 index vs Energy (calibrated); SX3 index ; Energy", 24 * 12, 0, 24 * 12, 400, 0, 5000);
-    hsx3E_raw = new TH1F("hsx3E_raw", "SX3 Back Energy (raw); Energy (arb); Counts", 4000, 0, 16000);
-    hsx3E_calib = new TH1F("hsx3E_calib", "SX3 Back Energy (gm); Energy (kev); Counts", 4000, 0, 16000);
-    hqqqIndexVE = new TH2F("hqqqIndexVE", "QQQ index vs Energy; QQQ index ; Energy", 4 * 2 * 16, 0, 4 * 2 * 16, 400, 0, 5000);
-    hqqqIndexVE_gm = new TH2F("hqqqIndexVE_cal", "QQQ index vs Energy (calibrated); QQQ index ; Energy", 4 * 2 * 16, 0, 4 * 2 * 16, 400, 0, 5000);
-    hsx3Coin = new TH2F("hsx3Coin", "SX3 Coincident", 24 * 12, 0, 24 * 12, 24 * 12, 0, 24 * 12);
-    hqqqCoin = new TH2F("hqqqCoin", "QQQ Coincident", 4 * 2 * 16, 0, 4 * 2 * 16, 4 * 2 * 16, 0, 4 * 2 * 16);
-
-    hqqqPolar = new TH2F("hqqqPolar", "QQQ Polar ID", 16 * 4, -TMath::Pi(), TMath::Pi(), 16, 10, 50);
-
-    sx3_contr.ConstructGeo();
-    pw_contr.ConstructGeo();
-    // ----------------------- Load Back Gains
-    {
-        std::string filename = "sx3_GainMatchback.txt";
-        std::ifstream infile(filename);
-        if (!infile.is_open())
-        {
-            std::cerr << "Error opening " << filename << "!" << std::endl;
-        }
-        else
-        {
-            int id, bk;
-            double gain;
-            while (infile >> id >> bk >> gain)
-            {
-                backGain[id][bk] = gain;
-                backGainValid[id][bk] = (gain > 0);
-            }
-            infile.close();
-            std::cout << "Loaded back gains from " << filename << std::endl;
-        }
-    }
-
-    // ----------------------- Load Front Gains
-    {
-        std::string filename = "sx3_GainMatchfront.txt";
-        std::ifstream infile(filename);
-        if (!infile.is_open())
-        {
-            std::cerr << "Error opening " << filename << "!" << std::endl;
-        }
-        else
-        {
-            int id, bk, u, d;
-            double gain;
-            while (infile >> id >> bk >> u >> d >> gain)
-            {
-                frontGain[id][bk][u][d] = gain;
-                frontGainValid[id][bk][u][d] = (gain > 0);
-            }
-            infile.close();
-            std::cout << "Loaded front gains from " << filename << std::endl;
-        }
-    }
-
+    plotter = new HistPlotter("Calib.root", "TFILE");
     // ----------------------- Load QQQ Gains
     {
         std::string filename = "qqq_GainMatch.txt";
@@ -152,22 +54,6 @@ void Calibration::Begin(TTree * /*tree*/)
             std::cout << "Loaded QQQ gains from " << filename << std::endl;
         }
     }
-
-    for (int id = 0; id < MAX_SX3; id++)
-    {
-        for (int bk = 0; bk < MAX_BK; bk++)
-        {
-            for (int up = 0; up < MAX_UP; up++)
-            {
-                for (int dn = 0; dn < MAX_DOWN; dn++)
-                {
-                    TString hname = Form("hCal_id%d_bk%d_up%d_dn%d", id, bk, up, dn);
-                    TString htitle = Form("SX3 id%d bk%d up%d dn%d; Energy (arb); Counts", id, bk, up, dn);
-                    hSX3Spectra[id][bk][up][dn] = new TH1F(hname, htitle, 4000, 0, 16000);
-                }
-            }
-        }
-    }
     for (int det = 0; det < MAX_QQQ; det++)
     {
         for (int ring = 0; ring < MAX_RING; ring++)
@@ -176,210 +62,76 @@ void Calibration::Begin(TTree * /*tree*/)
             {
                 TString hname = Form("hCal_qqq%d_ring%d_wedge%d", det, ring, wedge);
                 TString htitle = Form("QQQ det%d ring%d wedge%d; Energy (arb); Counts", det, ring, wedge);
-                hQQQSpectra[det][ring][wedge] = new TH1F(hname, htitle, 4000, 0, 16000);
+                // hQQQSpectra[det][ring][wedge] = new TH1F(hname, htitle, 4000, 0, 16000);
             }
         }
     }
-
-    SX3 sx3_contr;
 }
+
 Bool_t Calibration::Process(Long64_t entry)
 {
-    hitPos.Clear();
-    HitNonZero = false;
-
-    // Load branches
-    b_sx3Multi->GetEntry(entry);
-    b_sx3ID->GetEntry(entry);
-    b_sx3Ch->GetEntry(entry);
-    b_sx3E->GetEntry(entry);
-    b_sx3T->GetEntry(entry);
     b_qqqMulti->GetEntry(entry);
     b_qqqID->GetEntry(entry);
     b_qqqCh->GetEntry(entry);
     b_qqqE->GetEntry(entry);
     b_qqqT->GetEntry(entry);
-    b_pcMulti->GetEntry(entry);
-    b_pcID->GetEntry(entry);
 
-    sx3.CalIndex();
     qqq.CalIndex();
-    pc.CalIndex();
 
-    // ########################################################### Raw data
-    sx3ecut = false;
-    std::vector<std::pair<int, int>> ID; // first = id, 2nd = index
-    for (int i = 0; i < sx3.multi; i++)
-    {
-        ID.emplace_back(sx3.id[i], i);
-        hsx3IndexVE->Fill(sx3.index[i], sx3.e[i]);
-
-        if (sx3.e[i] > 100)
-            sx3ecut = true;
-
-        for (int j = i + 1; j < sx3.multi; j++)
-            hsx3Coin->Fill(sx3.index[i], sx3.index[j]);
-    }
-
-    // --- SX3 safe handling ---
-    if (!ID.empty())
-    {
-        std::sort(ID.begin(), ID.end(), [](auto &a, auto &b)
-                  { return a.first < b.first; });
-
-        std::vector<std::pair<int, int>> sx3ID;
-        sx3ID.push_back(ID[0]);
-        bool found = false;
-
-        for (size_t i = 1; i < ID.size(); i++)
-        {
-            if (ID[i].first == sx3ID.back().first)
-            {
-                sx3ID.push_back(ID[i]);
-                if (sx3ID.size() >= 3)
-                    found = true;
-            }
-            else
-            {
-                if (!found)
-                {
-                    sx3ID.clear();
-                    sx3ID.push_back(ID[i]);
-                }
-            }
-        }
-        if (found)
-        {
-            int sx3ChUp = -1, sx3ChDn = -1, sx3ChBk = -1;
-            float sx3EUp = 0.0f, sx3EDn = 0.0f, sx3EBk = 0.0f;
-
-            for (size_t i = 0; i < sx3ID.size(); i++)
-            {
-                int index = sx3ID[i].second;
-
-                if (sx3.ch[index] < 8)
-                {
-                    if ((sx3.ch[index] % 2) == 0) // even -> down
-                    {
-                        sx3ChDn = sx3.ch[index];
-                        sx3EDn = sx3.e[index];
-                    }
-                    else // odd -> up
-                    {
-                        sx3ChUp = sx3.ch[index];
-                        sx3EUp = sx3.e[index];
-                    }
-                }
-                else
-                {
-                    sx3ChBk = sx3.ch[index];
-                    sx3EBk = sx3.e[index];
-                }
-
-                bool haveFrontPair = (sx3ChUp >= 0 || sx3ChDn >= 0);
-                bool haveBack = (sx3ChBk >= 0);
-                double GM_EUp = 0.0, GM_EDn = 0.0, calibEBack = 0.0;
-
-                if (haveBack)
-                {
-                    // --- ALWAYS fill raw ADC for diagnostics
-                    // (temporarily use the existing spectrum to confirm fills)
-                    // If you don't want raw values mixed with calibrated later, create a separate _raw array.
-                    hSX3Spectra[sx3ID[i].first][sx3ChBk][sx3ChUp][sx3ChDn]->Fill(sx3EUp);
-
-                    // --- If gain is available, also fill calibrated energy
-                    if (frontGainValid[sx3ID[i].first][sx3ChBk][sx3ChUp][sx3ChDn])
-                    {
-                        GM_EUp = frontGain[sx3ID[i].first][sx3ChBk][sx3ChUp][sx3ChDn] * sx3EUp;
-                        if (GM_EUp > 50.0)
-                            hSX3Spectra[sx3ID[i].first][sx3ChBk][sx3ChUp][sx3ChDn]->Fill(GM_EUp); // optional: mixes raw+calib
-                    }
-                    // --- If back gain is available, also fill calibrated energy
-                    hsx3E_raw->Fill(sx3EBk);
-
-                    if (backGainValid[sx3ID[i].first][sx3ChBk])
-                    {
-                        calibEBack = backGain[sx3ID[i].first][sx3ChBk] * sx3EBk;
-                        if (calibEBack > 50.0)
-                            hsx3E_calib->Fill(calibEBack); // optional: mixes raw+calib
-                    }
-
-                    // Keep the other diagnostic plots
-                    hsx3IndexVE_gm->Fill(sx3.index[sx3ID[i].second], GM_EUp);
-                    hSX3->Fill(sx3ChDn + 4, sx3ChBk);
-                    hSX3->Fill(sx3ChUp, sx3ChBk);
-                    hSX3FvsB->Fill(sx3EUp + sx3EDn, sx3EBk);
-
-                    if (GM_EUp > 50.0 && sx3EBk > 50.0)
-                    {
-                        sx3_contr.CalSX3Pos(sx3ID[i].first, sx3ChUp, sx3ChDn, sx3ChBk, GM_EUp, sx3EDn);
-                        hitPos = sx3_contr.GetHitPos();
-                        HitNonZero = true;
-                    }
-                }
-            }
-        }
-    }
-
-    // ======================= QQQ =======================
     for (int i = 0; i < qqq.multi; i++)
     {
-        int det = qqq.id[i];
-        if (qqq.e[i] > 100)
-            qqqEcut = true;
-
-        for (int j = 0; j < qqq.multi; j++)
-        {
-            if (j == i)
-                continue;
-            hqqqCoin->Fill(qqq.index[i], qqq.index[j]);
-        }
-
         for (int j = i + 1; j < qqq.multi; j++)
         {
+            if (qqq.e[i] > 100)
+                qqqEcut = true;
             if (qqq.id[i] == qqq.id[j])
             {
-                int chWedge = -1, chRing = -1;
-                if (qqq.ch[i] < qqq.ch[j])
+                int chWedge = -1;
+                int chRing = -1;
+                float eWedgeRaw = 0.0;
+                float eWedge = 0.0;
+                float eRingRaw = 0.0;
+                float eRing = 0.0;
+                if (qqq.ch[i] < 16 && qqq.ch[j] >= 16 && qqqGainValid[qqq.id[i]][qqq.ch[i]][qqq.ch[j] - 16])
                 {
-                    chRing = qqq.ch[j] - 16;
                     chWedge = qqq.ch[i];
+                    eWedgeRaw = qqq.e[i];
+                    eWedge = qqq.e[i] * qqqGain[qqq.id[i]][qqq.ch[i]][qqq.ch[j] - 16];
+                    printf("Wedge E: %.2f  Gain: %.4f \n", eWedge, qqqGain[qqq.id[i]][qqq.ch[i]][qqq.ch[j] - 16]);
+                    chRing = qqq.ch[j] - 16;
+                    eRingRaw = qqq.e[j];
+                    eRing = qqq.e[j]; //*qqqGain[qqq.id[j]][qqq.ch[j]][qqq.ch[i]-16];
+                }
+                else if (qqq.ch[j] < 16 && qqq.ch[i] >= 16 && qqqGainValid[qqq.id[j]][qqq.ch[j]][qqq.ch[i] - 16])
+                {
+                    chWedge = qqq.ch[j];
+                    eWedge = qqq.e[j] * qqqGain[qqq.id[j]][qqq.ch[j]][qqq.ch[i] - 16];
+                    eWedgeRaw = qqq.e[j];
+
+                    chRing = qqq.ch[i] - 16;
+                    eRing = qqq.e[i] * qqqGain[qqq.id[i]][qqq.ch[i]][qqq.ch[j] - 16];
+                    eRingRaw = qqq.e[i];
                 }
                 else
+                    continue;
+
+                // hQQQFVB->Fill(eWedge, eRing);
+                // plotter->Fill2D(Form("hRaw_qqq%d_ring%d_wedge%d", qqq.id[i], chRing, chWedge),400,0,16000,400,0,16000, eWedgeRaw, eRingRaw,"ERaw");
+                plotter->Fill2D("hRawQQQ", 4000, 0, 16000, 4000, 0, 16000, eWedgeRaw, eRingRaw);
+                plotter->Fill2D("hGMQQQ", 4000, 0, 16000, 4000, 0, 16000, eWedge, eRing);
+
+                TString histName = Form("hQQQFVB_id%d_r%d_w%d", qqq.id[i], chRing, chWedge);
+                TH2F *hist2d = (TH2F *)gDirectory->Get(histName);
+                if (!hist2d)
                 {
-                    chRing = qqq.ch[i];
-                    chWedge = qqq.ch[j] - 16;
+                    hist2d = new TH2F(histName, Form("QQQ Det%d R%d W%d;Wedge E;Ring E", qqq.id[i], chRing, chWedge), 400, 0, 16000, 400, 0, 16000);
                 }
 
-                double Ecal = qqq.e[i];
-                if (det >= 0 && det < MAX_QQQ &&
-                    chRing >= 0 && chRing < MAX_RING &&
-                    chWedge >= 0 && chWedge < MAX_WEDGE)
+                hist2d->Fill(eWedge, eRing);
+                if (cut && cut->IsInside(eWedge, eRing))
                 {
-                    // ALWAYS fill raw energy for diagnostics
-                    hQQQSpectra[det][chRing][chWedge]->Fill(qqq.e[i]);
-
-                    // If calibrated gain is present, also fill calibrated energy
-                    if (qqqGainValid[det][chRing][chWedge])
-                    {
-                        double Ecal = qqq.e[i] * qqqGain[det][chRing][chWedge];
-                        hQQQSpectra[det][chRing][chWedge]->Fill(Ecal); // optional: mixes raw+calib
-                    }
-                }
-
-                hqqqIndexVE_gm->Fill(qqq.index[i], Ecal);
-                hqqqIndexVE->Fill(qqq.index[i], qqq.e[i]);
-
-                double theta = -TMath::Pi() / 2 + 2 * TMath::Pi() / 16 / 4. * (qqq.id[i] * 16 + chWedge + 0.5);
-                double rho = 50. + 40. / 16. * (chRing + 0.5);
-                hqqqPolar->Fill(theta, rho);
-
-                if (!HitNonZero)
-                {
-                    double x = rho * TMath::Cos(theta);
-                    double y = rho * TMath::Sin(theta);
-                    hitPos.SetXYZ(x, y, 23 + 75 + 30);
-                    HitNonZero = true;
+                    // Accumulate data for gain matching
+                    dataPoints[{qqq.id[i], chRing, chWedge}].emplace_back(eWedge, eRing);
                 }
             }
         }
@@ -387,77 +139,83 @@ Bool_t Calibration::Process(Long64_t entry)
 
     return kTRUE;
 }
+
 void Calibration::Terminate()
 {
-    const double AM241_ALPHA = 5486.0; // keV
+    const int MAX_DET = 4;
+    const int MAX_RING = 16;
+    const int MAX_WEDGE = 16;
 
-    // ----------------------- Summary Plots
-    TH2F *hSX3Summary = new TH2F("hSX3Summary", "SX3 Channel Means;Channel Index;Mean (ADC)",
-                                 MAX_SX3 * MAX_BK * MAX_UP * MAX_DOWN, 0, MAX_SX3 * MAX_BK * MAX_UP * MAX_DOWN,
-                                 200, 0, 10000);
+    const double AM241_PEAK = 5485.56; // keV
+    double calibArray[MAX_DET][MAX_RING][MAX_WEDGE] = {{{0}}};
+    bool calibValid[MAX_DET][MAX_RING][MAX_WEDGE] = {{{false}}};
 
-    TH2F *hQQQSummary = new TH2F("hQQQSummary", "QQQ Channel Means;Channel Index;Mean (ADC)",
-                                 MAX_QQQ * MAX_RING * MAX_WEDGE, 0, MAX_QQQ * MAX_RING * MAX_WEDGE,
-                                 200, 0, 10000);
-
-    // ----------------------- SX3 Calibration (quick check with mean)
-    for (int id = 0; id < MAX_SX3; id++)
+    std::ofstream outFile("qqq_Calib.txt");
+    if (!outFile.is_open())
     {
-        for (int bk = 0; bk < MAX_BK; bk++)
+        std::cerr << "Error opening output file!" << std::endl;
+        return;
+    }
+
+    for (const auto &kv : dataPoints)
+    {
+        auto [id, ring, wedge] = kv.first;
+        const auto &pts = kv.second;
+        if (pts.size() < 5)
+            continue;
+
+        std::vector<double> wE, rE;
+        for (const auto &pr : pts)
         {
-            for (int up = 0; up < MAX_UP; up++)
+            wE.push_back(pr.first);
+            rE.push_back(pr.second);
+        }
+
+        TGraph g(wE.size(), wE.data(), rE.data());
+        TF1 f("f", "[0]*x", 0, 16000);
+        g.Fit(&f, "QNR");
+        calibArray[id][ring][wedge] = f.GetParameter(0);
+        calibValid[id][ring][wedge] = true;
+    }
+
+    for (int id = 0; id < MAX_DET; ++id)
+    {
+        for (int ring = 0; ring < MAX_RING; ++ring)
+        {
+            for (int wedge = 0; wedge < MAX_WEDGE; ++wedge)
             {
-                for (int dn = 0; dn < MAX_DOWN; dn++)
+                if (calibValid[id][ring][wedge])
                 {
-                    TH1F *hSpec = hSX3Spectra[id][bk][up][dn];
-                    if (!hSpec || hSpec->GetEntries() < 200)
-                        continue;
-
-                    double mean = hSpec->GetMean();
-
-                    int sx3Index = (((id * MAX_BK + bk) * MAX_UP + up) * MAX_DOWN + dn);
-                    hSX3Summary->Fill(sx3Index, mean);
-
-                    std::cout << Form("SX3 id%d bk%d up%d dn%d → mean %.1f",
-                                      id, bk, up, dn, mean)
-                              << std::endl;
+                    outFile << id << " " << wedge << " " << ring << " " << calibArray[id][ring][wedge] << std::endl;
+                    printf("Gain match Det%d Ring%d Wedge%d → %.4f \n", id, ring, wedge, calibArray[id][ring][wedge]);
                 }
             }
         }
     }
 
-    // ----------------------- QQQ Calibration (quick check with mean)
-    for (int det = 0; det < MAX_QQQ; det++)
+    outFile.close();
+    std::cout << "Gain matching complete." << std::endl;
+
+    // === Plot all gain-matched QQQ points together with a 2D histogram ===
+    TH2F *hAll = new TH2F("hAll", "All QQQ Gain-Matched;Corrected Wedge E;Ring E",
+                          800, 0, 16000, 800, 0, 16000);
+
+    // Fill the combined TH2F with corrected data
+    for (auto &kv : dataPoints)
     {
-        for (int ring = 0; ring < MAX_RING; ring++)
+        int id, ring, wedge;
+        std::tie(id, ring, wedge) = kv.first;
+        if (!calibValid[id][ring][wedge])
+            continue;
+        auto &pts = kv.second;
+        for (auto &pr : pts)
         {
-            for (int wedge = 0; wedge < MAX_WEDGE; wedge++)
-            {
-                TH1F *hSpec = hQQQSpectra[det][ring][wedge];
-                if (!hSpec || hSpec->GetEntries() < 200)
-                    continue;
-
-                double mean = hSpec->GetMean();
-
-                int qqqIndex = ((det * MAX_RING + ring) * MAX_WEDGE + wedge);
-                hQQQSummary->Fill(qqqIndex, mean);
-
-                std::cout << Form("QQQ det%d ring%d wedge%d → mean %.1f",
-                                  det, ring, wedge, mean)
-                          << std::endl;
-            }
+            double corrWedge = pr.first * calibArray[id][ring][wedge];
+            double corrRing = pr.second * calibArray[id][ring][wedge];
+            printf("here: WedgeE: %.2f  RingE: %.2f \n", corrWedge, corrRing);
+            hAll->Fill(corrWedge, corrRing);
+            plotter->Fill2D("hAll", 800, 0, 16000, 800, 0, 16000, corrWedge, corrRing); // Create the histogram in the plotter
         }
     }
-
-    // ----------------------- Draw Summary
-    TCanvas *cSum = new TCanvas("cSum", "Calibration Summary (Means)", 1200, 600);
-    cSum->Divide(2, 1);
-
-    cSum->cd(1);
-    hSX3Summary->Draw("COLZ");
-
-    cSum->cd(2);
-    hQQQSummary->Draw("COLZ");
-
-    cSum->Update();
+    plotter->FlushToDisk();
 }

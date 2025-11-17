@@ -39,13 +39,12 @@ const int MAX_BK = 4;
 double frontGainUp[MAX_DET][MAX_BK][MAX_UP][MAX_DOWN] = {{{{0}}}};
 double frontGainDown[MAX_DET][MAX_BK][MAX_UP][MAX_DOWN] = {{{{0}}}};
 bool frontGainValid[MAX_DET][MAX_BK][MAX_UP][MAX_DOWN] = {{{{false}}}};
-TCanvas c("canvas","canvas", 800, 600);
-
+TCanvas c("canvas", "canvas", 800, 600);
 
 // ==== Configuration Flags ====
 const bool interactiveMode = true; // If true: show canvas + wait for user
 const bool verboseFit = true;      // If true: print fit summary and chi²
-const bool drawCanvases = true;   // If false: canvases won't be drawn at all
+const bool drawCanvases = true;    // If false: canvases won't be drawn at all
 
 // HistPlotter plotter("SX3GainMatchBack.root");
 
@@ -91,8 +90,8 @@ void GainMatchSX3::Begin(TTree * /*tree*/)
 
     // plotter.ReadCuts("cuts.txt");
 
-    std::string filename = "sx3_GainMatchfront0.txt";
-    //std::string filename = "sx3_GainMatchfront.txt";
+    std::string filename = "sx3_GainMatchfront.txt";
+    // std::string filename = "sx3_GainMatchfront.txt";
 
     std::ifstream infile(filename);
     if (!infile.is_open())
@@ -102,12 +101,19 @@ void GainMatchSX3::Begin(TTree * /*tree*/)
     }
 
     int id, bk, u, d;
-    double gainup,gaindown;
+    double gainup, gaindown;
     while (infile >> id >> bk >> u >> d >> gainup >> gaindown)
     {
         frontGainUp[id][bk][u][d] = gainup;
         frontGainDown[id][bk][u][d] = gaindown;
         frontGainValid[id][bk][u][d] = true;
+        if(frontGainValid[id][bk][u][d]) {
+            // std::cout << "Loaded front gain for Det" << id << " Bk" << bk << " U" << u << " D" << d
+            //           << ": Up=" << gainup << ", Down=" << gaindown << std::endl;
+        }
+        else {
+            std::cout << "No valid front gain for Det" << id << " Bk" << bk << " U" << u << " D" << d << std::endl;
+        }
     }
 }
 
@@ -195,10 +201,10 @@ Bool_t GainMatchSX3::Process(Long64_t entry)
                     if (sx3.ch[index] < 8)
                     {
                         if (sx3.ch[index] % 2 == 0)
-                        {
+                        { 
                             sx3ChDn = sx3.ch[index];
                             sx3EDn = sx3.e[index];
-                            // 
+                            //
                         }
                         else
                         {
@@ -212,8 +218,7 @@ Bool_t GainMatchSX3::Process(Long64_t entry)
                         sx3EBk = sx3.e[index];
                     }
                 }
-                sx3EUp*=frontGainUp[sx3ID[i].first][sx3ChBk][sx3ChUp / 2][sx3ChDn / 2];
-                sx3EDn*=frontGainDown[sx3ID[i].first][sx3ChBk][sx3ChUp / 2][sx3ChDn / 2];
+                
             }
             // Only if we found all three channels do we proceed
             if (sx3ChUp >= 0 && sx3ChDn >= 0 && sx3ChBk >= 0)
@@ -222,6 +227,17 @@ Bool_t GainMatchSX3::Process(Long64_t entry)
                 hSX3->Fill(sx3ChDn + 4, sx3ChBk);
                 hSX3->Fill(sx3ChUp, sx3ChBk);
                 hSX3FvsB->Fill(sx3EUp + sx3EDn, sx3EBk);
+                
+                if (frontGainValid[sx3ID[0].first][sx3ChBk][sx3ChUp / 2][sx3ChDn / 2])
+                {
+                    sx3EUp *= frontGainUp[sx3ID[0].first][sx3ChBk][sx3ChUp / 2][sx3ChDn / 2];
+                    sx3EDn *= frontGainDown[sx3ID[0].first][sx3ChBk][sx3ChUp / 2][sx3ChDn / 2];
+                }
+                else
+                {
+                    // printf("No front gain for Det%d Bk%d U%d D%d\n", sx3ID[0].first, sx3ChBk, sx3ChUp / 2, sx3ChDn / 2);
+                    sx3EUp = sx3EDn = 0.;
+                }
                 // plotter.Fill2D("hSX3F", 400, 0, 16000, 400, 0, 16000, sx3EUp + sx3EDn, sx3EBk);
 
                 // Pick detector ID from one of the correlated hits (all same detector)
@@ -254,7 +270,6 @@ Bool_t GainMatchSX3::Process(Long64_t entry)
 
                 hist2d->Fill(sx3EUp + sx3EDn, sx3EBk);
                 hist2d1->Fill((sx3EUp - sx3EDn) / (sx3EUp + sx3EDn), sx3EBk);
-
             }
         }
     }
@@ -268,7 +283,7 @@ void GainMatchSX3::Terminate()
     double backSlope[MAX_DET][MAX_BK] = {{0}};
     bool backSlopeValid[MAX_DET][MAX_BK] = {{false}};
 
-    std::ofstream outFile("sx3_BackGains1.txt");
+    std::ofstream outFile("sx3_BackGains0.txt");
     if (!outFile.is_open())
     {
         std::cerr << "Error opening sx3_BackGains.txt for writing!" << std::endl;
@@ -376,7 +391,6 @@ void GainMatchSX3::Terminate()
                            400, 0.0, 1.0, 400, 0.0, 1.0);
     TH2F *hAsymUnorm = new TH2F("hAsymUnorm", "Up vs Dn;Up E;Dn E",
                                 800, 0.0, 4000.0, 800, 0.0, 4000.0);
-
 
     // Fill histograms using corrected back energies
     for (const auto &kv : dataPoints)
