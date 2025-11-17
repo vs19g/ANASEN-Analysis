@@ -109,26 +109,27 @@ Bool_t Calibration::Process(Long64_t entry)
                     eWedgeRaw = qqq.e[j];
 
                     chRing = qqq.ch[i] - 16;
-                    eRing = qqq.e[i] * qqqGain[qqq.id[i]][qqq.ch[i]][qqq.ch[j] - 16];
+                    eRing = qqq.e[i];// * qqqGain[qqq.id[i]][qqq.ch[i]][qqq.ch[j] - 16];
                     eRingRaw = qqq.e[i];
                 }
                 else
                     continue;
 
                 // hQQQFVB->Fill(eWedge, eRing);
-                // plotter->Fill2D(Form("hRaw_qqq%d_ring%d_wedge%d", qqq.id[i], chRing, chWedge),400,0,16000,400,0,16000, eWedgeRaw, eRingRaw,"ERaw");
+                plotter->Fill2D(Form("hRaw_qqq%d_ring%d_wedge%d", qqq.id[i], chRing, chWedge),400,0,16000,400,0,16000, eWedgeRaw, eRingRaw,"ERaw");
+                plotter->Fill2D(Form("hGM_qqq%d_ring%d_wedge%d", qqq.id[i], chRing, chWedge),400,0,16000,400,0,16000, eWedge, eRing,"EGM");
                 plotter->Fill2D("hRawQQQ", 4000, 0, 16000, 4000, 0, 16000, eWedgeRaw, eRingRaw);
                 plotter->Fill2D("hGMQQQ", 4000, 0, 16000, 4000, 0, 16000, eWedge, eRing);
 
                 TString histName = Form("hQQQFVB_id%d_r%d_w%d", qqq.id[i], chRing, chWedge);
-                TH2F *hist2d = (TH2F *)gDirectory->Get(histName);
-                if (!hist2d)
-                {
-                    hist2d = new TH2F(histName, Form("QQQ Det%d R%d W%d;Wedge E;Ring E", qqq.id[i], chRing, chWedge), 400, 0, 16000, 400, 0, 16000);
-                }
+                // TH2F *hist2d = (TH2F *)gDirectory->Get(histName);
+                // if (!hist2d)
+                // {
+                //     hist2d = new TH2F(histName, Form("QQQ Det%d R%d W%d;Wedge E;Ring E", qqq.id[i], chRing, chWedge), 400, 0, 16000, 400, 0, 16000);
+                // }
 
-                hist2d->Fill(eWedge, eRing);
-                if (cut && cut->IsInside(eWedge, eRing))
+                // hist2d->Fill(eWedge, eRing);
+                // if (cut && cut->IsInside(eWedge, eRing))
                 {
                     // Accumulate data for gain matching
                     dataPoints[{qqq.id[i], chRing, chWedge}].emplace_back(eWedge, eRing);
@@ -142,13 +143,9 @@ Bool_t Calibration::Process(Long64_t entry)
 
 void Calibration::Terminate()
 {
-    const int MAX_DET = 4;
-    const int MAX_RING = 16;
-    const int MAX_WEDGE = 16;
-
     const double AM241_PEAK = 5485.56; // keV
-    double calibArray[MAX_DET][MAX_RING][MAX_WEDGE] = {{{0}}};
-    bool calibValid[MAX_DET][MAX_RING][MAX_WEDGE] = {{{false}}};
+    double calibArray[MAX_QQQ][MAX_RING][MAX_WEDGE] = {{{0}}};
+    bool calibValid[MAX_QQQ][MAX_RING][MAX_WEDGE] = {{{false}}};
 
     std::ofstream outFile("qqq_Calib.txt");
     if (!outFile.is_open())
@@ -157,41 +154,55 @@ void Calibration::Terminate()
         return;
     }
 
-    for (const auto &kv : dataPoints)
-    {
-        auto [id, ring, wedge] = kv.first;
-        const auto &pts = kv.second;
-        if (pts.size() < 5)
-            continue;
+   // ======================= Loop over all channels =======================
+for (auto &kv : dataPoints) {
 
-        std::vector<double> wE, rE;
-        for (const auto &pr : pts)
-        {
-            wE.push_back(pr.first);
-            rE.push_back(pr.second);
-        }
+    int det, ring, wedge;
+    std::tie(det, ring, wedge) = kv.first;
 
-        TGraph g(wE.size(), wE.data(), rE.data());
-        TF1 f("f", "[0]*x", 0, 16000);
-        g.Fit(&f, "QNR");
-        calibArray[id][ring][wedge] = f.GetParameter(0);
-        calibValid[id][ring][wedge] = true;
+    const std::vector<std::pair<double,double>> &pts = kv.second;
+
+    if (pts.size() < 5)
+        continue;
+
+    // Build TGraph from stored (wedgeGM, ringE)
+    std::vector<double> wedgeGM, ringE;
+    wedgeGM.reserve(pts.size());
+    ringE.reserve(pts.size());
+
+    for (auto &p : pts) {
+        wedgeGM.push_back(p.first);   // gain-matched wedge energy (ADC)
+        ringE.push_back(p.second);    // ring energy (ADC)
     }
 
-    for (int id = 0; id < MAX_DET; ++id)
-    {
-        for (int ring = 0; ring < MAX_RING; ++ring)
-        {
-            for (int wedge = 0; wedge < MAX_WEDGE; ++wedge)
-            {
-                if (calibValid[id][ring][wedge])
-                {
-                    outFile << id << " " << wedge << " " << ring << " " << calibArray[id][ring][wedge] << std::endl;
-                    printf("Gain match Det%d Ring%d Wedge%d → %.4f \n", id, ring, wedge, calibArray[id][ring][wedge]);
-                }
-            }
-        }
-    }
+    TGraph g(pts.size(), wedgeGM.data(), ringE.data());
+    g.SetTitle(Form("QQQ Det%d Ring%d Wedge%d", det, ring, wedge));
+
+    // Fit a line through origin: E_ring = a * E_wedge
+    TF1 f("f","[0]*x",0,16000);
+    g.Fit(&f,"QNR");     // Quiet, No draw, use Range
+
+    double slope_raw = f.GetParameter(0);
+
+    if (slope_raw <= 0)
+        continue;
+
+    // Convert raw slope into keV calibration:
+    // Use the Am241 peak expected position:
+    //   E_keV = ADC * slope_keV
+    double slope_keV = AM241_PEAK / (AM241_PEAK / slope_raw); 
+    // Simplifies to:
+    // slope_keV = slope_raw; // slope now directly converts ADC → keV
+
+    calibArray[det][ring][wedge] = slope_keV;
+    calibValid[det][ring][wedge] = true;
+
+    outFile << det << " " << ring << " " << wedge << " "
+            << slope_keV << "\n";
+
+    printf("Calib Det=%d Ring=%d Wedge=%d  slope=%.5f\n",
+           det, ring, wedge, slope_keV);
+}
 
     outFile.close();
     std::cout << "Gain matching complete." << std::endl;
@@ -212,9 +223,8 @@ void Calibration::Terminate()
         {
             double corrWedge = pr.first * calibArray[id][ring][wedge];
             double corrRing = pr.second * calibArray[id][ring][wedge];
-            printf("here: WedgeE: %.2f  RingE: %.2f \n", corrWedge, corrRing);
             hAll->Fill(corrWedge, corrRing);
-            plotter->Fill2D("hAll", 800, 0, 16000, 800, 0, 16000, corrWedge, corrRing); // Create the histogram in the plotter
+            plotter->Fill2D("hAll", 4000, 0, 16000, 4000, 0, 16000, corrWedge, corrRing); // Create the histogram in the plotter
         }
     }
     plotter->FlushToDisk();

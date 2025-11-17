@@ -10,11 +10,11 @@
 #include <fstream>
 #include <utility>
 #include <algorithm>
-
-
+#include "Armory/HistPlotter.h"
 #include "TVector3.h"
 
 TH2F *hQQQFVB;
+HistPlotter *plotter;
 
 int padID = 0;
 
@@ -23,6 +23,7 @@ std::map<std::tuple<int, int, int>, std::vector<std::pair<double, double>>> data
 
 void GainMatchQQQ::Begin(TTree * /*tree*/)
 {
+    plotter = new HistPlotter("GainQQQ.root", "TFILE");
     TString option = GetOption();
 
     hQQQFVB = new TH2F("hQQQFVB", "QQQ Front vs Back; Front E; Back E", 800, 0, 16000, 800, 0, 16000);
@@ -83,18 +84,32 @@ Bool_t GainMatchQQQ::Process(Long64_t entry)
 
                 hQQQFVB->Fill(eWedge, eRing);
 
-                TString histName = Form("hQQQFVB_id%d_r%d_w%d", qqq.id[i], chRing, chWedge);
-                TH2F *hist2d = (TH2F *)gDirectory->Get(histName);
-                if (!hist2d)
-                {
-                    hist2d = new TH2F(histName, Form("QQQ Det%d R%d W%d;Wedge E;Ring E", qqq.id[i], chRing, chWedge), 400, 0, 16000, 400, 0, 16000);
-                }
+                // TString histName = Form("hQQQFVB_id%d_r%d_w%d", qqq.id[i], chRing, chWedge);
+                // TH2F *hist2d = (TH2F *)gDirectory->Get(histName);
+                // if (!hist2d)
+                // {
+                //     hist2d = new TH2F(histName, Form("QQQ Det%d R%d W%d;Wedge E;Ring E", qqq.id[i], chRing, chWedge), 400, 0, 16000, 400, 0, 16000);
+                // }
 
-                hist2d->Fill(eWedge, eRing);
-                if (cut && cut->IsInside(eWedge, eRing))
+                // hist2d->Fill(eWedge, eRing);
+                // if (cut && cut->IsInside(eWedge, eRing))
+                double ratio = eRing / eWedge;
+                double maxslope=1.5;
+                //gate gets rid of noisy off diagonal events forming  a 'V' about the center
+                //TODO: These are very likely nearest-neighbor charge-sharing events, that will go away if appropriately summed
+
+                // if(ratio < maxslope && ratio > 1./maxslope || eWedge<200 || eRing<200) //method adopted from Sudarshan's approach
+                bool validPoint = false;
+                if(ratio < maxslope && ratio > 1./maxslope)// || eWedge<200 || eRing<200) //method adopted from Sudarshan's approach
                 {
                     // Accumulate data for gain matching
                     dataPoints[{qqq.id[i], chRing, chWedge}].emplace_back(eWedge, eRing);
+                    plotter->Fill2D("hAll_in", 4000, 0, 16000, 4000, 0, 16000, eWedge, eRing);
+                    validPoint = true;
+                }
+                
+                if(!validPoint){
+                    plotter->Fill2D("hAll_out", 4000, 0, 16000, 4000, 0, 16000, eWedge, eRing);
                 }
             }
         }
@@ -160,7 +175,7 @@ void GainMatchQQQ::Terminate()
 
     // === Plot all gain-matched QQQ points together with a 2D histogram ===
     TH2F *hAll = new TH2F("hAll", "All QQQ Gain-Matched;Corrected Wedge E;Ring E",
-                          800, 0, 16000, 800, 0, 16000);
+                          4000, 0, 16000, 4000, 0, 16000);
 
     // Fill the combined TH2F with corrected data
     for (auto &kv : dataPoints)
@@ -177,4 +192,6 @@ void GainMatchQQQ::Terminate()
             hAll->Fill(corrWedge, ringE);
         }
     }
+    
+    plotter->FlushToDisk();
 }
