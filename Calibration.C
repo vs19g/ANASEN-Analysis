@@ -30,7 +30,7 @@ const int MAX_WEDGE = 16;
 double qqqwGain[MAX_QQQ][MAX_RING][MAX_WEDGE] = {{{0}}};
 double qqqrGain[MAX_QQQ][MAX_RING][MAX_WEDGE] = {{{0}}};
 bool qqqwGainValid[MAX_QQQ][MAX_RING][MAX_WEDGE] = {{{false}}};
-bool qqqrGainValid[MAX_QQQ][MAX_RING][MAX_WEDGE] = {{{false}}};    
+bool qqqrGainValid[MAX_QQQ][MAX_RING][MAX_WEDGE] = {{{false}}};
 
 void Calibration::Begin(TTree * /*tree*/)
 {
@@ -46,8 +46,8 @@ void Calibration::Begin(TTree * /*tree*/)
         else
         {
             int det, ring, wedge;
-            double gainw,gainr;
-            while (infile >> det >> ring >> wedge >> gainw>>gainr)
+            double gainw, gainr;
+            while (infile >> det >> ring >> wedge >> gainw >> gainr)
             {
                 qqqwGain[det][ring][wedge] = gainw;
                 qqqrGain[det][ring][wedge] = gainr;
@@ -104,7 +104,7 @@ Bool_t Calibration::Process(Long64_t entry)
                     // printf("Wedge E: %.2f  Gain: %.4f \n", eWedge, qqqGain[qqq.id[i]][qqq.ch[i]][qqq.ch[j] - 16]);
                     chRing = qqq.ch[j] - 16;
                     eRingRaw = qqq.e[j];
-                    eRing = qqq.e[j] * qqqrGain[qqq.id[j]][qqq.ch[j]][qqq.ch[i]-16];
+                    eRing = qqq.e[j] * qqqrGain[qqq.id[j]][qqq.ch[j]][qqq.ch[i] - 16];
                 }
                 else if (qqq.ch[j] < 16 && qqq.ch[i] >= 16 && qqqrGainValid[qqq.id[j]][qqq.ch[j]][qqq.ch[i] - 16] && qqqwGainValid[qqq.id[j]][qqq.ch[j]][qqq.ch[i] - 16])
                 {
@@ -134,6 +134,11 @@ Bool_t Calibration::Process(Long64_t entry)
 
                 // hist2d->Fill(eWedge, eRing);
                 // if (cut && cut->IsInside(eWedge, eRing))
+                const double MIN_ADC = 1500.0;
+                const double MAX_ADC = 3000.0;
+
+                if (eWedge >= MIN_ADC && eWedge <= MAX_ADC &&
+                    eRing >= MIN_ADC && eRing <= MAX_ADC)
                 {
                     // Accumulate data for gain matching
                     dataPoints[{qqq.id[i], chRing, chWedge}].emplace_back(eWedge, eRing);
@@ -147,8 +152,8 @@ Bool_t Calibration::Process(Long64_t entry)
 
 void Calibration::Terminate()
 {
-    const double AM241_PEAK = 5485.56; 
-    const double P_PEAK=7000; // keV
+    const double AM241_PEAK = 5485.56;
+    const double P_PEAK = 7000; // keV
 
     double calibArray[MAX_QQQ][MAX_RING][MAX_WEDGE] = {{{0}}};
     bool calibValid[MAX_QQQ][MAX_RING][MAX_WEDGE] = {{{false}}};
@@ -248,9 +253,9 @@ void Calibration::Terminate()
             double eRkeV = eRGM * slope / 1000;
 
             hCal->Fill(eWkeV, eRkeV);
-            plotter->Fill2D("hCalQQQ", 4000, 0, 100, 4000, 0, 100, eWkeV, eRkeV);
-            plotter->Fill2D(Form("hRCal_qqq%d", det ), 16,0,15, 400, 0, 24, ring, eRkeV, "RingCal");
-            plotter->Fill2D(Form("hWCal_qqq%d", det ), 16,0,15, 400, 0, 24, wedge, eWkeV, "WedgeCal");
+            plotter->Fill2D("hCalQQQ", 4000, 0, 10, 4000, 0, 10, eWkeV, eRkeV);
+            plotter->Fill2D(Form("hRCal_qqq%d", det), 16, 0, 15, 400, 0, 24, ring, eRkeV, "RingCal");
+            plotter->Fill2D(Form("hWCal_qqq%d", det), 16, 0, 15, 400, 0, 24, wedge, eWkeV, "WedgeCal");
         }
     }
 

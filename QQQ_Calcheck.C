@@ -142,14 +142,17 @@ Bool_t QQQ_Calcheck::Process(Long64_t entry)
                     continue;
 
                 // hQQQFVB->Fill(eWedge, eRing);
-                plotter->Fill2D(Form("hRaw_qqq%d_ring%d_wedge%d", qqq.id[i], chRing, chWedge), 400, 0, 16000, 400, 0, 16000, eWedgeRaw, eRingRaw, "ERaw");
+                plotter->Fill2D(Form("hRaw_qqq%d_ring%d_wedge%d", qqq.id[i], chRing, chWedge), 400, 0, 8000, 400, 0, 8000, eWedgeRaw, eRingRaw, "ERaw");
                 plotter->Fill2D(Form("hGM_qqq%d_ring%d_wedge%d", qqq.id[i], chRing, chWedge), 400, 0, 16000, 400, 0, 16000, eWedge, eRing, "EGM");
-                plotter->Fill2D(Form("hCal_qqq%d_ring%d_wedge%d", qqq.id[i], chRing, chWedge), 400, 0, 24, 400, 0, 24, eWedgeMeV, eRingMeV, "ECal");
+                plotter->Fill2D(Form("hCal_qqq%d_ring%d_wedge%d", qqq.id[i], chRing, chWedge), 400, 0, 10, 400, 0, 10, eWedgeMeV, eRingMeV, "ECal");
+                if(eWedgeRaw >1500 && eRingRaw>1500 )
+                plotter->Fill2D(Form("hCal_cut_qqq%d_ring%d_wedge%d", qqq.id[i], chRing, chWedge), 400, 0, 10, 400, 0, 10, eWedgeMeV, eRingMeV, "ECal_cut");
+                
                 plotter->Fill2D(Form("hRCal_qqq%d", qqq.id[i]), 16, 0, 15, 1000, 0, 30, chRing, eRingMeV, "RingCal");
                 plotter->Fill2D(Form("hWCal_qqq%d", qqq.id[i]), 16, 0, 15, 1000, 0, 30, chWedge, eWedgeMeV, "WedgeCal");
-                plotter->Fill2D("hRawQQQ", 4000, 0, 16000, 4000, 0, 16000, eWedgeRaw, eRingRaw);
+                plotter->Fill2D("hRawQQQ", 4000, 0, 8000, 4000, 0, 8000, eWedgeRaw, eRingRaw);
                 plotter->Fill2D("hGMQQQ", 4000, 0, 16000, 4000, 0, 16000, eWedge, eRing);
-                plotter->Fill2D("hCalQQQ", 4000, 0, 24, 4000, 0, 24, eWedgeMeV, eRingMeV);
+                plotter->Fill2D("hCalQQQ", 4000, 0, 10, 4000, 0, 10, eWedgeMeV, eRingMeV);
             }
         }
     }

@@ -117,22 +117,21 @@ Bool_t GainMatchQQQ::Process(Long64_t entry)
         auto [id, chr, chw, er, ew] = tuple;
         if (ringMults[chr] > 1 || wedgeMults[chw] > 1)
             continue; // ignore multiplicity > 1 events
-            double ratio = (ew > 0.0) ? (er / ew) : 0.0;
-                double maxslope = 1.5;
+        double ratio = (ew > 0.0) ? (er / ew) : 0.0;
+        double maxslope = 1.5;
 
-                bool validPoint = false;
-                if (ratio < maxslope && ratio > 1. / maxslope)
-                {
-                    // Accumulate data for gain matching
-                    dataPoints[{id, chr, chw}].emplace_back(ew, er);
-                    plotter->Fill2D("hAll_in", 4000, 0, 16000, 4000, 0, 16000, ew, er);
-                    validPoint = true;
-                }
-
-                if (!validPoint)
-                {
-                    plotter->Fill2D("hAll_out", 4000, 0, 16000, 4000, 0, 16000, ew, er);
-                }
+        bool validPoint = false;
+        if (ratio < maxslope && ratio > 1. / maxslope)
+        {
+            // Accumulate data for gain matching
+            dataPoints[{id, chr, chw}].emplace_back(ew, er);
+            plotter->Fill2D("hAll_in", 4000, 0, 16000, 4000, 0, 16000, ew, er);
+            validPoint = true;
+        }
+        if (!validPoint)
+        {
+            plotter->Fill2D("hAll_out", 4000, 0, 16000, 4000, 0, 16000, ew, er);
+        }
     }
 
     return kTRUE;
@@ -174,6 +173,7 @@ void GainMatchQQQ::Terminate()
         bool solved = false;
         double final_gW = 0.0;
         double final_gR = 0.0;
+        // make a vector  of ring wedge as I go through all points and fit a tgraph on the fly
 
         // Iterative sigma-clipping loop
         for (int iter = 0; iter < MAX_ITER; ++iter)
