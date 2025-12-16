@@ -121,7 +121,10 @@
     "MakePlotsSX3.C": "cpp",
     "QQQ_Calibcheck.C": "cpp",
     "QQQ_Calcheck.C": "cpp",
-    "makeplots.C": "cpp"
+    "makeplots.C": "cpp",
+    "GlobalMinimizeQQQ.C": "cpp",
+    "QQQStage2.C": "cpp",
+    "inspect.C": "cpp"
   },
   "github-enterprise.uri": "https://fsunuc.physics.fsu.edu"
 }

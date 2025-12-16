@@ -28,9 +28,9 @@ const int MAX_QQQ = 4;
 const int MAX_RING = 16;
 const int MAX_WEDGE = 16;
 double qqqwGain[MAX_QQQ][MAX_RING][MAX_WEDGE] = {{{0}}};
-double qqqrGain[MAX_QQQ][MAX_RING][MAX_WEDGE] = {{{0}}};
+// double qqqrGain[MAX_QQQ][MAX_RING][MAX_WEDGE] = {{{0}}};
 bool qqqwGainValid[MAX_QQQ][MAX_RING][MAX_WEDGE] = {{{false}}};
-bool qqqrGainValid[MAX_QQQ][MAX_RING][MAX_WEDGE] = {{{false}}};
+// bool qqqrGainValid[MAX_QQQ][MAX_RING][MAX_WEDGE] = {{{false}}};
 
 void Calibration::Begin(TTree * /*tree*/)
 {
@@ -50,9 +50,9 @@ void Calibration::Begin(TTree * /*tree*/)
             while (infile >> det >> ring >> wedge >> gainw >> gainr)
             {
                 qqqwGain[det][ring][wedge] = gainw;
-                qqqrGain[det][ring][wedge] = gainr;
+                // qqqrGain[det][ring][wedge] = gainr;
                 qqqwGainValid[det][ring][wedge] = (gainw > 0);
-                qqqrGainValid[det][ring][wedge] = (gainr > 0);
+                // qqqrGainValid[det][ring][wedge] = (gainr > 0);
             }
             infile.close();
             std::cout << "Loaded QQQ gains from " << filename << std::endl;
@@ -96,7 +96,7 @@ Bool_t Calibration::Process(Long64_t entry)
                 float eWedge = 0.0;
                 float eRingRaw = 0.0;
                 float eRing = 0.0;
-                if (qqq.ch[i] < 16 && qqq.ch[j] >= 16 && qqqrGainValid[qqq.id[i]][qqq.ch[i]][qqq.ch[j] - 16] && qqqwGainValid[qqq.id[i]][qqq.ch[i]][qqq.ch[j] - 16])
+                if (qqq.ch[i] < 16 && qqq.ch[j] >= 16 && /*qqqrGainValid[qqq.id[i]][qqq.ch[i]][qqq.ch[j] - 16] &&*/ qqqwGainValid[qqq.id[i]][qqq.ch[i]][qqq.ch[j] - 16])
                 {
                     chWedge = qqq.ch[i];
                     eWedgeRaw = qqq.e[i];
@@ -104,16 +104,16 @@ Bool_t Calibration::Process(Long64_t entry)
                     // printf("Wedge E: %.2f  Gain: %.4f \n", eWedge, qqqGain[qqq.id[i]][qqq.ch[i]][qqq.ch[j] - 16]);
                     chRing = qqq.ch[j] - 16;
                     eRingRaw = qqq.e[j];
-                    eRing = qqq.e[j] * qqqrGain[qqq.id[j]][qqq.ch[j]][qqq.ch[i] - 16];
+                    eRing = qqq.e[j];// * qqqrGain[qqq.id[j]][qqq.ch[j]][qqq.ch[i] - 16];
                 }
-                else if (qqq.ch[j] < 16 && qqq.ch[i] >= 16 && qqqrGainValid[qqq.id[j]][qqq.ch[j]][qqq.ch[i] - 16] && qqqwGainValid[qqq.id[j]][qqq.ch[j]][qqq.ch[i] - 16])
+                else if (qqq.ch[j] < 16 && qqq.ch[i] >= 16 && /*qqqrGainValid[qqq.id[j]][qqq.ch[j]][qqq.ch[i] - 16] &&*/ qqqwGainValid[qqq.id[j]][qqq.ch[j]][qqq.ch[i] - 16])
                 {
                     chWedge = qqq.ch[j];
                     eWedge = qqq.e[j] * qqqwGain[qqq.id[j]][qqq.ch[j]][qqq.ch[i] - 16];
                     eWedgeRaw = qqq.e[j];
 
                     chRing = qqq.ch[i] - 16;
-                    eRing = qqq.e[i] * qqqrGain[qqq.id[i]][qqq.ch[i]][qqq.ch[j] - 16];
+                    eRing = qqq.e[i];// * qqqrGain[qqq.id[i]][qqq.ch[i]][qqq.ch[j] - 16];
                     eRingRaw = qqq.e[i];
                 }
                 else
@@ -137,8 +137,14 @@ Bool_t Calibration::Process(Long64_t entry)
                 const double MIN_ADC = 1500.0;
                 const double MAX_ADC = 3000.0;
 
-                if (eWedge >= MIN_ADC && eWedge <= MAX_ADC &&
-                    eRing >= MIN_ADC && eRing <= MAX_ADC)
+                // if (eWedge >= MIN_ADC && eWedge <= MAX_ADC &&
+                //     eRing >= MIN_ADC && eRing <= MAX_ADC)
+                double ratio = (eWedge > 0.0) ? (eRing / eWedge) : 0.0;
+
+                double maxslope = 1.5;
+
+                bool validPoint = false;
+                if (ratio < maxslope && ratio > 1. / maxslope)
                 {
                     // Accumulate data for gain matching
                     dataPoints[{qqq.id[i], chRing, chWedge}].emplace_back(eWedge, eRing);

@@ -10,6 +10,7 @@ AnasenMS
 
 data/
 data_proton/
+Sudarshan/
 Analyzer_C_ACLiC_dict0713aaa966_dictContent.h
 .gitignore
 Analyzer_C_ACLiC_dict5411fecd5c_dictUmbrella.h
@@ -19,3 +20,7 @@ MakePlotsQQQ.C
 MakePlotsQQQ.h
 MakePlotsSX3.C
 MakePlotsSX3.h
+qqq_gains_det3.dat
+qqq_relative_gains.dat
+Armory/CorrelateQQQ.h
+QQQStage2.C

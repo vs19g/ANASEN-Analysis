@@ -14,6 +14,9 @@
 #include <numeric>
 #include "Armory/HistPlotter.h"
 #include "TVector3.h"
+#include "TGraphErrors.h"
+#include "TF1.h"
+#include <cmath>
 
 TH2F *hQQQFVB;
 HistPlotter *plotter;
@@ -123,11 +126,11 @@ Bool_t GainMatchQQQ::Process(Long64_t entry)
         bool validPoint = false;
         if (ratio < maxslope && ratio > 1. / maxslope)
         {
-            // Accumulate data for gain matching
-            dataPoints[{id, chr, chw}].emplace_back(ew, er);
-            plotter->Fill2D("hAll_in", 4000, 0, 16000, 4000, 0, 16000, ew, er);
-            validPoint = true;
-        }
+                // Accumulate data for gain matching
+                dataPoints[{id, chr, chw}].emplace_back(ew, er);
+                plotter->Fill2D("hAll_in", 4000, 0, 16000, 4000, 0, 16000, ew, er);
+                validPoint = true;
+                    }
         if (!validPoint)
         {
             plotter->Fill2D("hAll_out", 4000, 0, 16000, 4000, 0, 16000, ew, er);
@@ -137,223 +140,170 @@ Bool_t GainMatchQQQ::Process(Long64_t entry)
     return kTRUE;
 }
 
+
 void GainMatchQQQ::Terminate()
 {
     const int MAX_DET = 4;
     const int MAX_RING = 16;
     const int MAX_WEDGE = 16;
 
+    // We store gains locally just for the "corrected" plot, 
+    // but the file will output Slopes for the global minimizer.
     double gainW[MAX_DET][MAX_RING][MAX_WEDGE] = {{{0}}};
     double gainR[MAX_DET][MAX_RING][MAX_WEDGE] = {{{0}}};
     bool gainValid[MAX_DET][MAX_RING][MAX_WEDGE] = {{{false}}};
 
+    // Output file for the Minimizer
     std::ofstream outFile("qqq_GainMatch.txt");
-    if (!outFile.is_open())
-    {
-        std::cerr << "Error opening output file!" << std::endl;
-        return;
-    }
+    
+    // Benchmark/Debug file
+    std::ofstream benchFile("benchmark_diff.txt"); 
+    benchFile << "ID Wedge Ring Chi2NDF Slope SlopeErr" << std::endl;
 
-    // Parameters for sigma-clipping
-    const int MIN_POINTS = 5;
-    const int MAX_ITER = 5;
-    const double CLIP_SIGMA = 3.0;
+    if (!outFile.is_open()) { std::cerr << "Error opening output file!" << std::endl; return; }
+
+    const int MIN_POINTS = 50;
+    const int MAX_ITER = 3;        // Outlier rejection passes
+    const double CLIP_SIGMA = 2.5; // Sigma threshold for outliers
 
     for (const auto &kv : dataPoints)
     {
         auto key = kv.first;
         auto [id, ring, wedge] = key;
-        const auto &pts_in = kv.second;
-        if (pts_in.size() < (size_t)MIN_POINTS)
-            continue;
+        const auto &pts = kv.second;
 
-        // Make a working copy of the points for clipping
-        std::vector<std::pair<double, double>> pts = pts_in;
+        if (pts.size() < (size_t)MIN_POINTS) continue;
 
-        bool solved = false;
-        double final_gW = 0.0;
-        double final_gR = 0.0;
-        // make a vector  of ring wedge as I go through all points and fit a tgraph on the fly
+        std::vector<std::pair<double, double>> current_pts = pts;
+        
+        double finalSlope = 0.0;
+        double finalSlopeErr = 0.0;
+        bool converged = false;
 
-        // Iterative sigma-clipping loop
+        // --- Iterative Fitting ---
         for (int iter = 0; iter < MAX_ITER; ++iter)
         {
-            // Compute sums
-            double sum_w2 = 0.0;
-            double sum_wr = 0.0;
-            double sum_r2 = 0.0;
-            for (const auto &p : pts)
+            if (current_pts.size() < (size_t)MIN_POINTS) break;
+
+            std::vector<double> x, y, ex, ey;
+
+            for (const auto &p : current_pts)
             {
-                double w = p.first;
-                double r = p.second;
-                sum_w2 += w * w;
-                sum_wr += w * r;
-                sum_r2 += r * r;
+                x.push_back(p.first);  // Wedge E
+                y.push_back(p.second); // Ring E
+                ex.push_back(std::sqrt(std::abs(p.first))); // Error in X (Poisson)
+                ey.push_back(std::sqrt(std::abs(p.second))); // Error in Y (Poisson)
+                
+                // Sanity check to avoid 0 error
+                if(ex.back() < 1.0) ex.back() = 1.0;
+                if(ey.back() < 1.0) ey.back() = 1.0;
             }
 
-            // Guard against degenerate cases
-            if (sum_w2 <= 0.0 || sum_wr <= 0.0)
-            {
-                // // fallback to single-parameter linear fit (original method)
-                // // Use ROOT TGraph fitting as fallback
-                // if (pts.size() >= 2)
-                // {
-                //     std::vector<double> wE, rE;
-                //     wE.reserve(pts.size());
-                //     rE.reserve(pts.size());
-                //     for (const auto &pr : pts)
-                //     {
-                //         wE.push_back(pr.first);
-                //         rE.push_back(pr.second);
-                //     }
-                //     TGraph g(static_cast<int>(wE.size()), wE.data(), rE.data());
-                //     TF1 f("f_fallback", "[0]*x", 0, 16000);
-                //     g.Fit(&f, "QNR");
-                //     double slope = f.GetParameter(0);
-                //     if (slope > 0)
-                //     {
-                //         // distribute correction symmetrically:
-                //         double alpha = slope; // r ≈ slope * w => alpha = slope
-                //         double gW_try = std::sqrt(alpha);
-                //         double gR_try = 1.0 / gW_try;
-                //         final_gW = gW_try;
-                //         final_gR = gR_try;
-                //         solved = true;
-                //     }
-                // }
+            // 2. Create Graph
+            TGraphErrors *gr = new TGraphErrors(current_pts.size(), x.data(), y.data(), ex.data(), ey.data());
+            
+            // 3. Fit Linear Function through Origin
+            TF1 *f1= new TF1("calibFit", "[0]*x", 0, 16000);
+            f1->SetParameter(0, 1.0);   
+
+            // "Q"=Quiet, "N"=NoDraw, "S"=ResultPtr
+            // We do NOT use "W" (Ignore weights), we want to use the errors we set.
+            int fitStatus = gr->Fit(f1, "QNS");
+
+            if (fitStatus != 0) {
+                delete gr; delete f1;
+                break; 
+            }
+
+            finalSlope = f1->GetParameter(0);
+            double chi2 = f1->GetChisquare();
+            double ndf = f1->GetNDF();
+            
+            // Get the statistical error on the slope
+            double rawErr = f1->GetParError(0);
+            
+            // SCALING ERROR:
+            // If Chi2/NDF > 1, the data scatters more than Poisson stats predict.
+            // // We inflate the error by sqrt(Chi2/NDF) to be conservative for the Minimizer.
+            // double redChi2 = (ndf > 0) ? (chi2 / ndf) : 1.0;
+            // double inflation = (redChi2 > 1.0) ? std::sqrt(redChi2) : 1.0;
+            
+            // finalSlopeErr = rawErr * inflation;
+
+            // 4. Outlier Rejection
+            if (iter == MAX_ITER - 1) {
+                converged = true;
+                delete gr; delete f1;
                 break;
             }
 
-            // alpha = sum(w*r) / sum(w^2)
-            double alpha = sum_wr / sum_w2;
-
-            if (!(alpha > 0.0) || !std::isfinite(alpha))
-            {
-                // // degenerate; fallback to TF1 fit as above
-                // if (pts.size() >= 2)
-                // {
-                //     std::vector<double> wE, rE;
-                //     wE.reserve(pts.size());
-                //     rE.reserve(pts.size());
-                //     for (const auto &pr : pts)
-                //     {
-                //         wE.push_back(pr.first);
-                //         rE.push_back(pr.second);
-                //     }
-                //     TGraph g(static_cast<int>(wE.size()), wE.data(), rE.data());
-                //     TF1 f("f_fallback2", "[0]*x", 0, 16000);
-                //     g.Fit(&f, "QNR");
-                //     double slope = f.GetParameter(0);
-                //     if (slope > 0)
-                //     {
-                //         double gW_try = std::sqrt(slope);
-                //         double gR_try = 1.0 / gW_try;
-                //         final_gW = gW_try;
-                //         final_gR = gR_try;
-                //         solved = true;
-                //     }
-                // }
-                break;
-            }
-
-            // distribute correction between W and R
-            double gW = std::sqrt(alpha);
-            double gR = 1.0 / gW;
-
-            // compute residuals and sigma
+            // Calculate Residuals
             std::vector<double> residuals;
-            residuals.reserve(pts.size());
-            for (const auto &p : pts)
-            {
-                double w = p.first;
-                double r = p.second;
-                double res = gW * w - gR * r;
+            double sumSqResid = 0.0;
+            for(size_t k=0; k<current_pts.size(); ++k) {
+                double val = f1->Eval(current_pts[k].first);
+                double res = current_pts[k].second - val;
                 residuals.push_back(res);
+                sumSqResid += res*res;
             }
+        //     double sigma = std::sqrt(sumSqResid / current_pts.size());
+            
+        //     // Filter
+        //     std::vector<std::pair<double, double>> next_pts;
+        //     for(size_t k=0; k<current_pts.size(); ++k) {
+        //         if(std::abs(residuals[k]) < CLIP_SIGMA * sigma) {
+        //             next_pts.push_back(current_pts[k]);
+        //         }
+        //     }
 
-            // mean and stddev (use population sigma here)
-            double mean = 0.0;
-            for (double v : residuals)
-                mean += v;
-            mean /= residuals.size();
+        //     if (next_pts.size() == current_pts.size()) {
+        //         converged = true; 
+        //         delete gr; delete f1;
+        //         break;
+        //     }
+        //     current_pts = next_pts;
+        //     delete gr; delete f1;
+        }
 
-            double var = 0.0;
-            for (double v : residuals)
-                var += (v - mean) * (v - mean);
-            var /= residuals.size();
-            double sigma = std::sqrt(var);
+        if (!converged || finalSlope <= 0) continue;
 
-            // If sigma is NaN or zero, accept and break
-            if (!std::isfinite(sigma) || sigma == 0.0)
-            {
-                final_gW = gW;
-                final_gR = gR;
-                solved = true;
-                break;
-            }
-
-            // Clip > CLIP_SIGMA and build new pts
-            size_t before = pts.size();
-            std::vector<std::pair<double, double>> new_pts;
-            new_pts.reserve(pts.size());
-            for (size_t k = 0; k < pts.size(); ++k)
-            {
-                if (std::fabs(residuals[k] - mean) <= CLIP_SIGMA * sigma)
-                    new_pts.push_back(pts[k]);
-            }
-            pts.swap(new_pts);
-            size_t after = pts.size();
-
-            // If no points removed or too few remain, accept current solution
-            final_gW = gW;
-            final_gR = gR;
-            solved = true;
-            if (before == after || pts.size() < (size_t)MIN_POINTS)
-                break;
-            // otherwise iterate again with clipped pts
-        } // end iter loop
-
-        if (!solved)
-            continue;
-
-        // sanity checks: avoid ridiculous gains
-        if (!(final_gW > 0.0) || !(final_gR > 0.0) || !std::isfinite(final_gW) || !std::isfinite(final_gR))
-            continue;
-
-        // store gains
-        gainW[id][ring][wedge] = final_gW;
-        gainR[id][ring][wedge] = final_gR;
+        // --- Store/Output ---
+        
+        // 1. Save locally for the verification plot (hAll)
+        // Approximate local gain for plotting purposes only
+        double gW_local = std::sqrt(finalSlope);
+        double gR_local = 1.0 / gW_local;
+        gainW[id][ring][wedge] = gW_local;
+        gainR[id][ring][wedge] = gR_local;
         gainValid[id][ring][wedge] = true;
 
-        // write out both gains: id wedge ring gW gR
-        outFile << id << " " << wedge << " " << ring << " " << final_gW << " " << final_gR << std::endl;
-        printf("Gain match Det%d Ring%d Wedge%d → gW=%.6f gR=%.6f\n", id, ring, wedge, final_gW, final_gR);
+        // 2. Write to File for Minimizer
+        // Format: ID Wedge Ring Slope Error
+        outFile << id << " " << wedge << " " << ring << " " << finalSlope << " " << finalSlopeErr << std::endl;
+
+        // 3. Benchmark Info
+        benchFile << id << " " << wedge << " " << ring << " " 
+                  << finalSlope << " " << finalSlopeErr << std::endl;
     }
 
     outFile.close();
+    benchFile.close();
+    std::cout << "Gain matching with Errors complete." << std::endl;
 
-    std::cout << "Gain matching complete." << std::endl;
-
-    // === Plot all gain-matched QQQ points together with a 2D histogram ===
-
-    // Fill the combined TH2F with corrected data
+    // Plotting the corrected data (Visual check using local approx gains)
     for (auto &kv : dataPoints)
     {
         int id, ring, wedge;
         std::tie(id, ring, wedge) = kv.first;
-        if (!gainValid[id][ring][wedge])
-            continue;
+        if (!gainValid[id][ring][wedge]) continue;
         auto &pts = kv.second;
         for (auto &pr : pts)
         {
             double corrWedge = pr.first * gainW[id][ring][wedge];
             double corrRing = pr.second * gainR[id][ring][wedge];
-            // hAll->Fill(corrWedge, corrRing);
             plotter->Fill2D("hAll", 4000, 0, 16000, 4000, 0, 16000, corrWedge, corrRing);
-            plotter->Fill2D(Form("hGMQQQ_id%d_ring%d_wedge%d", id, ring, wedge), 400, 0, 16000, 400, 0, 16000, corrWedge, corrRing, "GainMatched");
         }
     }
 
-    // Optionally keep previous global histos too
     plotter->FlushToDisk();
 }

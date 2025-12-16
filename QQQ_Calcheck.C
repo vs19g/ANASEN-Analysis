@@ -52,9 +52,9 @@ void QQQ_Calcheck::Begin(TTree * /*tree*/)
             while (infile >> det >> ring >> wedge >> gainw>> gainr)
             {
                 qqqwGain[det][ring][wedge] = gainw;
-                qqqrGain[det][ring][wedge] = gainr;
+                // qqqrGain[det][ring][wedge] = gainr;
                 qqqwGainValid[det][ring][wedge] = (gainw > 0);
-                qqqrGainValid[det][ring][wedge] = (gainr > 0);
+                // qqqrGainValid[det][ring][wedge] = (gainr > 0);
             }
             infile.close();
             std::cout << "Loaded QQQ gains from " << filename << std::endl;
@@ -110,7 +110,7 @@ Bool_t QQQ_Calcheck::Process(Long64_t entry)
                 float eRing = 0.0;
                 float eRingMeV = 0.0;
                 // plug in gains
-                if (qqq.ch[i] < 16 && qqq.ch[j] >= 16 && qqqrGainValid[qqq.id[i]][qqq.ch[i]][qqq.ch[j] - 16] && qqqwGainValid[qqq.id[i]][qqq.ch[i]][qqq.ch[j] - 16])
+                if (qqq.ch[i] < 16 && qqq.ch[j] >= 16 && /*qqqrGainValid[qqq.id[i]][qqq.ch[i]][qqq.ch[j] - 16] &&*/ qqqwGainValid[qqq.id[i]][qqq.ch[i]][qqq.ch[j] - 16])
                 {
                     chWedge = qqq.ch[i];
                     eWedgeRaw = qqq.e[i];
@@ -118,16 +118,16 @@ Bool_t QQQ_Calcheck::Process(Long64_t entry)
                     // printf("Wedge E: %.2f  Gain: %.4f \n", eWedge, qqqGain[qqq.id[i]][qqq.ch[i]][qqq.ch[j] - 16]);
                     chRing = qqq.ch[j] - 16;
                     eRingRaw = qqq.e[j];
-                    eRing = qqq.e[j] * qqqrGain[qqq.id[j]][qqq.ch[j]][qqq.ch[i]-16];
+                    eRing = qqq.e[j];//* qqqrGain[qqq.id[j]][qqq.ch[j]][qqq.ch[i]-16];
                 }
-                else if (qqq.ch[j] < 16 && qqq.ch[i] >= 16 && qqqrGainValid[qqq.id[j]][qqq.ch[j]][qqq.ch[i] - 16] && qqqwGainValid[qqq.id[j]][qqq.ch[j]][qqq.ch[i] - 16])
+                else if (qqq.ch[j] < 16 && qqq.ch[i] >= 16/* && qqqrGainValid[qqq.id[j]][qqq.ch[j]][qqq.ch[i] - 16] */&& qqqwGainValid[qqq.id[j]][qqq.ch[j]][qqq.ch[i] - 16])
                 {
                     chWedge = qqq.ch[j];
                     eWedge = qqq.e[j] * qqqwGain[qqq.id[j]][qqq.ch[j]][qqq.ch[i] - 16];
                     eWedgeRaw = qqq.e[j];
 
                     chRing = qqq.ch[i] - 16;
-                    eRing = qqq.e[i] * qqqrGain[qqq.id[i]][qqq.ch[i]][qqq.ch[j] - 16];
+                    eRing = qqq.e[i];// * qqqrGain[qqq.id[i]][qqq.ch[i]][qqq.ch[j] - 16];
                     eRingRaw = qqq.e[i];
                 }
                 else
@@ -151,7 +151,7 @@ Bool_t QQQ_Calcheck::Process(Long64_t entry)
                 plotter->Fill2D(Form("hRCal_qqq%d", qqq.id[i]), 16, 0, 15, 1000, 0, 30, chRing, eRingMeV, "RingCal");
                 plotter->Fill2D(Form("hWCal_qqq%d", qqq.id[i]), 16, 0, 15, 1000, 0, 30, chWedge, eWedgeMeV, "WedgeCal");
                 plotter->Fill2D("hRawQQQ", 4000, 0, 8000, 4000, 0, 8000, eWedgeRaw, eRingRaw);
-                plotter->Fill2D("hGMQQQ", 4000, 0, 16000, 4000, 0, 16000, eWedge, eRing);
+                plotter->Fill2D("hGMQQQ", 4000, 0, 8000, 4000, 0, 8000, eWedge, eRing);
                 plotter->Fill2D("hCalQQQ", 4000, 0, 10, 4000, 0, 10, eWedgeMeV, eRingMeV);
             }
         }
