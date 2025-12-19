@@ -79,14 +79,10 @@ void Analyzer::Begin(TTree * /*tree*/)
   TString option = GetOption();
 
   hsx3IndexVE = new TH2F("hsx3IndexVE", "SX3 index vs Energy; sx3 index ; Energy", 24 * 12, 0, 24 * 12, 400, 0, 5000);
-  hsx3IndexVE->SetNdivisions(-612, "x");
   hqqqIndexVE = new TH2F("hqqqIndexVE", "QQQ index vs Energy; QQQ index ; Energy", 4 * 2 * 16, 0, 4 * 2 * 16, 400, 0, 5000);
-  hqqqIndexVE->SetNdivisions(-1204, "x");
   hpcIndexVE = new TH2F("hpcIndexVE", "PC index vs Energy; PC index ; Energy", 2 * 24, 0, 2 * 24, 400, 0, 16000);
-  hpcIndexVE->SetNdivisions(-1204, "x");
   hpcIndexVE_GM = new TH2F("hpcIndexVE_GM", "PC index vs Energy; PC index ; Energy", 2 * 24, 0, 2 * 24, 400, 0, 16000);
-  hpcIndexVE_GM->SetNdivisions(-1204, "x");
-
+ 
   hsx3Coin = new TH2F("hsx3Coin", "SX3 Coincident", 24 * 12, 0, 24 * 12, 24 * 12, 0, 24 * 12);
   hqqqCoin = new TH2F("hqqqCoin", "QQQ Coincident", 4 * 2 * 16, 0, 4 * 2 * 16, 4 * 2 * 16, 0, 4 * 2 * 16);
   hpcCoin = new TH2F("hpcCoin", "PC Coincident", 2 * 24, 0, 2 * 24, 2 * 24, 0, 2 * 24);
@@ -95,20 +91,12 @@ void Analyzer::Begin(TTree * /*tree*/)
   hqqqPolar = new TH2F("hqqqPolar", "QQQ Polar ID", 16 * 4, -TMath::Pi(), TMath::Pi(), 16, 10, 50);
 
   hsx3VpcIndex = new TH2F("hsx3Vpcindex", "sx3 vs pc; sx3 index; pc index", 24 * 12, 0, 24 * 12, 48, 0, 48);
-  hsx3VpcIndex->SetNdivisions(-612, "x");
-  hsx3VpcIndex->SetNdivisions(-12, "y");
   hqqqVpcIndex = new TH2F("hqqqVpcindex", "qqq vs pc; qqq index; pc index", 4 * 2 * 16, 0, 4 * 2 * 16, 48, 0, 48);
-  hqqqVpcIndex->SetNdivisions(-612, "x");
-  hqqqVpcIndex->SetNdivisions(-12, "y");
-
+ 
   hqqqVpcE = new TH2F("hqqqVpcEnergy", "qqq vs pc; qqq energy; pc energy", 400, 0, 5000, 800, 0, 16000);
-  hqqqVpcE->SetNdivisions(-612, "x");
-  hqqqVpcE->SetNdivisions(-12, "y");
-
+ 
   hsx3VpcE = new TH2F("hsx3VpcEnergy", "sx3 vs pc; sx3 energy; pc energy", 400, 0, 5000, 800, 0, 16000);
-  hsx3VpcE->SetNdivisions(-612, "x");
-  hsx3VpcE->SetNdivisions(-12, "y");
-
+ 
   hZProj = new TH1F("hZProj", "Z Projection", 1200, -600, 600);
   hPCZProj = new TH1F("hPCZProj", "PC Z Projection", 600, -300, 300);
 

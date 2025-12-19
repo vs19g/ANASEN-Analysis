@@ -1,64 +1,158 @@
-#define Analyzer_cxx
+#define TrackRecon_cxx
 
-#include "Analyzer.h"
+#include "TrackRecon.h"
+#include "Armory/ClassPW.h"
+#include "Armory/HistPlotter.h"
+
 #include <TH2.h>
 #include <TStyle.h>
 #include <TCanvas.h>
 #include <TMath.h>
+#include "TVector3.h"
 
+#include <fstream>
+#include <iostream>
+#include <sstream>
+#include <map>
 #include <utility>
 #include <algorithm>
 
-#include "Armory/ClassSX3.h"
-#include "Armory/ClassPC1An.h"
-
-#include "TVector3.h"
-
-TH2F * hsx3IndexVE;
-TH2F * hqqqIndexVE;
-TH2F * hpcIndexVE;
-
-TH2F * hsx3Coin;
-TH2F * hqqqCoin;
-TH2F * hpcCoin;
-
-TH2F * hqqqPolar;
-TH2F * hsx3VpcIndex;
-TH2F * hqqqVpcIndex;
-TH2F * hqqqVpcE;
-TH2F * hsx3VpcE;
-TH2F * hanVScatsum;
-int padID = 0;
-
-SX3 sx3_contr;
-PC pw_contr;
+// Global instances
+PW pw_contr;
+PW pwinstance;
 TVector3 hitPos;
+
+// Calibration globals
+const int MAX_QQQ = 4;
+const int MAX_RING = 16;
+const int MAX_WEDGE = 16;
+double qqqGain[MAX_QQQ][MAX_RING][MAX_WEDGE] = {{{0}}};
+bool qqqGainValid[MAX_QQQ][MAX_RING][MAX_WEDGE] = {{{false}}};
+double qqqCalib[MAX_QQQ][MAX_RING][MAX_WEDGE] = {{{0}}};
+bool qqqCalibValid[MAX_QQQ][MAX_RING][MAX_WEDGE] = {{{false}}};
+
+// PC Arrays
+double pcSlope[48];
+double pcIntercept[48];
+
+HistPlotter *plotter;
+
 bool HitNonZero;
+bool sx3ecut;
+bool qqqEcut;
 
-TH1F * hZProj;
-
-void Analyzer::Begin(TTree * /*tree*/){
+void TrackRecon::Begin(TTree * /*tree*/)
+{
   TString option = GetOption();
+  plotter = new HistPlotter("Analyzer_QQQ.root", "TFILE");
 
-  hZProj = new TH1F("hZProj", "Z Projection", 200, -600, 600);
-
-  sx3_contr.ConstructGeo();
   pw_contr.ConstructGeo();
+  pwinstance.ConstructGeo();
 
+  // ---------------------------------------------------------
+  // 1. CRITICAL FIX: Initialize PC Arrays to Default (Raw)
+  // ---------------------------------------------------------
+  for (int i = 0; i < 48; i++)
+  {
+    pcSlope[i] = 1.0;     // Default slope = 1 (preserves Raw energy)
+    pcIntercept[i] = 0.0; // Default intercept = 0
+  }
+
+  // Calculate Crossover Geometry ONCE
+  TVector3 a, c, diff;
+  double a2, ac, c2, adiff, cdiff, denom, alpha;
+
+  for (int i = 0; i < pwinstance.An.size(); i++)
+  {
+    a = pwinstance.An[i].first - pwinstance.An[i].second;
+
+    for (int j = 0; j < pwinstance.Ca.size(); j++)
+    {
+      c = pwinstance.Ca[j].first - pwinstance.Ca[j].second;
+      diff = pwinstance.An[i].first - pwinstance.Ca[j].first;
+      a2 = a.Dot(a);
+      c2 = c.Dot(c);
+      ac = a.Dot(c);
+      adiff = a.Dot(diff);
+      cdiff = c.Dot(diff);
+      denom = a2 * c2 - ac * ac;
+      alpha = (ac * cdiff - c2 * adiff) / denom; 
+
+      Crossover[i][j][0].x = pwinstance.An[i].first.X() + alpha * a.X();
+      Crossover[i][j][0].y = pwinstance.An[i].first.Y() + alpha * a.Y();
+      Crossover[i][j][0].z = pwinstance.An[i].first.Z() + alpha * a.Z();
+
+      if (Crossover[i][j][0].z < -190 || Crossover[i][j][0].z > 190)
+      {
+        Crossover[i][j][0].z = 9999999;
+      }
+
+      Crossover[i][j][1].x = alpha;
+      Crossover[i][j][1].y = 0;
+    }
+  }
+
+  // Load PC Calibrations
+  std::ifstream inputFile("slope_intercept_results.txt");
+  if (inputFile.is_open())
+  {
+    std::string line;
+    int index;
+    double slope, intercept;
+    while (std::getline(inputFile, line))
+    {
+      std::stringstream ss(line);
+      ss >> index >> slope >> intercept;
+      if (index >= 0 && index <= 47)
+      {
+        pcSlope[index] = slope;
+        pcIntercept[index] = intercept;
+      }
+    }
+    inputFile.close();
+  }
+  else
+  {
+    std::cerr << "Error opening slope_intercept.txt" << std::endl;
+  }
+
+  // ... (Load QQQ Gains and Calibs - same as before) ...
+  {
+    std::string filename = "qqq_GainMatch.txt";
+    std::ifstream infile(filename);
+    if (infile.is_open())
+    {
+      int det, ring, wedge;
+      double gainw, gainr;
+      while (infile >> det >> ring >> wedge >> gainw >> gainr)
+      {
+        qqqGain[det][ring][wedge] = gainw;
+        qqqGainValid[det][ring][wedge] = (gainw > 0);
+      }
+      infile.close();
+    }
+  }
+  {
+    std::string filename = "qqq_Calib.txt";
+    std::ifstream infile(filename);
+    if (infile.is_open())
+    {
+      int det, ring, wedge;
+      double slope;
+      while (infile >> det >> ring >> wedge >> slope)
+      {
+        qqqCalib[det][ring][wedge] = slope;
+        qqqCalibValid[det][ring][wedge] = (slope > 0);
+      }
+      infile.close();
+    }
+  }
 }
 
-
-
-
-Bool_t Analyzer::Process(Long64_t entry){
-
-  // if ( entry > 100 ) return kTRUE;
-
+Bool_t TrackRecon::Process(Long64_t entry)
+{
   hitPos.Clear();
   HitNonZero = false;
-
-  // if( entry > 1) return kTRUE;
-  // printf("################### ev : %llu \n", entry);
 
   b_sx3Multi->GetEntry(entry);
   b_sx3ID->GetEntry(entry);
@@ -80,224 +174,233 @@ Bool_t Analyzer::Process(Long64_t entry){
   qqq.CalIndex();
   pc.CalIndex();
 
-  // sx3.Print();
+  // QQQ Processing
+  qqqEcut = false;
+  for (int i = 0; i < qqq.multi; i++)
+  {
+    plotter->Fill2D("QQQ_Index_Vs_Energy", 16*8, 0, 16*8, 2000, 0, 16000, qqq.index[i], qqq.e[i], "hRawQQQ");
 
-  //########################################################### Raw data
-  // //======================= SX3
+    if (qqq.e[i] > 100)
+      qqqEcut = true;
 
-  std::vector<std::pair<int, int>> ID; // first = id, 2nd = index
+    for (int j = 0; j < qqq.multi; j++)
+    {
+      if (j == i)
+        continue;
+      plotter->Fill2D("QQQ_Coincidence_Matrix", 16*8, 0, 16*8, 16*8, 0, 16*8, qqq.index[i], qqq.index[j], "hRawQQQ");
+    }
 
-  if( ID.size() > 0 ){
-    std::sort(ID.begin(), ID.end(),  [](const std::pair<int, int> & a, const std::pair<int, int> & b) {
-      return a.first < b.first;
-    } );
-    // printf("##############################\n");
-    // for( size_t i = 0; i < ID.size(); i++) printf("%zu | %d %d \n", i, ID[i].first, ID[i].second );
-
-    std::vector<std::pair<int, int>> sx3ID; 
-    sx3ID.push_back(ID[0]);
-    bool found = false;
-    for( size_t i = 1; i < ID.size(); i++){
-      if( ID[i].first == sx3ID.back().first) {
-        sx3ID.push_back(ID[i]);
-        if( sx3ID.size() >= 3) {
-          found = true;
-        } 
-      }else{
-        if( !found ){
-          sx3ID.clear();
-          sx3ID.push_back(ID[i]);
-        }
+    for (int k = 0; k < pc.multi; k++)
+    {
+      if (pc.index[k] < 24 && pc.e[k] > 50)
+      {
+        plotter->Fill2D("QQQ_Vs_PC_Energy", 400, 0, 4000, 1000, 0, 16000, qqq.e[i], pc.e[k]);
+        plotter->Fill2D("QQQ_Index_Vs_PC_Index", 16, 0, 16, 24, 0, 24, qqq.index[i], pc.index[k]);
       }
     }
 
-    // printf("---------- sx3ID Multi : %zu \n", sx3ID.size());
+    for (int j = i + 1; j < qqq.multi; j++)
+    {
+      if (qqq.id[i] == qqq.id[j])
+      {
+        if (qqq.e[i] > 100)
+          qqqEcut = true;
 
-    if( found ){
-      int sx3ChUp, sx3ChDn, sx3ChBk;
-      float sx3EUp, sx3EDn;
-      // printf("------ sx3 ID : %d, multi: %zu\n", sx3ID[0].first, sx3ID.size());
-      for( size_t i = 0; i < sx3ID.size(); i++ ){
-        int index = sx3ID[i].second;
-        // printf(" %zu | index %d | ch : %d, energy : %d \n", i, index, sx3.ch[index], sx3.e[index]);
+        if (qqq.id[i] == qqq.id[j])
+        {
+          int chWedge = -1;
+          int chRing = -1;
+          float eWedge = 0.0;
+          float eWedgeMeV = 0.0;
+          float eRing = 0.0;
+          float eRingMeV = 0.0;
 
-
-        if( sx3.ch[index] < 8 ){
-          if( sx3.ch[index] % 2 == 0) {
-            sx3ChDn = sx3.ch[index];
-            sx3EDn = sx3.e[index];
-          }else{
-            sx3ChUp = sx3.ch[index];
-            sx3EUp = sx3.e[index];
+          if (qqq.ch[i] < 16 && qqq.ch[j] >= 16 && qqqGainValid[qqq.id[i]][qqq.ch[i]][qqq.ch[j] - 16])
+          {
+            chWedge = qqq.ch[i];
+            eWedge = qqq.e[i] * qqqGain[qqq.id[i]][qqq.ch[i]][qqq.ch[j] - 16];
+            chRing = qqq.ch[j] - 16;
+            eRing = qqq.e[j];
           }
-        }else{
-          sx3ChBk = sx3.ch[index];
-        }
-         for( int j = 0; j < pc.multi; j++){
-      // hsx3VpcIndex->Fill( sx3.index[i], pc.index[j] );
-            if( sx3.ch[index] > 8 ){
-              hsx3VpcE->Fill( sx3.e[i], pc.e[j] );
-          //  hpcIndexVE->Fill( pc.index[i], pc.e[i] );
+          else if (qqq.ch[j] < 16 && qqq.ch[i] >= 16 && qqqGainValid[qqq.id[j]][qqq.ch[j]][qqq.ch[i] - 16])
+          {
+            chWedge = qqq.ch[j];
+            eWedge = qqq.e[j] * qqqGain[qqq.id[j]][qqq.ch[j]][qqq.ch[i] - 16];
+            chRing = qqq.ch[i] - 16;
+            eRing = qqq.e[i];
+          }
+          else
+            continue;
+
+          if (qqqCalibValid[qqq.id[i]][chRing][chWedge])
+          {
+            eWedgeMeV = eWedge * qqqCalib[qqq.id[i]][chRing][chWedge] / 1000;
+            eRingMeV = eRing * qqqCalib[qqq.id[i]][chRing][chWedge] / 1000;
+          }
+          else
+            continue;
+
+          plotter->Fill2D("WedgeE_Vs_RingECal", 1000, 0, 10, 1000, 0, 10, eWedgeMeV, eRingMeV, "hCalQQQ");
+
+          for (int k = 0; k < pc.multi; k++)
+          {
+            if (pc.index[k] < 24 && pc.e[k] > 50)
+            {
+              plotter->Fill2D("QQQ_Calib_Vs_PC_Energy", 1000,0,16, 2000, 0, 30000, eWedgeMeV, pc.e[k], "hCalQQQ");
+              plotter->Fill2D("QQQ_Calib_Vs_PC_Energy",1000,0,16, 2000, 0, 30000, eRingMeV, pc.e[k], "hCalQQQ");
             }
           }
-      }
 
-      sx3_contr.CalSX3Pos(sx3ID[0].first, sx3ChUp, sx3ChDn, sx3ChBk, sx3EUp, sx3EDn);
-      hitPos = sx3_contr.GetHitPos();
-      HitNonZero = true;
-      // hitPos.Print();
-    }
+          double theta = -TMath::Pi() / 2 + 2 * TMath::Pi() / 16 / 4. * (qqq.id[i] * 16 + chWedge + 0.5);
+          double rho = 50. + 40. / 16. * (chRing + 0.5);
 
-  }
-  
+          plotter->Fill2D("QQQPolarPlot", 200, -2*TMath::Pi() , 2*TMath::Pi() , 400, 40, 100, theta, rho, "hCalQQQ");
 
-  // //======================= QQQ
-  for( int i = 0; i < qqq.multi; i ++){
-    for( int j = i + 1; j < qqq.multi; j++){
-      if( qqq.id[i] == qqq.id[j]  ){ // must be same detector 
-        int chWedge = -1;
-        int chRing  =  -1;
-        if( qqq.ch[i] < qqq.ch[j]){
-          chRing = qqq.ch[j] - 16;
-          chWedge = qqq.ch[i];
-        }else{
-          chRing = qqq.ch[i];
-          chWedge = qqq.ch[j] - 16;
-        }
-
-        // printf(" ID : %d , chWedge : %d, chRing : %d \n", qqq.id[i], chWedge, chRing);
-
-        double theta = -TMath::Pi()/2 + 2*TMath::Pi()/16/4.*(qqq.id[i]*16 + chWedge +0.5);
-        double rho   = 10.+40./16.*(chRing+0.5);
-        // if(qqq.e[i]>50){
-        hqqqPolar->Fill( theta, rho);
-        // }
-        // qqq.used[i] = true;
-        // qqq.used[j] = true;
-
-        if( !HitNonZero ){
-        double x = rho * TMath::Cos(theta);
-        double y = rho * TMath::Sin(theta);
-        hitPos.SetXYZ(x, y, 23 + 75 + 30);
-        HitNonZero = true;
-        }
-      }
-    }
-  
-   
-  }
-  // //======================= PC
- PCHit_1An hitInfo;
-
-  ID.clear();
-  int counter=0;
-  std::vector<std::pair<int, double>> E; 
-  E.clear();
-
-  if( E.size()==3 ){
-    float aE = 0;
-    float cE = 0;
-    bool multi_an =false;
-      for(int l=0;l<E.size();l++){
-        if(E[l].first<24 && E[l].first!=20 && E[l].first!=12){
-          if(!multi_an){
-            aE = E[l].second;
+          if (!HitNonZero)
+          {
+            double x = rho * TMath::Cos(theta);
+            double y = rho * TMath::Sin(theta);
+            hitPos.SetXYZ(x, y, 23 + 75 + 30);
+            HitNonZero = true;
           }
-          multi_an=true;
-        }
-        else {
-          cE = E[l].second + cE;
         }
       }
-    // printf("anode= %d, cathode = %d\n", aID, cID);
-  // }
-    if( ID[0].first < 1 ) {
-      aID = pc.ch[ID[0].second];
-      cID = pc.ch[ID[1].second];
-    }else{
-      cID = pc.ch[ID[0].second];
-      aID = pc.ch[ID[1].second];
     }
-
-    hanVScatsum->Fill(aE,cE);
-      
-    if( HitNonZero){
-      pw_contr.CalTrack3( hitPos, hitinfo, cID);
-      hZProj->Fill(pw_contr.GetZ0());
-    }
-
-  // }
   }
-  
 
+  // PC Gain Matching and Filling
+  for (int i = 0; i < pc.multi; i++)
+  {
+    if (pc.e[i] > 100)
+    {
+      plotter->Fill2D("PC_Index_Vs_Energy", 24, 0, 24, 2000, 0, 30000, pc.index[i], pc.e[i], "hRawPC");
+    }
 
-  //########################################################### Track constrcution
+    if (pc.index[i] >= 0 && pc.index[i] < 48)
+    {
+      // FIX: pcSlope defaults to 1.0 now, so this won't zero out data if file entry is missing
+      pc.e[i] = pcSlope[pc.index[i]] * pc.e[i] + pcIntercept[pc.index[i]];
+      plotter->Fill2D("PC_Index_VS_GainMatched_Energy", 24, 0, 24, 2000, 0, 30000, pc.index[i], pc.e[i], "hGMPC");
+    }
+    for(int j=i+1;j<pc.multi;j++)
+    {
+      plotter->Fill2D("PC_Coincidence_Matrix",24, 0, 24, 24, 24, 48, pc.index[i], pc.index[j], "hRawPC");
+    }
+  }
 
+  anodeHits.clear();
+  cathodeHits.clear();
+  corrcatMax.clear();
 
-  //############################## DO THE KINEMATICS
+  int aID = 0;
+  int cID = 0;
+  float aE = 0;
+  float cE = 0;
+  float aESum = 0;
+  float cESum = 0;
+  float aEMax = 0;
+  int aIDMax = 0;
 
+  for (int i = 0; i < pc.multi; i++)
+  {
+    if (pc.e[i] > 100)
+    {
+      if (pc.index[i] < 24)
+        anodeHits.push_back(std::pair<int, double>(pc.index[i], pc.e[i]));
+      else if (pc.index[i] >= 24)
+        cathodeHits.push_back(std::pair<int, double>(pc.index[i] - 24, pc.e[i]));
+    }
+  }
+
+  std::sort(anodeHits.begin(), anodeHits.end(), [](const std::pair<int, double> &a, const std::pair<int, double> &b)
+            { return a.second > b.second; });
+  std::sort(cathodeHits.begin(), cathodeHits.end(), [](const std::pair<int, double> &a, const std::pair<int, double> &b)
+            { return a.second > b.second; });
+
+  if (anodeHits.size() >= 1 && cathodeHits.size() > 1)
+  {
+    // 2. CRITICAL FIX: Define reference vector 'a'
+    // In Analyzer.cxx, 'a' was left over from the loop. We use the first anode wire as reference here.
+    // (Assuming pwinstance.An is populated and wires are generally parallel).
+    TVector3 refAnode = pwinstance.An[0].first - pwinstance.An[0].second;
+
+    if (((TMath::TanH(hitPos.Y() / hitPos.X())) > (TMath::TanH(refAnode.Y() / refAnode.X()) - TMath::PiOver4())) ||
+        ((TMath::TanH(hitPos.Y() / hitPos.X())) < (TMath::TanH(refAnode.Y() / refAnode.X()) + TMath::PiOver4())))
+    {
+      for (const auto &anode : anodeHits)
+      {
+        aID = anode.first;
+        aE = anode.second;
+        aESum += aE;
+        if (aE > aEMax)
+        {
+          aEMax = aE;
+          aIDMax = aID;
+        }
+      }
+
+      for (const auto &cathode : cathodeHits)
+      {
+        cID = cathode.first;
+        cE = cathode.second;
+        plotter->Fill2D("AnodeMax_Vs_Cathode_Coincidence_Matrix", 24, 0, 24, 24, 0, 24, aIDMax, cID, "hGMPC");
+        plotter->Fill2D("Anode_Vs_Cathode_Coincidence_Matrix", 24, 0, 24, 24, 0, 24, aID, cID, "hGMPC");
+        plotter->Fill2D("Anode_vs_CathodeE", 2000, 0, 30000, 2000, 0, 30000, aE, cE, "hGMPC");
+
+        for (int j = -4; j < 3; j++)
+        {
+          if ((aIDMax + 24 + j) % 24 == 23 - cID)
+          {
+            corrcatMax.push_back(std::pair<int, double>(cID, cE));
+            cESum += cE;
+          }
+        }
+      }
+    }
+  }
+
+  TVector3 anodeIntersection;
+  anodeIntersection.Clear();
+
+  {
+    float x = 0, y = 0, z = 0;
+    for (const auto &corr : corrcatMax)
+    {
+      if (cESum > 0)
+      {
+        x += (corr.second) / cESum * Crossover[aIDMax][corr.first][0].x;
+        y += (corr.second) / cESum * Crossover[aIDMax][corr.first][0].y;
+        z += (corr.second) / cESum * Crossover[aIDMax][corr.first][0].z;
+      }
+    }
+    anodeIntersection = TVector3(x, y, z);
+  }
+
+  if (anodeIntersection.Z() != 0)
+  {
+    plotter->Fill1D("PC_Z_Projection", 600, -300, 300, anodeIntersection.Z(), "hGMPC");
+  }
+
+  plotter->Fill2D("AnodeMaxE_Vs_Cathode_Sum_Energy", 2000, 0, 30000, 2000, 0, 30000, aEMax, cESum, "hGMPC");
+  plotter->Fill1D("Correlated_Cathode_MaxAnode", 6, 0, 5, corrcatMax.size(), "hGMPC");
+  plotter->Fill2D("Correlated_Cathode_VS_MaxAnodeEnergy", 6, 0, 5, 2000, 0, 30000, corrcatMax.size(), aEMax, "hGMPC");
+  plotter->Fill1D("AnodeHits", 12, 0, 11, anodeHits.size(), "hGMPC");
+
+  if (anodeHits.size() < 1)
+  {
+    plotter->Fill1D("NoAnodeHits_CathodeHits", 6, 0, 5, cathodeHits.size(), "hGMPC");
+  }
+
+  if (HitNonZero && anodeIntersection.Z() != 0)
+  {
+    pw_contr.CalTrack2(hitPos, anodeIntersection);
+    plotter->Fill1D("VertexRecon", 600, -300, 300, pw_contr.GetZ0(), "hGMPC");
+  }
 
   return kTRUE;
 }
 
-void Analyzer::Terminate(){
-
-  gStyle->SetOptStat("neiou");
-  TCanvas * canvas = new TCanvas("cANASEN", "ANASEN", 2000, 2000); 
-  canvas->Divide(3,3);
-
-  //hsx3VpcIndex->Draw("colz");
-
-  //=============================================== pad-1
-  padID ++; canvas->cd(padID); canvas->cd(padID)->SetGrid(1);
-
-  hsx3IndexVE->Draw("colz");
-
-  //=============================================== pad-2
-  padID ++; canvas->cd(padID); canvas->cd(padID)->SetGrid(1);
-
-  hqqqIndexVE->Draw("colz");
-
-  //=============================================== pad-3
-  padID ++; canvas->cd(padID); canvas->cd(padID)->SetGrid(1);
-
-  hpcIndexVE->Draw("colz");
-
-  //=============================================== pad-4
-  padID ++; canvas->cd(padID); canvas->cd(padID)->SetGrid(1);
-
-  hsx3Coin->Draw("colz");
-
-  //=============================================== pad-5
-  padID ++; canvas->cd(padID); canvas->cd(padID)->SetGrid(1);
-
-  hqqqCoin->Draw("colz");
-
-  //=============================================== pad-6
-  padID ++; canvas->cd(padID); canvas->cd(padID)->SetGrid(1);
-
-  hpcCoin->Draw("colz");
-
-  //=============================================== pad-7
-  padID ++; canvas->cd(padID); canvas->cd(padID)->SetGrid(1);
-
-  hsx3VpcIndex ->Draw("colz"); 
-  // hsx3VpcE->Draw("colz") ;
-
-  //=============================================== pad-8
-  padID ++; canvas->cd(padID); canvas->cd(padID)->SetGrid(1);
-
-  hqqqVpcIndex ->Draw("colz");  
-
-  // hqqqVpcE ->Draw("colz");
-  //=============================================== pad-9
-  padID ++; 
-
-  // canvas->cd(padID)->DrawFrame(-50, -50, 50, 50);
-  // hqqqPolar->Draw("same colz pol");
-
- canvas->cd(padID); canvas->cd(padID)->SetGrid(1);
- hZProj->Draw();
-  // hanVScatsum->Draw("colz");
-
+void TrackRecon::Terminate()
+{
+  plotter->FlushToDisk();
 }
