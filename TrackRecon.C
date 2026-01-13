@@ -477,8 +477,8 @@ Bool_t TrackRecon::Process(Long64_t entry)
   {
     plotter->Fill1D("PC_Z_proj_2C", 600, -300, 300, anodeIntersection.Z(), "hGMPC");
   }
-
-  plotter->Fill2D("AHIts_vs_CHits", 12, 0, 11, 6, 0, 5, anodeHits.size(), cathodeHits.size(), "hRawPC");
+if(anodeHits.size()>0 && cathodeHits.size()>0)
+  plotter->Fill2D("AHits_vs_CHits", 12, 0, 11, 6, 0, 5, anodeHits.size(), cathodeHits.size(), "hRawPC");
 
 
   for (int i = 0; i < qqq.multi; i++)
