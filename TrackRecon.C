@@ -224,7 +224,7 @@ Bool_t TrackRecon::Process(Long64_t entry)
         plotter->Fill2D("QQQ_Vs_PC_Energy", 400, 0, 4000, 1000, 0, 16000, qqq.e[i], pc.e[k]);
         plotter->Fill2D("QQQ_Index_Vs_PC_Index", 16 * 8, 0, 16 * 8, 24, 0, 24, qqq.index[i], pc.index[k]);
       }
-      else if(pc.index[k] >= 24 && pc.e[k] > 50)
+      else if (pc.index[k] >= 24 && pc.e[k] > 50)
       {
         plotter->Fill2D("QQQ_Vs_PC_Energy_Cathode", 400, 0, 4000, 1000, 0, 16000, qqq.e[i], pc.e[k]);
       }
@@ -297,6 +297,10 @@ Bool_t TrackRecon::Process(Long64_t entry)
             plotter->Fill2D("Timing_Difference_QQQ_PC", 20000, -1000, 1000, 16, 0, 16, tRing - static_cast<double>(pc.t[k]), chRing, "hCalQQQ");
             plotter->Fill2D("DelT_Vs_QQQRingECal", 20000, -1000, 1000, 1000, 0, 10, tRing - static_cast<double>(pc.t[k]), eRingMeV, "hCalQQQ");
           }
+          if (pc.index[k] >= 24 && pc.e[k] > 50)
+          {
+            plotter->Fill2D("Timing_Difference_QQQ_PC_Cathode", 20000, -1000, 1000, 16, 0, 16, tRing - static_cast<double>(pc.t[k]), chRing, "hCalQQQ");
+          }
         }
 
         double theta = -TMath::Pi() / 2 + 2 * TMath::Pi() / 16 / 4. * (qqq.id[i] * 16 + chWedge + 0.5);
@@ -354,7 +358,7 @@ Bool_t TrackRecon::Process(Long64_t entry)
         plotter->Fill2D("PC_Time_Vs_QQQ_ch", 200, -1000, 1000, 16 * 8, 0, 16 * 8, anodeT - cathodeT, qqq.ch[j], "hGMPC");
         plotter->Fill2D("PC_Time_vs_AIndex", 200, -1000, 1000, 24, 0, 24, anodeT - cathodeT, anodeIndex, "hGMPC");
         plotter->Fill2D("PC_Time_vs_CIndex", 200, -1000, 1000, 24, 0, 24, anodeT - cathodeT, cathodeIndex, "hGMPC");
-        plotter->Fill1D("PC_Time_A" + std::to_string(anodeIndex) + "_C" + std::to_string(cathodeIndex), 200, -1000, 1000, anodeT - cathodeT, "TimingPC");
+        // plotter->Fill1D("PC_Time_A" + std::to_string(anodeIndex) + "_C" + std::to_string(cathodeIndex), 200, -1000, 1000, anodeT - cathodeT, "TimingPC");
       }
 
       for (int j = 0; j < sx3.multi; j++)
@@ -477,9 +481,66 @@ Bool_t TrackRecon::Process(Long64_t entry)
   {
     plotter->Fill1D("PC_Z_proj_2C", 600, -300, 300, anodeIntersection.Z(), "hGMPC");
   }
-if(anodeHits.size()>0 && cathodeHits.size()>0)
-  plotter->Fill2D("AHits_vs_CHits", 12, 0, 11, 6, 0, 5, anodeHits.size(), cathodeHits.size(), "hRawPC");
+  if (anodeHits.size() > 0 && cathodeHits.size() > 0)
+    plotter->Fill2D("AHits_vs_CHits", 12, 0, 11, 6, 0, 5, anodeHits.size(), cathodeHits.size(), "hRawPC");
 
+  // make another plot with nearest neighbour constraint
+  bool hasNeighbourAnodes = false;
+  bool hasNeighbourCathodes = false;
+
+  // 1. Check Anodes for neighbours (including wrap-around 0-23)
+  for (size_t i = 0; i < anodeHits.size(); i++)
+  {
+    for (size_t j = i + 1; j < anodeHits.size(); j++)
+    {
+      int diff = std::abs(anodeHits[i].first - anodeHits[j].first);
+      if (diff == 1 || diff == 23)
+      { // 23 handles the cylindrical wrap
+        hasNeighbourAnodes = true;
+        break;
+      }
+    }
+    if (hasNeighbourAnodes)
+      break;
+  }
+
+  // 2. Check Cathodes for neighbours (including wrap-around 0-23)
+  for (size_t i = 0; i < cathodeHits.size(); i++)
+  {
+    for (size_t j = i + 1; j < cathodeHits.size(); j++)
+    {
+      int diff = std::abs(cathodeHits[i].first - cathodeHits[j].first);
+      if (diff == 1 || diff == 23)
+      {
+        hasNeighbourCathodes = true;
+        break;
+      }
+    }
+    if (hasNeighbourCathodes)
+      break;
+  }
+
+  // ---------------------------------------------------------
+  // FILL PLOTS
+  // ---------------------------------------------------------
+  if (anodeHits.size() > 0 && cathodeHits.size() > 0)
+  {
+    plotter->Fill2D("AHits_vs_CHits_NA" + std::to_string(hasNeighbourAnodes), 12, 0, 11, 6, 0, 5, anodeHits.size(), cathodeHits.size(), "hRawPC");
+    plotter->Fill2D("AHits_vs_CHits_NC" + std::to_string(hasNeighbourCathodes), 12, 0, 11, 6, 0, 5, anodeHits.size(), cathodeHits.size(), "hRawPC");
+
+    // Constraint Plot: Only fill if BOTH planes have adjacent hits
+    // This effectively removes events with only isolated single-wire hits (noise)
+    if (hasNeighbourAnodes && hasNeighbourCathodes)
+    {
+      plotter->Fill2D("AHits_vs_CHits_NN", 12, 0, 11, 6, 0, 5, anodeHits.size(), cathodeHits.size(), "hRawPC");
+    }
+  }
+
+  if (HitNonZero && anodeIntersection.Z() != 0)
+  {
+    pw_contr.CalTrack2(hitPos, anodeIntersection);
+    plotter->Fill1D("VertexRecon", 600, -300, 300, pw_contr.GetZ0(), "hGMPC");
+  }
 
   for (int i = 0; i < qqq.multi; i++)
   {
@@ -525,6 +586,14 @@ if(anodeHits.size()>0 && cathodeHits.size()>0)
         {
           plotter->Fill2D("PC_Z_vs_QQQRing", 600, -300, 300, 16, 0, 16, anodeIntersection.Z(), chRing, "hGMPC");
         }
+        if (anodeIntersection.Z() != 0 && cathodeHits.size() == 2)
+        {
+          plotter->Fill2D("PC_Z_vs_QQQRing_2C", 600, -300, 300, 16, 0, 16, anodeIntersection.Z(), chRing, "hGMPC");
+          
+          plotter->Fill2D("PC_Z_vs_QQQWedge_2C", 600, -300, 300, 16, 0, 16, anodeIntersection.Z(), chWedge, "hGMPC");
+
+        }
+        plotter->Fill2D("Vertex_V_QQQRing", 600, -300, 300, 16, 0, 16, pw_contr.GetZ0(), chRing, "hGMPC");
 
         // plotter->Fill2D("EdE_PC_vs_QQQ_timegate_ls1000"+std::to_string())
 
@@ -547,12 +616,6 @@ if(anodeHits.size()>0 && cathodeHits.size()>0)
   if (anodeHits.size() < 1)
   {
     plotter->Fill1D("NoAnodeHits_CathodeHits", 6, 0, 5, cathodeHits.size(), "hGMPC");
-  }
-
-  if (HitNonZero && anodeIntersection.Z() != 0)
-  {
-    pw_contr.CalTrack2(hitPos, anodeIntersection);
-    plotter->Fill1D("VertexRecon", 600, -300, 300, pw_contr.GetZ0(), "hGMPC");
   }
 
   return kTRUE;
