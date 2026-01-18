@@ -287,7 +287,7 @@ inline void PW::CalTrack(TVector3 sx3Pos, int anodeID, int cathodeID, bool verbo
 inline void PW::CalTrack2(TVector3 siPos, TVector3 anodeInt, bool verbose)
 {
 
-  float mx, my;
+  double mx, my;
   double z;
   mx = siPos.X() / (siPos.X() - anodeInt.X());
   my = siPos.Y() / (siPos.Y() - anodeInt.Y());

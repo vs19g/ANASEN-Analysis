@@ -198,9 +198,17 @@ Bool_t TrackRecon::Process(Long64_t entry)
   qqq1000cut = false;
   int qqqCount = 0;
   int qqqAdjCh = 0;
+  for (int i = 0; i < qqq.multi; i++)
+  {
+    if (qqq.id[i] == 0 && qqq.ch[i] >= 16)
+    {
+      qqq.ch[i] = 31 - qqq.ch[i] + 16;
+    }
+  }
 
   for (int i = 0; i < qqq.multi; i++)
   {
+
     plotter->Fill2D("QQQ_Index_Vs_Energy", 16 * 8, 0, 16 * 8, 2000, 0, 16000, qqq.index[i], qqq.e[i], "hRawQQQ");
 
     if (qqq.e[i] > 100)
@@ -307,6 +315,8 @@ Bool_t TrackRecon::Process(Long64_t entry)
         double rho = 50. + 40. / 16. * (chRing + 0.5);
 
         plotter->Fill2D("QQQPolarPlot", 16 * 4, -TMath::Pi(), TMath::Pi(), 32, 40, 100, theta, rho, "hCalQQQ");
+        plotter->Fill2D("QQQCartesianPlot", 200, -100, 100, 200, -100, 100, rho * TMath::Cos(theta), rho * TMath::Sin(theta), "hCalQQQ");
+        plotter->Fill2D("QQQCartesianPlot" + std::to_string(qqq.id[i]), 200, -100, 100, 200, -100, 100, rho * TMath::Cos(theta), rho * TMath::Sin(theta), "hCalQQQ");
 
         if (!HitNonZero)
         {
@@ -406,7 +416,7 @@ Bool_t TrackRecon::Process(Long64_t entry)
   // std::sort(cathodeHits.begin(), cathodeHits.end(), [](const std::pair<int, double> &a, const std::pair<int, double> &b)
   //           { return a.second > b.second; });
 
-  if (anodeHits.size() == 2 && cathodeHits.size() >= 1)
+  if (anodeHits.size() >= 1 && cathodeHits.size() >= 1)
   {
     // 2. CRITICAL FIX: Define reference vector 'a'
     // In Analyzer.cxx, 'a' was left over from the loop. We use the first anode wire as reference here.
@@ -466,6 +476,8 @@ Bool_t TrackRecon::Process(Long64_t entry)
     }
     anodeIntersection = TVector3(x, y, z);
   }
+
+  // flip the algorithm for cathode 1 multi anode events
 
   if (anodeIntersection.Z() != 0)
   {
@@ -589,12 +601,11 @@ Bool_t TrackRecon::Process(Long64_t entry)
         if (anodeIntersection.Z() != 0 && cathodeHits.size() == 2)
         {
           plotter->Fill2D("PC_Z_vs_QQQRing_2C", 600, -300, 300, 16, 0, 16, anodeIntersection.Z(), chRing, "hGMPC");
-          
           plotter->Fill2D("PC_Z_vs_QQQWedge_2C", 600, -300, 300, 16, 0, 16, anodeIntersection.Z(), chWedge, "hGMPC");
-
         }
         plotter->Fill2D("Vertex_V_QQQRing", 600, -300, 300, 16, 0, 16, pw_contr.GetZ0(), chRing, "hGMPC");
 
+        plotter->Fill2D("PolarAngle_Vs_QQQRing" + std::to_string(qqqID), 400, 0, TMath::Pi(), 16, 0, 16, TMath::ATan(anodeIntersection.Y() / anodeIntersection.X()) * 180. / TMath::Pi(), chWedge);
         // plotter->Fill2D("EdE_PC_vs_QQQ_timegate_ls1000"+std::to_string())
 
         plotter->Fill2D("PC_Z_vs_QQQRing_Det" + std::to_string(qqqID), 600, -300, 300, 16, 0, 16, anodeIntersection.Z(), chRing, "hGMPC");
