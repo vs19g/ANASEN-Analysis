@@ -12,12 +12,13 @@ timeWindow=$2
 
 option=$3
 
-rawFolder=/home/tandem/data1/2024_09_17Fap/data
+# rawFolder=/home/tandem/data1/2024_09_17Fap/data
+rawFolder=../Raw_data
 rootFolder=../root_data
 
 if [ $option -eq 0 ]; then
 
-    rsync -auh --info=progress2 splitpole@128.186.111.223:/media/nvmeData/2024_09_17Fap/*.fsu /home/tandem/data1/2024_09_17Fap/data
+    # rsync -auh --info=progress2 splitpole@128.186.111.223:/media/nvmeData/2024_09_17Fap/*.fsu /home/tandem/data1/2024_09_17Fap/data
 
     fileList=`\ls -1 ${rawFolder}/*Run_${runID}_*.fsu`
 
@@ -30,4 +31,4 @@ if [ $option -eq 0 ]; then
     ./Mapper ${rootFolder}/*${runID}*${timeWindow}.root
 fi
 
-root "processRun.C(\"${rootFolder}/ProtonRun_${runID}_mapped.root\")"
+root "processRun.C(\"${rootFolder}/Run_${runID}_mapped.root\")"

@@ -144,7 +144,7 @@ void TrackRecon::Begin(TTree * /*tree*/)
     {
       int det, ring, wedge;
       double gainw, gainr;
-      while (infile >> det >> ring >> wedge >> gainw >> gainr)
+      while (infile >> det  >> wedge >> ring >> gainw >> gainr)
       {
         qqqGain[det][ring][wedge] = gainw;
         qqqGainValid[det][ring][wedge] = (gainw > 0);
@@ -160,7 +160,7 @@ void TrackRecon::Begin(TTree * /*tree*/)
     {
       int det, ring, wedge;
       double slope;
-      while (infile >> det >> ring >> wedge >> slope)
+      while (infile >> det >> wedge >> ring >> slope)
       {
         qqqCalib[det][ring][wedge] = slope;
         qqqCalibValid[det][ring][wedge] = (slope > 0);
@@ -202,11 +202,7 @@ Bool_t TrackRecon::Process(Long64_t entry)
   int qqqAdjCh = 0;
   for (int i = 0; i < qqq.multi; i++)
   {
-    if (qqq.id[i] == 3 && qqq.ch[i] <= 16)
-    {
-      qqq.ch[i] = 16-qqq.ch[i] ;
-    }
-    if (qqq.id[i] == 1 && qqq.ch[i] <= 16)
+    if ((qqq.id[i] == 3 || qqq.id[i] ==1) && qqq.ch[i] <= 16)
     {
       qqq.ch[i] = 16-qqq.ch[i] ;
     }

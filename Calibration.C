@@ -222,7 +222,7 @@ void Calibration::Terminate()
         calibArray[det][ring][wedge] = slope_keV;
         calibValid[det][ring][wedge] = true;
 
-        outFile << det << " " << ring << " " << wedge << " "
+        outFile << det << " " << wedge << " " << ring << " "
                 << slope_keV << "\n";
 
         // printf("QQQ DET=%d R=%d W=%d  ADCpeak=%.1f  slope_keV=%.6f\n",det, ring, wedge, adcPeak, slope_keV);
