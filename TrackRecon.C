@@ -278,7 +278,7 @@ Bool_t TrackRecon::Process(Long64_t entry)
         else
           continue;
 
-        plotter->Fill1D("Wedgetime_Vs_Ringtime", 200, -2000, 2000, tWedge - tRing, "hCalQQQ");
+        plotter->Fill1D("Wedgetime_Vs_Ringtime", 200, -1000, 1000, tWedge - tRing, "hCalQQQ");
         plotter->Fill2D("RingE_vs_Index", 16 * 4, 0, 16 * 4, 1000, 0, 16000, chRing + qqq.id[i] * 16, eRing, "hRawQQQ");
         plotter->Fill2D("WedgeE_vs_Index", 16 * 4, 0, 16 * 4, 1000, 0, 16000, chWedge + qqq.id[i] * 16, eWedge, "hRawQQQ");
 
@@ -315,16 +315,17 @@ Bool_t TrackRecon::Process(Long64_t entry)
             // //   plotter->Fill2D("QQQ_CalibW_Vs_PC_Energy_OffTime", 1000, 0, 16, 2000, 0, 30000, eWedgeMeV, pc.e[k], "hCalQQQ");
             // //   plotter->Fill2D("QQQ_CalibR_Vs_PC_Energy_OffTime", 1000, 0, 16, 2000, 0, 30000, eRingMeV, pc.e[k], "hCalQQQ");
             // // }
-            plotter->Fill2D("Timing_Difference_QQQ_PC", 2000, -1000, 1000, 16, 0, 16, tRing - static_cast<double>(pc.t[k]), chRing, "hCalQQQ");
-            plotter->Fill2D("DelT_Vs_QQQRingECal", 2000, -1000, 1000, 1000, 0, 10, tRing - static_cast<double>(pc.t[k]), eRingMeV, "hCalQQQ");
-            if (tRing - static_cast<double>(pc.t[k]) < -150 && tRing - static_cast<double>(pc.t[k]) > -450)
+            plotter->Fill2D("Timing_Difference_QQQ_PC", 500, -1000, 1000, 16, 0, 16, tRing - static_cast<double>(pc.t[k]), chRing, "hCalQQQ");
+            plotter->Fill2D("DelT_Vs_QQQRingECal", 500, -1000, 1000, 1000, 0, 10, tRing - static_cast<double>(pc.t[k]), eRingMeV, "hCalQQQ");
+            if (tRing - static_cast<double>(pc.t[k]) < -150 && tRing - static_cast<double>(pc.t[k]) > -450) // 27Al
+            // if (tRing - static_cast<double>(pc.t[k]) < -70 && tRing - static_cast<double>(pc.t[k]) > -150) // 17F
             {
               PCQQQTimeCut = true;
             }
           }
           if (pc.index[k] >= 24 && pc.e[k] > 50)
           {
-            plotter->Fill2D("Timing_Difference_QQQ_PC_Cathode", 2000, -1000, 1000, 16, 0, 16, tRing - static_cast<double>(pc.t[k]), chRing, "hCalQQQ");
+            plotter->Fill2D("Timing_Difference_QQQ_PC_Cathode", 500, -1000, 1000, 16, 0, 16, tRing - static_cast<double>(pc.t[k]), chRing, "hCalQQQ");
           }
         }
 
@@ -508,18 +509,18 @@ Bool_t TrackRecon::Process(Long64_t entry)
     PCQQQPhiCut = true;
   }
 
-  for (double Tz = -190; Tz <= 190; Tz += 10.0)
-  {
-    TVector3 TargetPos(0, 0, Tz);
-    plotter->Fill2D("Inttheta_vs_QQQtheta_TC" + std::to_string(PCQQQTimeCut) + "_TZ" + std::to_string(Tz), 90, 0, 180, 80, 0, 180, (anodeIntersection - TargetPos).Theta() * 180. / TMath::Pi(), (hitPos - TargetPos).Theta() * 180. / TMath::Pi(), "TPosVariation");
-  }
+  // for (double Tz = -190; Tz <= 190; Tz += 10.0)
+  // {
+  //   TVector3 TargetPos(0, 0, Tz);
+  //   plotter->Fill2D("Inttheta_vs_QQQtheta_TC" + std::to_string(PCQQQTimeCut) + "_TZ" + std::to_string(Tz), 90, 0, 180, 120, 0, 180, (anodeIntersection - TargetPos).Theta() * 180. / TMath::Pi(), (hitPos - TargetPos).Theta() * 180. / TMath::Pi(), "TPosVariation");
+  // }
 
   if (anodeIntersection.Z() != 0)
   {
     plotter->Fill1D("PC_Z_Projection", 600, -300, 300, anodeIntersection.Z(), "hGMPC");
     plotter->Fill2D("Z_Proj_VsDelTime", 600, -300, 300, 200, -2000, 2000, anodeIntersection.Z(), anodeT - cathodeT, "hGMPC");
-    plotter->Fill2D("IntPhi_vs_QQQphi", 400, -200, 200, 400, -200, 200, anodeIntersection.Phi() * 180. / TMath::Pi(), hitPos.Phi() * 180. / TMath::Pi(), "hGMPC");
-    plotter->Fill2D("Inttheta_vs_QQQtheta", 90, 0, 180, 20, 0, 45, anodeIntersection.Theta() * 180. / TMath::Pi(), hitPos.Theta() * 180. / TMath::Pi(), "hGMPC");
+    plotter->Fill2D("IntPhi_vs_QQQphi", 100, -200, 200, 80, -200, 200, anodeIntersection.Phi() * 180. / TMath::Pi(), hitPos.Phi() * 180. / TMath::Pi());
+    plotter->Fill2D("Inttheta_vs_QQQtheta", 90, 0, 180, 20, 0, 45, anodeIntersection.Theta() * 180. / TMath::Pi(), hitPos.Theta() * 180. / TMath::Pi());
     plotter->Fill2D("Inttheta_vs_QQQtheta_TC" + std::to_string(PCQQQTimeCut), 90, 0, 180, 20, 0, 45, anodeIntersection.Theta() * 180. / TMath::Pi(), hitPos.Theta() * 180. / TMath::Pi());
     plotter->Fill2D("IntPhi_vs_QQQphi_TC" + std::to_string(PCQQQTimeCut) + "PhiC" + std::to_string(PCQQQPhiCut), 100, -200, 200, 80, -200, 200, anodeIntersection.Phi() * 180. / TMath::Pi(), hitPos.Phi() * 180. / TMath::Pi());
   }
@@ -601,6 +602,10 @@ Bool_t TrackRecon::Process(Long64_t entry)
   {
     pw_contr.CalTrack2(hitPos, anodeIntersection);
     plotter->Fill1D("VertexRecon", 600, -300, 300, pw_contr.GetZ0(), "hGMPC");
+    if(PCQQQPhiCut&&PCQQQTimeCut)
+    {
+      plotter->Fill1D("VertexRecon_TC_PhiC", 600, -300, 300, pw_contr.GetZ0(), "hGMPC");
+    }
   }
 
   for (int i = 0; i < qqq.multi; i++)
@@ -672,6 +677,12 @@ Bool_t TrackRecon::Process(Long64_t entry)
         plotter->Fill2D("PC_Z_vs_QQQRing_Det" + std::to_string(qqqID), 600, -300, 300, 16, 0, 16, anodeIntersection.Z(), chRing, "hGMPC");
       }
     }
+  }
+  for (int i = 0; i < sx3.multi; i++)
+  {
+    // plotting sx3 strip hits vs anode phi
+    if (sx3.ch[i] < 8)
+      plotter->Fill2D("AnodePhi_vs_SX3Strip", 100, -200, 200, 8 * 24, 0, 8 * 24, anodeIntersection.Phi() * 180. / TMath::Pi(), sx3.id[i] * 8 + sx3.ch[i], "hGMPC");
   }
 
   if (anodeIntersection.Z() != 0 && cathodeHits.size() == 3)

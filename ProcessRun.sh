@@ -22,7 +22,7 @@ if [ $option -eq 0 ]; then
 
     fileList=`\ls -1 ${rawFolder}/*Run_${runID}_*.fsu`
 
-    ./EventBuilder ${timeWindow} 0 0 100000000 ${fileList}
+    # ./EventBuilder ${timeWindow} 0 0 100000000 ${fileList}
 
     outFile=${rawFolder}/*${runID}*${timeWindow}.root
 
