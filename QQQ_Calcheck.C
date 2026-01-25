@@ -133,10 +133,10 @@ Bool_t QQQ_Calcheck::Process(Long64_t entry)
                 else
                     continue;
                 // plug in calibrations
-                if (qqqCalibValid[qqq.id[i]][chRing][chWedge])
+                if (qqqCalibValid[qqq.id[i]][chWedge][chRing])
                 {
-                    eWedgeMeV = eWedge * qqqCalib[qqq.id[i]][chRing][chWedge] / 1000;
-                    eRingMeV = eRing * qqqCalib[qqq.id[i]][chRing][chWedge] / 1000;
+                    eWedgeMeV = eWedge * qqqCalib[qqq.id[i]][chWedge][chRing] / 1000;
+                    eRingMeV = eRing * qqqCalib[qqq.id[i]][chWedge][chRing] / 1000;
                 }
                 else
                     continue;

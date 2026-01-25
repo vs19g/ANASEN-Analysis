@@ -146,8 +146,8 @@ void TrackRecon::Begin(TTree * /*tree*/)
       double gainw, gainr;
       while (infile >> det >> wedge >> ring >> gainw >> gainr)
       {
-        qqqGain[det][ring][wedge] = gainw;
-        qqqGainValid[det][ring][wedge] = (gainw > 0);
+        qqqGain[det][wedge][ring] = gainw;
+        qqqGainValid[det][wedge][ring] = (gainw > 0);
         // std::cout << "QQQ Gain Loaded: Det " << det << " Ring " << ring << " Wedge " << wedge << " GainW " << gainw << " GainR " << gainr << std::endl;
       }
       infile.close();
@@ -162,8 +162,8 @@ void TrackRecon::Begin(TTree * /*tree*/)
       double slope;
       while (infile >> det >> wedge >> ring >> slope)
       {
-        qqqCalib[det][ring][wedge] = slope;
-        qqqCalibValid[det][ring][wedge] = (slope > 0);
+        qqqCalib[det][wedge][ring] = slope;
+        qqqCalibValid[det][wedge][ring] = (slope > 0);
         // std::cout << "QQQ Calib Loaded: Det " << det << " Ring " << ring << " Wedge " << wedge << " Slope " << slope << std::endl;
       }
       infile.close();
@@ -278,14 +278,14 @@ Bool_t TrackRecon::Process(Long64_t entry)
         else
           continue;
 
-        plotter->Fill1D("Wedgetime_Vs_Ringtime", 200, -1000, 1000, tWedge - tRing, "hCalQQQ");
+        plotter->Fill1D("Wedgetime_Vs_Ringtime", 100, -1000, 1000, tWedge - tRing, "hCalQQQ");
         plotter->Fill2D("RingE_vs_Index", 16 * 4, 0, 16 * 4, 1000, 0, 16000, chRing + qqq.id[i] * 16, eRing, "hRawQQQ");
         plotter->Fill2D("WedgeE_vs_Index", 16 * 4, 0, 16 * 4, 1000, 0, 16000, chWedge + qqq.id[i] * 16, eWedge, "hRawQQQ");
 
-        if (qqqCalibValid[qqq.id[i]][chRing][chWedge])
+        if (qqqCalibValid[qqq.id[i]][chWedge][chRing])
         {
-          eWedgeMeV = eWedge * qqqCalib[qqq.id[i]][chRing][chWedge] / 1000;
-          eRingMeV = eRing * qqqCalib[qqq.id[i]][chRing][chWedge] / 1000;
+          eWedgeMeV = eWedge * qqqCalib[qqq.id[i]][chWedge][chRing] / 1000;
+          eRingMeV = eRing * qqqCalib[qqq.id[i]][chWedge][chRing] / 1000;
         }
         else
           continue;
@@ -317,6 +317,8 @@ Bool_t TrackRecon::Process(Long64_t entry)
             // // }
             plotter->Fill2D("Timing_Difference_QQQ_PC", 500, -1000, 1000, 16, 0, 16, tRing - static_cast<double>(pc.t[k]), chRing, "hCalQQQ");
             plotter->Fill2D("DelT_Vs_QQQRingECal", 500, -1000, 1000, 1000, 0, 10, tRing - static_cast<double>(pc.t[k]), eRingMeV, "hCalQQQ");
+            plotter->Fill2D("CalibratedQQQEvsPCE",  1000, 0, 10, 2000, 0, 30000, eRingMeV, pc.e[k], "hGMPC");
+            plotter->Fill2D("CalibratedQQQEvsPCE", 1000, 0, 10, 2000, 0, 30000, eWedgeMeV, pc.e[k], "hGMPC");
             if (tRing - static_cast<double>(pc.t[k]) < -150 && tRing - static_cast<double>(pc.t[k]) > -450) // 27Al
             // if (tRing - static_cast<double>(pc.t[k]) < -70 && tRing - static_cast<double>(pc.t[k]) > -150) // 17F
             {
@@ -326,6 +328,7 @@ Bool_t TrackRecon::Process(Long64_t entry)
           if (pc.index[k] >= 24 && pc.e[k] > 50)
           {
             plotter->Fill2D("Timing_Difference_QQQ_PC_Cathode", 500, -1000, 1000, 16, 0, 16, tRing - static_cast<double>(pc.t[k]), chRing, "hCalQQQ");
+          
           }
         }
 
