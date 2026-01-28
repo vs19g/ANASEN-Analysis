@@ -39,7 +39,7 @@ void QQQ_Calcheck::Begin(TTree * /*tree*/)
     plotter = new HistPlotter("Cal_checkQQQ.root", "TFILE");
     // ----------------------- Load QQQ Gains
     {
-        std::string filename = "qqq_GainMatch.txt";
+        std::string filename = "qqq_GainMatch.dat";
         std::ifstream infile(filename);
         if (!infile.is_open())
         {
@@ -62,7 +62,7 @@ void QQQ_Calcheck::Begin(TTree * /*tree*/)
     }
     // ----------------------- Load QQQ Calibrations
     {
-        std::string filename = "qqq_Calib.txt";
+        std::string filename = "qqq_Calib.dat";
         std::ifstream infile(filename);
         if (!infile.is_open())
         {
