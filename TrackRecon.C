@@ -324,8 +324,8 @@ Bool_t TrackRecon::Process(Long64_t entry)
             plotter->Fill2D("DelT_Vs_QQQRingECal", 500, -2500, 2500, 1000, 0, 10, tRing - static_cast<double>(pc.t[k]), eRingMeV, "hTiming");
             plotter->Fill2D("CalibratedQQQEvsAnodeE_R", 1000, 0, 10, 2000, 0, 30000, eRingMeV, pc.e[k], "hPCQQQ");
             plotter->Fill2D("CalibratedQQQEvsAnodeE_W", 1000, 0, 10, 2000, 0, 30000, eWedgeMeV, pc.e[k], "hPCQQQ");
-            // if (tRing - static_cast<double>(pc.t[k]) < -150 && tRing - static_cast<double>(pc.t[k]) > -450) // 27Al
-            if (tRing - static_cast<double>(pc.t[k]) < -75 && tRing - static_cast<double>(pc.t[k]) > -145) // 17F
+            if (tRing - static_cast<double>(pc.t[k]) < -150 && tRing - static_cast<double>(pc.t[k]) > -450) // 27Al
+            // if (tRing - static_cast<double>(pc.t[k]) < -75 && tRing - static_cast<double>(pc.t[k]) > -145) // 17F
             {
               PCQQQTimeCut = true;
             }
