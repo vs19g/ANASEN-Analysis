@@ -3,7 +3,7 @@
 # ==========================================
 # CONFIGURATION
 # ==========================================
-DATA_DIR="/mnt/d/Remapped_files/17F_data/root_data"
+DATA_DIR="/mnt/d/Remapped_files/27Al_data/root_data"
 MACRO="TrackRecon.C"
 
 # SAFETY SETTINGS
