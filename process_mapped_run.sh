@@ -3,7 +3,7 @@
 # ==========================================
 # CONFIGURATION
 # ==========================================
-DATA_DIR="/mnt/d/Remapped_files/27Al_data/root_data"
+DATA_DIR="/mnt/d/Remapped_files/17F_data/root_data"
 MACRO="TrackRecon.C"
 
 # SAFETY SETTINGS
@@ -49,7 +49,7 @@ for (( i=$START_RUN; i<=$END_RUN; i++ ))
 do
     # Construct the input filename
     # Logic: Run_0 + number -> Run_0115
-    file="${DATA_DIR}/Run_0${i}_mapped.root"
+    file="${DATA_DIR}/Run_${i}_mapped.root"
     
     # ------------------------------------------------------------
     # SKIP LOGIC

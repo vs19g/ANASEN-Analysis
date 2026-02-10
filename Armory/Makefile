@@ -27,6 +27,6 @@ Mapper	:	Mapper.cpp  ../mapping.h ClassDet.h
 # 		@echo "--------- making ANASEN Monte Carlo"
 # 		$(CC) $(COPTS) -o AnasenMS anasenMS.cpp $(ROOTLIBS)
 
-EventBuilder : EventBuilder.cpp ../ClassData.h fsuReader.h ../Hit.h
+EventBuilder : EventBuilder.cpp ClassData.h fsuReader.h Hit.h
 		@echo "--------- making EventBuilder"
 		$(CC) $(COPTS) -o EventBuilder EventBuilder.cpp $(ROOTLIBS) 

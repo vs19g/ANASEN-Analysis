@@ -5,6 +5,8 @@ EventBuilder*
 *.root
 *.exe
 *.txt
+*.err
+*.seq
 Mapper
 AnasenMS
 
