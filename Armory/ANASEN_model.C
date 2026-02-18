@@ -42,7 +42,7 @@ void ANASEN_model(int anodeID1 = -1, int anodeID2 = -1, int cathodeID1 = -1, int
   //--- making ANASEN
   const int nWire = 24;
   const int wireShift = 3;
-  const int zLen = 300; //mm
+  const int zLen = 350; //mm
   const int radiusA = 38;
   const int radiusC = 43;
 

@@ -301,6 +301,8 @@ Bool_t TrackRecon::Process(Long64_t entry)
           continue;
 
         plotter->Fill2D("WedgeE_Vs_RingECal", 1000, 0, 10, 1000, 0, 10, eWedgeMeV, eRingMeV, "hCalQQQ");
+         if(qqq.multi>2 )       plotter->Fill2D("WedgeE_Vs_RingECal_mulit>2", 1000, 0, 10, 1000, 0, 10, eWedgeMeV, eRingMeV, "hCalQQQ");
+         if(qqq.multi==2 )       plotter->Fill2D("WedgeE_Vs_RingECal_mulit=2", 1000, 0, 10, 1000, 0, 10, eWedgeMeV, eRingMeV, "hCalQQQ");
 
         for (int k = 0; k < pc.multi; k++)
         {
@@ -420,7 +422,8 @@ Bool_t TrackRecon::Process(Long64_t entry)
     for (int j = i + 1; j < pc.multi; j++)
     {
       // plotter->Fill2D("PC_Coincidence_Matrix_anodeMinusCathode_lt_-200_" + std::to_string(anodeT - cathodeT < -200), 48, 0, 48, 48, 0, 48, pc.index[i], pc.index[j], "hRawPC");
-      plotter->Fill2D("Anode_V_Anode", 24, 0, 24, 24, 0, 24, pc.index[i], pc.index[j], "hGMPC");
+      if(pc.e[i]>50 && pc.e[j]>50)
+      plotter->Fill2D("Anode_V_Anode", 24, 0, 24, 24, 0, 24, pc.index[i], pc.index[j], "hRawPC");
     }
   }
 

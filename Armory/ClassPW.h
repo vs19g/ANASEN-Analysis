@@ -2,6 +2,7 @@
 #define ClassPW_h
 
 #include <cstdio>
+#include <iostream>
 #include <TMath.h>
 #include <TVector3.h>
 #include <TRandom.h>
@@ -61,6 +62,14 @@ public:
   double GetTrackPhi() const { return trackVec.Phi(); }
   double GetZ0();
 
+  inline std::tuple<std::pair<TVector3, TVector3>, double, double, double>  GetPseudoWire(const std::vector<std::tuple<int,double,double>>& cluster, std::string type);
+
+  inline std::tuple<TVector3,double,double,double,double,double,double,double> 
+  FindCrossoverProperties(const std::vector<std::tuple<int,double,double>>& a_cluster, const std::vector<std::tuple<int,double,double>>& c_cluster);
+
+  inline std::vector<std::vector<std::tuple<int,double,double>>>
+  Make_Clusters(std::unordered_map<int,std::tuple<int,double,double>> wireEvents);
+	
   int GetNumWire() const { return nWire; }
   double GetDeltaAngle() const { return dAngle; }
   double GetAnodeLength() const { return anodeLength; }
@@ -105,7 +114,8 @@ private:
 
   const int nWire = 24;
   const int wireShift = 3;
-  const float zLen = 380; // mm
+  // const float zLen = 380; // mm
+  const float zLen = 348.6; // mm
   const float radiusA = 37;
   const float radiusC = 43;
 
@@ -171,7 +181,160 @@ inline void PW::ConstructGeo()
 
   dAngle = wireShift * TMath::TwoPi() / nWire;
   anodeLength = TMath::Sqrt(zLen * zLen + TMath::Power(2 * radiusA * TMath::Sin(dAngle / 2), 2));
-  cathodeLength = TMath::Sqrt(zLen * zLen + TMath::Power(2 * radiusC * TMath::Sin(dAngle / 2), 2));
+  cathodeLength = TMath::Sqrt(zLen * zLen + TMath::Power(2 * radiusC * TMath::Sin(dAngle / 2), 2)); //chord length subtending an angle alpha is 2rsin(alpha/2)
+}
+
+inline std::vector<std::vector<std::tuple<int,double,double>>>
+PW::Make_Clusters(std::unordered_map<int,std::tuple<int,double,double>> wireEvents) {
+   std::vector<std::vector<std::tuple<int,double,double>>> wireClusters;
+   std::vector<std::tuple<int,double,double>> wireCluster;
+	//TODO: Write a macro once, call it twice
+    int wirecount=0;
+	while(wirecount < 24) {
+		if(wireEvents.find(wirecount)==wireEvents.end()) {
+				wirecount++;
+				continue;
+		}
+		wireCluster.clear();
+		int ctr2=wirecount;
+		do {
+			wireCluster.emplace_back(wireEvents[ctr2]);
+			ctr2+=1;
+			if(ctr2==24 || ctr2-wirecount == 7) break; //loose logic, needs to be looked at.
+		} while(wireEvents.find(ctr2)!=wireEvents.end());
+		wireClusters.push_back(std::move(wireCluster));
+		wirecount = ctr2; //we already dealt with wires until the last value of ctr2
+	}
+
+	if(wireClusters.size() > 1) { //Deal with wraparound if required
+		auto first_cluster = wireClusters.front(); //front and back provide references to the elements themselves. less copy, can modify etc
+		auto last_cluster = wireClusters.back();
+		if(std::get<0>(last_cluster.back())==23 && std::get<0>(first_cluster.front())==0) {
+			last_cluster.insert(last_cluster.end(),first_cluster.begin(),first_cluster.end());
+		}
+		wireClusters.erase(wireClusters.begin()); //canonically, erase() needs an iterator, hence begin() not front()
+		//TODO: Can also deal with 'gaps' of missing wires similarly. end of one segment and beginning of another segment will be separated by missing wire --> combine the two
+		//TODO: Also needs some development regarding the time-correlation. Don't put wires in the same cluster if they aren't time coincident
+	}
+	return wireClusters;
+
+  /*if(aClusters.size()>1 || cClusters.size() > 1) {
+  	std::cout << " ============== " << std::endl;
+  }
+  if(aClusters.size()>1 && cClusters.size() >=1) {
+  	std::cout << aClusters.size() << " new anode clusters ----> " << std::endl;
+  	int cc=1;
+  	for(auto ac : aClusters) {
+  		std::cout << "  Cluster " << cc << std::endl;
+	  	double first_ts = std::get<2>(ac.at(0));
+  		for(auto item : ac) {
+	  		std::cout << "  \t" << std::get<0>(item) << " " << std::get<1>(item) << " " << std::get<2>(item)-first_ts << std::endl;
+  		}
+  		std::cout << "  ------" << std::endl;
+  		cc++;
+  	}
+  } 	
+
+  if(cClusters.size()>=1 ) {
+  	std::cout << cClusters.size() << " new cathode clusters ----> " << std::endl;
+  	int cc=1;
+  	for(auto ac : cClusters) {
+  		std::cout << "  Cluster " << cc << std::endl;
+	  	double first_ts = std::get<2>(ac.at(0));
+  		for(auto item : ac) {
+	  		std::cout << "  \t" << std::get<0>(item) << " " << std::get<1>(item) << " " << std::get<2>(item)-first_ts << std::endl;
+  		}
+  		std::cout << "  ------" << std::endl;
+  		cc++;
+  	}
+  } 	*/
+}
+
+inline std::tuple<std::pair<TVector3, TVector3>, double, double, double>
+PW::GetPseudoWire(const std::vector<std::tuple<int,double,double>>& cluster, std::string type) {
+	std::pair<TVector3,TVector3> avgvec = std::pair(TVector3(0,0,0),TVector3(0,0,0));
+	double sumEnergy = 0;
+	double maxEnergy = 0;
+	double tsMaxEnergy = 0;
+	if(type=="ANODE") {
+		//if(cluster.size()>1) std::cout << " -------anodes" << std::endl;
+		for( auto wire : cluster) {
+			avgvec.first += std::get<1>(wire)*TVector3(An.at(std::get<0>(wire)).first.X(), An.at(std::get<0>(wire)).first.Y(), 0) ;
+			avgvec.second += std::get<1>(wire)*TVector3(An.at(std::get<0>(wire)).second.X(), An.at(std::get<0>(wire)).second.Y(), 0);
+			sumEnergy += std::get<1>(wire);
+			if(std::get<1>(wire) > maxEnergy) {
+				maxEnergy = std::get<1>(wire);
+				tsMaxEnergy = std::get<2>(wire);
+			}
+			/*if(cluster.size()>1) {
+				std::cout << "\t\t ch:" << std::get<0>(wire) << " " << std::get<1>(wire) << " " << std::get<2>(wire) << std::endl;
+				std::cout << "\t\t w1(r,phi,z):" << An.at(std::get<0>(wire)).first.Perp() << " " << An.at(std::get<0>(wire)).first.Phi()*180/M_PI << " " << An.at(std::get<0>(wire)).first.Z() << std::endl;
+				std::cout << "\t\t w2(r,phi,z):" << An.at(std::get<0>(wire)).second.Perp() << " " << An.at(std::get<0>(wire)).second.Phi()*180/M_PI << " " << An.at(std::get<0>(wire)).second.Z() << std::endl;			
+			}*/
+		}
+		avgvec.first = avgvec.first*(1.0/sumEnergy);
+		avgvec.second = avgvec.second*(1.0/sumEnergy);
+		double phi1 = avgvec.first.Phi();
+		double phi2 = avgvec.second.Phi();
+		avgvec.first.SetXYZ(radiusA*TMath::Cos(phi1), radiusA*TMath::Sin(phi1), zLen/2);
+		avgvec.second.SetXYZ(radiusA*TMath::Cos(phi2), radiusA*TMath::Sin(phi2), -zLen/2);
+		/*if(cluster.size()>1) {
+			std::cout << "\t\t avg1(r,phi,z):" << avgvec.first.Perp() << " " << avgvec.first.Phi()*180/M_PI << " " << avgvec.first.Z() << std::endl;			
+			std::cout << "\t\t avg2(r,phi,z):" << avgvec.second.Perp() << " " << avgvec.second.Phi()*180/M_PI << " " << avgvec.second.Z() << std::endl;			
+		}*/	
+	} else if(type =="CATHODE") {
+		for( auto wire : cluster) {
+			avgvec.first += std::get<1>(wire)*TVector3(Ca.at(std::get<0>(wire)).first.X(), Ca.at(std::get<0>(wire)).first.Y(), 0) ;
+			avgvec.second += std::get<1>(wire)*TVector3(Ca.at(std::get<0>(wire)).second.X(), Ca.at(std::get<0>(wire)).second.Y(), 0);
+			sumEnergy += std::get<1>(wire);
+			if(std::get<1>(wire) > maxEnergy) {
+				maxEnergy = std::get<1>(wire);
+				tsMaxEnergy = std::get<2>(wire);
+			}
+		}
+		avgvec.first = avgvec.first*(1.0/sumEnergy);
+		avgvec.second = avgvec.second*(1.0/sumEnergy);
+		double phi1 = avgvec.first.Phi();
+		double phi2 = avgvec.second.Phi();
+		avgvec.first.SetXYZ(radiusC*TMath::Cos(phi1), radiusC*TMath::Sin(phi1), zLen/2);
+		avgvec.second.SetXYZ(radiusC*TMath::Cos(phi2), radiusC*TMath::Sin(phi2), -zLen/2);	
+	}
+	return std::tuple(avgvec, sumEnergy, maxEnergy, tsMaxEnergy); 
+}
+
+inline std::tuple<TVector3,double,double,double,double,double,double,double> PW::FindCrossoverProperties(const std::vector<std::tuple<int,double,double>>& a_cluster,
+																				 const std::vector<std::tuple<int,double,double>>& c_cluster) {
+	//std::pair<TVector3, TVector3> apwire = GetPseudoWire(a_cluster,"ANODE",anodeSumE);
+	//std::pair<TVector3, TVector3> cpwire = GetPseudoWire(c_cluster,"CATHODE",cathodeSumE);
+	auto [apwire, apSumE, apMaxE, apTSMaxE] = GetPseudoWire(a_cluster,"ANODE");
+	auto [cpwire, cpSumE, cpMaxE, cpTSMaxE] = GetPseudoWire(c_cluster,"CATHODE");
+
+	TVector3 crossover;
+	crossover.Clear();
+  	TVector3 a, c, diff;
+  	double a2, ac, c2, adiff, cdiff, denom, alpha=0;
+
+	if(apSumE && cpSumE) {
+    	a = apwire.first - apwire.second;
+		c = cpwire.first - cpwire.second;
+      	diff = apwire.first - cpwire.first;
+      	a2 = a.Dot(a);
+      	c2 = c.Dot(c);
+      	ac = a.Dot(c);
+      	adiff = a.Dot(diff);
+      	cdiff = c.Dot(diff);
+      	denom = a2 * c2 - ac * ac;
+      	alpha = (ac * cdiff - c2 * adiff) / denom;
+		crossover = apwire.first + alpha*a;		
+		if(crossover.z() < -190 || crossover.Z() > 190 ) {
+			alpha = 9999999;
+			apSumE=-1; cpSumE=-1;
+			apMaxE=-1; cpMaxE=-1;
+			apTSMaxE=-1; cpTSMaxE=-1;
+		}
+	}
+	//std::cout << apSumE << " " << cpSumE << " " << " " <<  crossover.Perp() << std::endl;
+	return std::tuple(crossover,alpha,apSumE,cpSumE,apMaxE,cpMaxE,apTSMaxE,cpTSMaxE);
 }
 
 inline void PW::FindWireID(TVector3 pos, TVector3 direction, bool verbose)
@@ -300,6 +463,18 @@ inline void PW::CalTrack2(TVector3 siPos, TVector3 anodeInt, bool verbose)
   if (verbose)
     printf("X slope = %f and Y slope = %f \n", mx, my);
 }
+
+/*inline TVector3 PW::CalTrack3(TVector3 siPos, TVector3 anodeInt, bool verbose)
+{
+
+  TVector3 v = anodeInt-siPos;
+  double t_minimum = -1.0*(siPos.X()*v.X()+siPos.Y()*v.Y())/(v.X()*v.X()+v.Y()*v.Y());
+  TVector3 vector_closest_to_z = siPos + t_minimum*v;
+
+  return vector_closest_to_z;
+  if (verbose)
+    printf("X slope = %f and Y slope = %f \n", mx, my);
+}*/
 
 inline double PW::GetZ0()
 {
