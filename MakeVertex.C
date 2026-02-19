@@ -117,7 +117,7 @@ void MakeVertex::Begin(TTree * /*tree*/)
   }
 
   // Load PC Calibrations
-  std::ifstream inputFile("slope_intercept_results.txt");
+  std::ifstream inputFile("slope_intercept_results.dat");
   if (inputFile.is_open())
   {
     std::string line;
@@ -137,7 +137,7 @@ void MakeVertex::Begin(TTree * /*tree*/)
   }
   else
   {
-    std::cerr << "Error opening slope_intercept.txt" << std::endl;
+    std::cerr << "Error opening slope_intercept.dat" << std::endl;
   }
 
   // Load QQQ Cuts from file
@@ -301,21 +301,21 @@ Bool_t MakeVertex::Process(Long64_t entry)
   int qqqCount = 0;
   int qqqAdjCh = 0;
   // REMOVE WHEN RERUNNING USING THE NEW CALIBRATION FILE
-  for (int i = 0; i < qqq.multi; i++)
-  {
-    //if ((qqq.id[i] == 3 || qqq.id[i] == 1) && qqq.ch[i] < 16)
-    if (qqq.id[i] == 1 && qqq.ch[i] < 16) //for run 12, 26Al
-    {
-      qqq.ch[i] = 16 - qqq.ch[i];
-    }
-  }
-  for (int i = 0; i < qqq.multi; i++)
-  {
-    if (qqq.id[i] == 0 && qqq.ch[i] >= 16)
-    {
-      qqq.ch[i] = 31 - qqq.ch[i] + 16;
-    }
-  }
+  // for (int i = 0; i < qqq.multi; i++)
+  // {
+  //   //if ((qqq.id[i] == 3 || qqq.id[i] == 1) && qqq.ch[i] < 16)
+  //   if (qqq.id[i] == 1 && qqq.ch[i] < 16) //for run 12, 26Al
+  //   {
+  //     qqq.ch[i] = 16 - qqq.ch[i];
+  //   }
+  // }
+  // for (int i = 0; i < qqq.multi; i++)
+  // {
+  //   if (qqq.id[i] == 0 && qqq.ch[i] >= 16)
+  //   {
+  //     qqq.ch[i] = 31 - qqq.ch[i] + 16;
+  //   }
+  // }
 
   std::vector<Event> QQQ_Events, PC_Events;
   std::vector<Event> QQQ_Events_Raw, PC_Events_Raw;

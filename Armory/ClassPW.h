@@ -114,7 +114,7 @@ private:
 
   const int nWire = 24;
   const int wireShift = 3;
-  // const float zLen = 380; // mm
+  //const float zLen = 380; // mm
   const float zLen = 348.6; // mm
   const float radiusA = 37;
   const float radiusC = 43;
