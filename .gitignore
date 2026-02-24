@@ -7,6 +7,7 @@ EventBuilder*
 *.txt
 *.err
 *.seq
+*.png
 Mapper
 AnasenMS
 
@@ -26,4 +27,3 @@ qqq_gains_det3.dat
 qqq_relative_gains.dat
 Armory/CorrelateQQQ.h
 QQQStage2.C
-qqqIvERun395.png

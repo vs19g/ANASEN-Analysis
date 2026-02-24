@@ -45,6 +45,9 @@ public:
 const int MAX_QQQ = 4;
 const int MAX_RING = 16;
 const int MAX_WEDGE = 16;
+const double qqqpos=100.0;
+const double vertexpos=14.2;
+const double pcrad=37.0;
 double qqqGain[MAX_QQQ][MAX_RING][MAX_WEDGE] = {{{0}}};
 bool qqqGainValid[MAX_QQQ][MAX_RING][MAX_WEDGE] = {{{false}}};
 double qqqCalib[MAX_QQQ][MAX_RING][MAX_WEDGE] = {{{0}}};
@@ -248,53 +251,53 @@ Bool_t MakeVertex::Process(Long64_t entry)
   pc.CalIndex();
 
   std::vector<Event> sx3Events;
-  if(sx3.multi>1) {
-  	std::array<sx3det,12> Fsx3;   
-  	//std::cout << "-----" << std::endl;
-  	for(int i=0; i<sx3.multi; i++) {
-  		if(sx3.id[i]>=12) continue;
-  		int id = sx3.id[i];
-  		if(sx3.ch[i]>=8) {
-  			int sx3ch=sx3.ch[i]-8;
-  			sx3ch=(sx3ch+3)%4;
-  			if(sx3ch==0 || sx3ch==3) continue;
-  			float value=sx3.e[i];
-  			int gch = sx3.id[i]*4+(sx3.ch[i]-8);
-  			Fsx3.at(id).fillevent("BACK",sx3ch,value);
-  			Fsx3.at(id).ts = static_cast<double>(sx3.t[i]);
-  			plotter->Fill2D("sx3backs_raw",100,0,100,800,0,4096,gch,sx3.e[i]);
-  		} else {
-  			int sx3ch=sx3.ch[i]/2;
-  			double value=sx3.e[i];
-  			if(sx3.ch[i]%2==0) {
-  	  		    Fsx3.at(id).fillevent("FRONT_L",sx3ch,value*sx3RightGain[id][sx3ch]);
-  			} else {
-  				Fsx3.at(id).fillevent("FRONT_R",sx3ch,value);
-  			}
-  		}
-  	}
-  	for(int id=0; id<12; id++) {
-  		Fsx3.at(id).validate();
-  		auto det = Fsx3.at(id);
-  		bool no_charge_sharing_strict = det.valid_front_chans.size()==1 && det.valid_back_chans.size()==1;
-  		if(det.valid) {
-  		    //std::cout << det.frontEL << " " << det.frontEL*sx3RightGain[id][det.stripF] << std::endl;
-  			plotter->Fill2D("be_vs_x_sx3_id_"+std::to_string(id)+"_f"+std::to_string(det.stripF)+"_b"+std::to_string(det.stripB),200,-1,1,800,0,8192,
-  							det.frontX,det.backE,"evsx");
-  			//std::cout << sx3BackGain[id][det.stripF][det.stripB] << " " << sx3FrontGain[id][det.stripF] << std::endl;
-  			plotter->Fill2D("matched_be_vs_x_sx3_id_"+std::to_string(id)+"_f"+std::to_string(det.stripF),200,-30,30,800,0,8192,
-  							det.frontX*sx3FrontGain[id][det.stripF]+sx3FrontOffset[id][det.stripF],det.backE*sx3BackGain[id][det.stripF][det.stripB],"evsx_matched");
-  			//plotter->Fill2D("fe_vs_x_sx3_id_"+std::to_string(id)+"_f"+std::to_string(det.stripF)+"_"+std::to_string(det.stripB),200,-1,1,800,0,4096,det.frontX,det.backE,"evsx");
-  			plotter->Fill2D("l_vs_r_sx3_id_"+std::to_string(id)+"_f"+std::to_string(det.stripF),800,0,4096,800,0,4096,det.frontEL,det.frontER,"l_vs_r");
-  		}
-  		if(det.valid && (id ==9 || id==7 || id == 1 || id==3) && det.stripF!=DEFAULT_NULL && det.stripB!=DEFAULT_NULL) {
-  			double z = det.frontX*sx3FrontGain[id][det.stripF]+sx3FrontOffset[id][det.stripF];
-  			double backE = det.backE*sx3BackGain[id][det.stripF][det.stripB];
-  			Event sx3ev(TVector3(0,0,z),backE,-1,det.ts,-1,det.stripB+4*id,det.stripF+4*id);
-  			sx3Events.push_back(sx3ev);
-  		}
-  	}
-  }
+  // if(sx3.multi>1) {
+  // 	std::array<sx3det,12> Fsx3;   
+  // 	//std::cout << "-----" << std::endl;
+  // 	for(int i=0; i<sx3.multi; i++) {
+  // 		if(sx3.id[i]>=12) continue;
+  // 		int id = sx3.id[i];
+  // 		if(sx3.ch[i]>=8) {
+  // 			int sx3ch=sx3.ch[i]-8;
+  // 			sx3ch=(sx3ch+3)%4;
+  // 			if(sx3ch==0 || sx3ch==3) continue;
+  // 			float value=sx3.e[i];
+  // 			int gch = sx3.id[i]*4+(sx3.ch[i]-8);
+  // 			Fsx3.at(id).fillevent("BACK",sx3ch,value);
+  // 			Fsx3.at(id).ts = static_cast<double>(sx3.t[i]);
+  // 			plotter->Fill2D("sx3backs_raw",100,0,100,800,0,4096,gch,sx3.e[i]);
+  // 		} else {
+  // 			int sx3ch=sx3.ch[i]/2;
+  // 			double value=sx3.e[i];
+  // 			if(sx3.ch[i]%2==0) {
+  // 	  		    Fsx3.at(id).fillevent("FRONT_L",sx3ch,value*sx3RightGain[id][sx3ch]);
+  // 			} else {
+  // 				Fsx3.at(id).fillevent("FRONT_R",sx3ch,value);
+  // 			}
+  // 		}
+  // 	}
+  // 	for(int id=0; id<12; id++) {
+  // 		Fsx3.at(id).validate();
+  // 		auto det = Fsx3.at(id);
+  // 		bool no_charge_sharing_strict = det.valid_front_chans.size()==1 && det.valid_back_chans.size()==1;
+  // 		if(det.valid) {
+  // 		    //std::cout << det.frontEL << " " << det.frontEL*sx3RightGain[id][det.stripF] << std::endl;
+  // 			plotter->Fill2D("be_vs_x_sx3_id_"+std::to_string(id)+"_f"+std::to_string(det.stripF)+"_b"+std::to_string(det.stripB),200,-1,1,800,0,8192,
+  // 							det.frontX,det.backE,"evsx");
+  // 			//std::cout << sx3BackGain[id][det.stripF][det.stripB] << " " << sx3FrontGain[id][det.stripF] << std::endl;
+  // 			plotter->Fill2D("matched_be_vs_x_sx3_id_"+std::to_string(id)+"_f"+std::to_string(det.stripF)+"_"+std::to_string(id*4+det.stripF),200,-30,30,800,0,8192,
+  // 							det.frontX*sx3FrontGain[id][det.stripF]+sx3FrontOffset[id][det.stripF],det.backE*sx3BackGain[id][det.stripF][det.stripB],"evsx_matched");
+  // 			//plotter->Fill2D("fe_vs_x_sx3_id_"+std::to_string(id)+"_f"+std::to_string(det.stripF)+"_"+std::to_string(det.stripB),200,-1,1,800,0,4096,det.frontX,det.backE,"evsx");
+  // 			plotter->Fill2D("l_vs_r_sx3_id_"+std::to_string(id)+"_f"+std::to_string(det.stripF),800,0,4096,800,0,4096,det.frontEL,det.frontER,"l_vs_r");
+  // 		}
+  // 		if(det.valid && (id ==9 || id==7 || id == 1 || id==3) && det.stripF!=DEFAULT_NULL && det.stripB!=DEFAULT_NULL) {
+  // 			double z = det.frontX*sx3FrontGain[id][det.stripF]+sx3FrontOffset[id][det.stripF];
+  // 			double backE = det.backE*sx3BackGain[id][det.stripF][det.stripB];
+  // 			Event sx3ev(TVector3(0,0,z),backE,-1,det.ts,-1,det.stripB+4*id,det.stripF+4*id);
+  // 			sx3Events.push_back(sx3ev);
+  // 		}
+  // 	}
+  // }
   //return kTRUE;
   // QQQ Processing
 
@@ -403,8 +406,8 @@ Bool_t MakeVertex::Process(Long64_t entry)
           double rho = 50. + (50. / 16.) * (chRing + 0.5); //"?"
 			//z used to be 75+30+23=128
 			//we found a 12mm shift towards the vertex later --> 116 
-          Event qqqevent(TVector3(rho*TMath::Cos(theta),rho*TMath::Sin(theta),116), eRingMeV, eWedgeMeV, tRing, tWedge,chRing+qqq.id[i]*16, chWedge+qqq.id[i]*16);
-          Event qqqeventr(TVector3(rho*TMath::Cos(theta),rho*TMath::Sin(theta),116), eRing, eWedge, tRing, tWedge,chRing+qqq.id[i]*16, chWedge+qqq.id[i]*16);
+          Event qqqevent(TVector3(rho*TMath::Cos(theta),rho*TMath::Sin(theta),qqqpos), eRingMeV, eWedgeMeV, tRing, tWedge,chRing+qqq.id[i]*16, chWedge+qqq.id[i]*16);
+          Event qqqeventr(TVector3(rho*TMath::Cos(theta),rho*TMath::Sin(theta),qqqpos), eRing, eWedge, tRing, tWedge,chRing+qqq.id[i]*16, chWedge+qqq.id[i]*16);
           QQQ_Events.push_back(qqqevent);
           QQQ_Events_Raw.push_back(qqqeventr);
           plotter->Fill2D("QQQCartesianPlot", 200, -100, 100, 200, -100, 100, rho * TMath::Cos(theta), rho * TMath::Sin(theta), "hCalQQQ");
@@ -452,7 +455,7 @@ Bool_t MakeVertex::Process(Long64_t entry)
           double rho = 50. + (50. / 16.) * (chRing + 0.5); //"?"
           double x = rho * TMath::Cos(theta);
           double y = rho * TMath::Sin(theta);
-          hitPos.SetXYZ(x, y, (23 + 75 + 30));
+          hitPos.SetXYZ(x, y, (qqqpos));
           qqqenergy = eRingMeV;
           qqqtimestamp = tRing;
           HitNonZero = true;
@@ -597,8 +600,8 @@ Bool_t MakeVertex::Process(Long64_t entry)
    			plotter->Fill2D("dE_E_Cathodesx3B",400,0,10,800,0,10000,sx3event.Energy1*0.001,pcevent.Energy2);
    			double sx3z = sx3event.pos.Z()+(75.0/2.0)-3.0; //w.r.t target origin at 90 for run12
    			double sx3rho = 88.0;//approximate barrel radius
-   			double sx3theta = TMath::ATan2(sx3rho,sx3z-90);
-   			double pczguess = 40.0/TMath::Tan(sx3theta) + 90.0;
+   			double sx3theta = TMath::ATan2(sx3rho,sx3z-vertexpos);
+   			double pczguess = pcrad/TMath::Tan(sx3theta) + vertexpos;
    			plotter->Fill2D("pcz_vs_sx3pczguess",300,0,200,150,0,200,pczguess,pcevent.pos.Z());
    			plotter->Fill2D("pcz_vs_sx3pczguess"+std::to_string(sx3event.ch2),300,0,200,150,0,200,pczguess,pcevent.pos.Z());
    			plotter->Fill2D("pcz_vs_sx3z",300,0,200,150,0,200,sx3z,pcevent.pos.Z());
@@ -611,13 +614,13 @@ Bool_t MakeVertex::Process(Long64_t entry)
    			plotter->Fill1D("dt_pcC_qqqW",640,-2000,2000,qqqevent.Time2 - pcevent.Time2);
    			plotter->Fill2D("dE_E_AnodeQQQR",400,0,10,800,0,40000,qqqevent.Energy1,pcevent.Energy1);
    			plotter->Fill2D("dE_E_CathodeQQQR",400,0,10,800,0,10000,qqqevent.Energy2,pcevent.Energy2);
-   			double sinTheta = TMath::Sin((qqqevent.pos - TVector3(0,0,90)).Theta())/TMath::Sin((TVector3(51.5,0,128.) - TVector3(0,0,90)).Theta());
+   			double sinTheta = TMath::Sin((qqqevent.pos - TVector3(0,0,vertexpos)).Theta())/TMath::Sin((TVector3(51.5,0,qqqpos) - TVector3(0,0,vertexpos)).Theta());
    			plotter->Fill2D("dE2_E_AnodeQQQR",400,0,10,800,0,40000,qqqevent.Energy1,pcevent.Energy1*sinTheta);
    			plotter->Fill2D("dE2_E_CathodeQQQR",400,0,10,800,0,10000,qqqevent.Energy2,pcevent.Energy2*sinTheta);
 
    			if(qqqevent.pos.Phi() <= pcevent.pos.Phi()+TMath::Pi()/4. && qqqevent.pos.Phi() >= pcevent.pos.Phi()-TMath::Pi()/4.) {
    			   		plotter->Fill1D("PCZ",800,-200,200,pcevent.pos.Z(),"phicut");
-					double pcz_guess = 40.0/TMath::Tan((qqqevent.pos-TVector3(0,0,90)).Theta())  + 90; //this is ideally kept to be all QQQ+userinput for calibration of pcz   
+					double pcz_guess = pcrad/TMath::Tan((qqqevent.pos-TVector3(0,0,vertexpos)).Theta())  + vertexpos; //this is ideally kept to be all QQQ+userinput for calibration of pcz   
    			   		plotter->Fill2D("pczguess_vs_pc",300,0,200,150,0,200,pcz_guess,pcevent.pos.Z(),"phicut");
 					plotter->Fill2D("pczguess_vs_pc_phi="+std::to_string(qqqevent.pos.Phi()*180./M_PI),300,0,200,150,0,200,pcz_guess,pcevent.pos.Z(),"phicut");
    			   		//plotter->Fill1D("PCZ",800,-200,200,pcevent.pos.Z(),"phicut");   			   		   			
