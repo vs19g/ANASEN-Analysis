@@ -126,5 +126,6 @@
     "QQQStage2.C": "cpp",
     "inspect.C": "cpp"
   },
-  "github-enterprise.uri": "https://fsunuc.physics.fsu.edu"
+  "github-enterprise.uri": "https://fsunuc.physics.fsu.edu",
+  "C_Cpp.default.compilerPath": "/usr/bin/gcc"
 }
