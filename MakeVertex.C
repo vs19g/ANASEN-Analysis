@@ -610,7 +610,8 @@ Bool_t MakeVertex::Process(Long64_t entry)
       {
         // Event PCEvent(crossover,apMaxE,cpMaxE,apTSMaxE,cpTSMaxE);
         // Event PCEvent(crossover,apSumE,cpSumE,apTSMaxE,cpTSMaxE);
-        Event PCEvent(crossover, apSumE, cpMaxE, apTSMaxE, cpTSMaxE); // run12 shows cathode-max and anode-sum provide best dE signals.
+        // Event PCEvent(crossover, apSumE, cpMaxE, apTSMaxE, cpTSMaxE); // run12 shows cathode-max and anode-sum provide best dE signals.
+        Event PCEvent(crossover, apSumE, cpMaxE, apTSMaxE, cpTSMaxE, aCluster.size(), cCluster.size()); // changed to include cluster size info --VS
         // std::cout << apSumE << " " << crossover.Perp() << " " << apMaxE << " " << apTSMaxE << std::endl;
         PC_Events.push_back(PCEvent);
         sumE_AC.push_back(std::pair(apSumE, cpSumE));
@@ -660,30 +661,35 @@ Bool_t MakeVertex::Process(Long64_t entry)
         // plotter->Fill1D("PCZ",800,-200,200,pcevent.pos.Z(),"phicut");
       }
 
-      if (cClusters.size() == 1)
-      {
-        plotter->Fill1D("pcz_1cCluster", 600, -300, 300, pcevent.pos.Z(), "hPCzQQQ");
-      }
-      else if (cClusters.size() == 2)
-      {
-        plotter->Fill1D("pcz_2cCluster", 600, -300, 300, pcevent.pos.Z(), "hPCzQQQ");
-      }
-      else if (cClusters.size() >= 3)
-      {
-        plotter->Fill1D("pcz_ncCluster", 600, -300, 300, pcevent.pos.Z(), "hPCzQQQ");
-      }
+      int aSize = pcevent.ch1;
+      int cSize = pcevent.ch2;
 
-      if (aClusters.size() == 1)
+      if (cSize == 1)
       {
-        plotter->Fill1D("pcz_1aCluster", 600, -300, 300, pcevent.pos.Z(), "hPCzQQQ");
+        if (aSize == 1)
+          plotter->Fill1D("pcz_a1c1Cluster", 600, -300, 300, pcevent.pos.Z(), "hPCzQQQ");
+        else if (aSize == 2)
+          plotter->Fill1D("pcz_a2c1Cluster", 600, -300, 300, pcevent.pos.Z(), "hPCzQQQ");
+        else if (aSize >= 3)
+          plotter->Fill1D("pcz_aNc1Cluster", 600, -300, 300, pcevent.pos.Z(), "hPCzQQQ");
       }
-      else if (aClusters.size() == 2)
+      else if (cSize == 2)
       {
-        plotter->Fill1D("pcz_2aCluster", 600, -300, 300, pcevent.pos.Z(), "hPCzQQQ");
+        if (aSize == 1)
+          plotter->Fill1D("pcz_a1c2Cluster", 600, -300, 300, pcevent.pos.Z(), "hPCzQQQ");
+        else if (aSize == 2)
+          plotter->Fill1D("pcz_a2c2Cluster", 600, -300, 300, pcevent.pos.Z(), "hPCzQQQ");
+        else if (aSize >= 3)
+          plotter->Fill1D("pcz_aNc2Cluster", 600, -300, 300, pcevent.pos.Z(), "hPCzQQQ");
       }
-      else if (aClusters.size() >= 3)
+      else if (cSize >= 3)
       {
-        plotter->Fill1D("pcz_naCluster", 600, -300, 300, pcevent.pos.Z(), "hPCzQQQ");
+        if (aSize == 1)
+          plotter->Fill1D("pcz_a1cNCluster", 600, -300, 300, pcevent.pos.Z(), "hPCzQQQ");
+        else if (aSize == 2)
+          plotter->Fill1D("pcz_a2cNCluster", 600, -300, 300, pcevent.pos.Z(), "hPCzQQQ");
+        else if (aSize >= 3)
+          plotter->Fill1D("pcz_aNcNCluster", 600, -300, 300, pcevent.pos.Z(), "hPCzQQQ");
       }
     }
   }
