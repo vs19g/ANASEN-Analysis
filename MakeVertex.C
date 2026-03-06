@@ -31,6 +31,7 @@ class Event
 public:
   Event(TVector3 p, double e1, double e2, double t1, double t2) : pos(p), Energy1(e1), Energy2(e2), Time1(t1), Time2(t2) {}
   Event(TVector3 p, double e1, double e2, double t1, double t2, int c1, int c2) : pos(p), Energy1(e1), Energy2(e2), Time1(t1), Time2(t2), ch1(c1), ch2(c2) {}
+  Event(TVector3 p, double e1, double e2, double t1, double t2, int a, int c, int c1, int c2) : pos(p), Energy1(e1), Energy2(e2), Time1(t1), Time2(t2), Anodech(a), Cathodech(c), ch1(c1), ch2(c2) {}
 
   TVector3 pos;
   int ch1 = -1;        // int(ch1/16) gives qqq id, ch1%16 gives ring#
@@ -39,6 +40,8 @@ public:
   double Energy2 = -1; // Back for QQQ, Cathode for PC
   double Time1 = -1;
   double Time2 = -1;
+  int Anodech = -1;
+  int Cathodech = -1;
 };
 
 // Calibration globals
@@ -46,7 +49,7 @@ const int MAX_QQQ = 4;
 const int MAX_RING = 16;
 const int MAX_WEDGE = 16;
 const double qqqpos = 100.0;
-const double vertexpos = 14.2;
+const double vertexpos = 53.4;
 const double pcrad = 37.0;
 double qqqGain[MAX_QQQ][MAX_RING][MAX_WEDGE] = {{{0}}};
 bool qqqGainValid[MAX_QQQ][MAX_RING][MAX_WEDGE] = {{{false}}};
@@ -611,7 +614,8 @@ Bool_t MakeVertex::Process(Long64_t entry)
         // Event PCEvent(crossover,apMaxE,cpMaxE,apTSMaxE,cpTSMaxE);
         // Event PCEvent(crossover,apSumE,cpSumE,apTSMaxE,cpTSMaxE);
         // Event PCEvent(crossover, apSumE, cpMaxE, apTSMaxE, cpTSMaxE); // run12 shows cathode-max and anode-sum provide best dE signals.
-        Event PCEvent(crossover, apSumE, cpMaxE, apTSMaxE, cpTSMaxE, aCluster.size(), cCluster.size()); // changed to include cluster size info --VS
+        // Event PCEvent(crossover, apSumE, cpMaxE, apTSMaxE, cpTSMaxE, aCluster.size(), cCluster.size());                                 // changed to include cluster size info --VS
+        Event PCEvent(crossover, apSumE, cpMaxE, apTSMaxE, cpTSMaxE, std::get<0>(aCluster.back()), std::get<0>(cCluster.back()), aCluster.size(), cCluster.size()); // changed to include cluster size info and channel numbers--VS
         // std::cout << apSumE << " " << crossover.Perp() << " " << apMaxE << " " << apTSMaxE << std::endl;
         PC_Events.push_back(PCEvent);
         sumE_AC.push_back(std::pair(apSumE, cpSumE));
@@ -640,8 +644,69 @@ Bool_t MakeVertex::Process(Long64_t entry)
     }
   }
 
+  for (auto aCluster : aClusters)
+  {
+    for (auto cCluster : cClusters)
+    {
+      // if (aCluster.size() <= 1 && cCluster.size() <= 1)
+      //   continue;
+      if (aCluster.size() == 1 && cCluster.size() == 1)
+      {
+        plotter->Fill2D("AnodeE_vs_CathodeE_TC" + std::to_string(PCQQQTimeCut) + "_a" + std::to_string(std::get<0>(aCluster.back())) + "c" + std::to_string(std::get<0>(cCluster.back())), 800, 0, 20000, 800, 0, 7000,std::get<1>(aCluster.back()), std::get<1>(cCluster.back()), "AvC");
+        plotter->Fill2D("AnodeE_vs_CathodeE_TC" + std::to_string(PCQQQTimeCut), 800, 0, 20000, 800, 0, 7000, std::get<1>(aCluster.back()), std::get<1>(cCluster.back()), "AvC");
+      }
+      else if (aCluster.size() == 1 && cCluster.size() == 2)
+      {
+        plotter->Fill2D("AnodeE_vs_CathodeESum_TC" + std::to_string(PCQQQTimeCut), 800, 0, 20000, 800, 0, 7000, std::get<1>(aCluster.back()), std::get<1>(cCluster.back()) + std::get<1>(cCluster.front()), "AvC");
+        if (std::get<1>(cCluster.back()) > std::get<1>(cCluster.front()))
+          plotter->Fill2D("C1vsC2", 800, 0, 20000, 800, 0, 7000, std::get<1>(cCluster.back()), std::get<1>(cCluster.front()), "AvC");
+        else
+          plotter->Fill2D("C1vsC2", 800, 0, 20000, 800, 0, 7000, std::get<1>(cCluster.front()), std::get<1>(cCluster.back()), "AvC");
+      }
+      else if (aCluster.size() == 2 && cCluster.size() == 1)
+      {
+        plotter->Fill2D("AnodeESum_vs_CathodeE_TC" + std::to_string(PCQQQTimeCut), 800, 0, 20000, 800, 0, 7000, std::get<1>(aCluster.back()) + std::get<1>(aCluster.front()), std::get<1>(cCluster.back()), "AvC");
+        if(std::get<1>(aCluster.back()) > std::get<1>(aCluster.front()))
+          plotter->Fill2D("A1vsA2", 800, 0, 20000, 800, 0, 7000, std::get<1>(aCluster.back()), std::get<1>(aCluster.front()), "AvC");
+        else
+          plotter->Fill2D("A1vsA2", 800, 0, 20000, 800, 0, 7000, std::get<1>(aCluster.front()), std::get<1>(aCluster.back()), "AvC");
+      }
+    }
+  }
+
   for (auto pcevent : PC_Events)
   {
+    int aSize = pcevent.ch1;
+    int cSize = pcevent.ch2;
+
+    if (cSize == 1)
+    {
+      if (aSize == 1)
+        plotter->Fill1D("pcz_a1c1Cluster", 600, -300, 300, pcevent.pos.Z(), "hPCzQQQ");
+      else if (aSize == 2)
+        plotter->Fill1D("pcz_a2c1Cluster", 600, -300, 300, pcevent.pos.Z(), "hPCzQQQ");
+      else if (aSize >= 3)
+        plotter->Fill1D("pcz_aNc1Cluster", 600, -300, 300, pcevent.pos.Z(), "hPCzQQQ");
+    }
+    else if (cSize == 2)
+    {
+      if (aSize == 1)
+        plotter->Fill1D("pcz_a1c2Cluster", 600, -300, 300, pcevent.pos.Z(), "hPCzQQQ");
+      else if (aSize == 2)
+        plotter->Fill1D("pcz_a2c2Cluster", 600, -300, 300, pcevent.pos.Z(), "hPCzQQQ");
+      else if (aSize >= 3)
+        plotter->Fill1D("pcz_aNc2Cluster", 600, -300, 300, pcevent.pos.Z(), "hPCzQQQ");
+    }
+    else if (cSize >= 3)
+    {
+      if (aSize == 1)
+        plotter->Fill1D("pcz_a1cNCluster", 600, -300, 300, pcevent.pos.Z(), "hPCzQQQ");
+      else if (aSize == 2)
+        plotter->Fill1D("pcz_a2cNCluster", 600, -300, 300, pcevent.pos.Z(), "hPCzQQQ");
+      else if (aSize >= 3)
+        plotter->Fill1D("pcz_aNcNCluster", 600, -300, 300, pcevent.pos.Z(), "hPCzQQQ");
+    }
+
     for (auto qqqevent : QQQ_Events)
     {
       plotter->Fill1D("dt_pcA_qqqR", 640, -2000, 2000, qqqevent.Time1 - pcevent.Time1);
@@ -661,35 +726,32 @@ Bool_t MakeVertex::Process(Long64_t entry)
         // plotter->Fill1D("PCZ",800,-200,200,pcevent.pos.Z(),"phicut");
       }
 
-      int aSize = pcevent.ch1;
-      int cSize = pcevent.ch2;
-
       if (cSize == 1)
       {
         if (aSize == 1)
-          plotter->Fill1D("pcz_a1c1Cluster", 600, -300, 300, pcevent.pos.Z(), "hPCzQQQ");
+          plotter->Fill1D("pcz_a1c1Cluster_QQQ", 600, -300, 300, pcevent.pos.Z(), "hPCzQQQ");
         else if (aSize == 2)
-          plotter->Fill1D("pcz_a2c1Cluster", 600, -300, 300, pcevent.pos.Z(), "hPCzQQQ");
+          plotter->Fill1D("pcz_a2c1Cluster_QQQ", 600, -300, 300, pcevent.pos.Z(), "hPCzQQQ");
         else if (aSize >= 3)
-          plotter->Fill1D("pcz_aNc1Cluster", 600, -300, 300, pcevent.pos.Z(), "hPCzQQQ");
+          plotter->Fill1D("pcz_aNc1Cluster_QQQ", 600, -300, 300, pcevent.pos.Z(), "hPCzQQQ");
       }
       else if (cSize == 2)
       {
         if (aSize == 1)
-          plotter->Fill1D("pcz_a1c2Cluster", 600, -300, 300, pcevent.pos.Z(), "hPCzQQQ");
+          plotter->Fill1D("pcz_a1c2Cluster_QQQ", 600, -300, 300, pcevent.pos.Z(), "hPCzQQQ");
         else if (aSize == 2)
-          plotter->Fill1D("pcz_a2c2Cluster", 600, -300, 300, pcevent.pos.Z(), "hPCzQQQ");
+          plotter->Fill1D("pcz_a2c2Cluster_QQQ", 600, -300, 300, pcevent.pos.Z(), "hPCzQQQ");
         else if (aSize >= 3)
-          plotter->Fill1D("pcz_aNc2Cluster", 600, -300, 300, pcevent.pos.Z(), "hPCzQQQ");
+          plotter->Fill1D("pcz_aNc2Cluster_QQQ", 600, -300, 300, pcevent.pos.Z(), "hPCzQQQ");
       }
       else if (cSize >= 3)
       {
         if (aSize == 1)
-          plotter->Fill1D("pcz_a1cNCluster", 600, -300, 300, pcevent.pos.Z(), "hPCzQQQ");
+          plotter->Fill1D("pcz_a1cNCluster_QQQ", 600, -300, 300, pcevent.pos.Z(), "hPCzQQQ");
         else if (aSize == 2)
-          plotter->Fill1D("pcz_a2cNCluster", 600, -300, 300, pcevent.pos.Z(), "hPCzQQQ");
+          plotter->Fill1D("pcz_a2cNCluster_QQQ", 600, -300, 300, pcevent.pos.Z(), "hPCzQQQ");
         else if (aSize >= 3)
-          plotter->Fill1D("pcz_aNcNCluster", 600, -300, 300, pcevent.pos.Z(), "hPCzQQQ");
+          plotter->Fill1D("pcz_aNcNCluster_QQQ", 600, -300, 300, pcevent.pos.Z(), "hPCzQQQ");
       }
     }
   }
