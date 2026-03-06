@@ -614,8 +614,8 @@ Bool_t MakeVertex::Process(Long64_t entry)
         // Event PCEvent(crossover,apMaxE,cpMaxE,apTSMaxE,cpTSMaxE);
         // Event PCEvent(crossover,apSumE,cpSumE,apTSMaxE,cpTSMaxE);
         // Event PCEvent(crossover, apSumE, cpMaxE, apTSMaxE, cpTSMaxE); // run12 shows cathode-max and anode-sum provide best dE signals.
-        // Event PCEvent(crossover, apSumE, cpMaxE, apTSMaxE, cpTSMaxE, aCluster.size(), cCluster.size());                                 // changed to include cluster size info --VS
-        Event PCEvent(crossover, apSumE, cpMaxE, apTSMaxE, cpTSMaxE, std::get<0>(aCluster.back()), std::get<0>(cCluster.back()), aCluster.size(), cCluster.size()); // changed to include cluster size info and channel numbers--VS
+        Event PCEvent(crossover, apSumE, cpMaxE, apTSMaxE, cpTSMaxE, aCluster.size(), cCluster.size());                                 // changed to include cluster size info --VS
+        // Event PCEvent(crossover, apSumE, cpMaxE, apTSMaxE, cpTSMaxE, std::get<0>(aCluster.back()), std::get<0>(cCluster.back()), aCluster.size(), cCluster.size()); // changed to include cluster size info and channel numbers--VS
         // std::cout << apSumE << " " << crossover.Perp() << " " << apMaxE << " " << apTSMaxE << std::endl;
         PC_Events.push_back(PCEvent);
         sumE_AC.push_back(std::pair(apSumE, cpSumE));
@@ -652,24 +652,18 @@ Bool_t MakeVertex::Process(Long64_t entry)
       //   continue;
       if (aCluster.size() == 1 && cCluster.size() == 1)
       {
-        plotter->Fill2D("AnodeE_vs_CathodeE_TC" + std::to_string(PCQQQTimeCut) + "_a" + std::to_string(std::get<0>(aCluster.back())) + "c" + std::to_string(std::get<0>(cCluster.back())), 800, 0, 20000, 800, 0, 7000,std::get<1>(aCluster.back()), std::get<1>(cCluster.back()), "AvC");
+        plotter->Fill2D("AnodeE_vs_CathodeE_TC" + std::to_string(PCQQQTimeCut) + "_a" + std::to_string(std::get<0>(aCluster.back())) + "c" + std::to_string(std::get<0>(cCluster.back())), 800, 0, 20000, 800, 0, 7000, std::get<1>(aCluster.back()), std::get<1>(cCluster.back()), "AvC");
         plotter->Fill2D("AnodeE_vs_CathodeE_TC" + std::to_string(PCQQQTimeCut), 800, 0, 20000, 800, 0, 7000, std::get<1>(aCluster.back()), std::get<1>(cCluster.back()), "AvC");
       }
       else if (aCluster.size() == 1 && cCluster.size() == 2)
       {
-        plotter->Fill2D("AnodeE_vs_CathodeESum_TC" + std::to_string(PCQQQTimeCut), 800, 0, 20000, 800, 0, 7000, std::get<1>(aCluster.back()), std::get<1>(cCluster.back()) + std::get<1>(cCluster.front()), "AvC");
-        if (std::get<1>(cCluster.back()) > std::get<1>(cCluster.front()))
-          plotter->Fill2D("C1vsC2", 800, 0, 8000, 800, 0, 8000, std::get<1>(cCluster.back()), std::get<1>(cCluster.front()), "AvC");
-        else
-          plotter->Fill2D("C1vsC2", 800, 0, 8000, 800, 0, 8000, std::get<1>(cCluster.front()), std::get<1>(cCluster.back()), "AvC");
+        plotter->Fill2D("AnodeE_vs_CathodeESum_TC" + std::to_string(PCQQQTimeCut), 800, 0, 20000, 800, 0, 14000, std::get<1>(aCluster.back()), std::get<1>(cCluster.back()) + std::get<1>(cCluster.front()), "AvC");
+        plotter->Fill2D("C1vsC2", 800, 0, 8000, 800, 0, 8000, std::get<1>(cCluster.back()), std::get<1>(cCluster.front()), "AvC");
       }
       else if (aCluster.size() == 2 && cCluster.size() == 1)
       {
-        plotter->Fill2D("AnodeESum_vs_CathodeE_TC" + std::to_string(PCQQQTimeCut), 800, 0, 20000, 800, 0, 7000, std::get<1>(aCluster.back()) + std::get<1>(aCluster.front()), std::get<1>(cCluster.back()), "AvC");
-        if(std::get<1>(aCluster.back()) > std::get<1>(aCluster.front()))
-          plotter->Fill2D("A1vsA2", 800, 0, 20000, 800, 0, 20000, std::get<1>(aCluster.back()), std::get<1>(aCluster.front()), "AvC");
-        else
-          plotter->Fill2D("A1vsA2", 800, 0, 20000, 800, 0, 20000, std::get<1>(aCluster.front()), std::get<1>(aCluster.back()), "AvC");
+        plotter->Fill2D("AnodeESum_vs_CathodeE_TC" + std::to_string(PCQQQTimeCut), 800, 0, 30000, 800, 0, 7000, std::get<1>(aCluster.back()) + std::get<1>(aCluster.front()), std::get<1>(cCluster.back()), "AvC");
+        plotter->Fill2D("A1vsA2", 1600, 0, 20000, 1600, 0, 20000, std::get<1>(aCluster.back()), std::get<1>(aCluster.front()), "AvC");
       }
     }
   }
