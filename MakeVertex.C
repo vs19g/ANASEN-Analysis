@@ -659,17 +659,17 @@ Bool_t MakeVertex::Process(Long64_t entry)
       {
         plotter->Fill2D("AnodeE_vs_CathodeESum_TC" + std::to_string(PCQQQTimeCut), 800, 0, 20000, 800, 0, 7000, std::get<1>(aCluster.back()), std::get<1>(cCluster.back()) + std::get<1>(cCluster.front()), "AvC");
         if (std::get<1>(cCluster.back()) > std::get<1>(cCluster.front()))
-          plotter->Fill2D("C1vsC2", 800, 0, 20000, 800, 0, 7000, std::get<1>(cCluster.back()), std::get<1>(cCluster.front()), "AvC");
+          plotter->Fill2D("C1vsC2", 800, 0, 8000, 800, 0, 8000, std::get<1>(cCluster.back()), std::get<1>(cCluster.front()), "AvC");
         else
-          plotter->Fill2D("C1vsC2", 800, 0, 20000, 800, 0, 7000, std::get<1>(cCluster.front()), std::get<1>(cCluster.back()), "AvC");
+          plotter->Fill2D("C1vsC2", 800, 0, 8000, 800, 0, 8000, std::get<1>(cCluster.front()), std::get<1>(cCluster.back()), "AvC");
       }
       else if (aCluster.size() == 2 && cCluster.size() == 1)
       {
         plotter->Fill2D("AnodeESum_vs_CathodeE_TC" + std::to_string(PCQQQTimeCut), 800, 0, 20000, 800, 0, 7000, std::get<1>(aCluster.back()) + std::get<1>(aCluster.front()), std::get<1>(cCluster.back()), "AvC");
         if(std::get<1>(aCluster.back()) > std::get<1>(aCluster.front()))
-          plotter->Fill2D("A1vsA2", 800, 0, 20000, 800, 0, 7000, std::get<1>(aCluster.back()), std::get<1>(aCluster.front()), "AvC");
+          plotter->Fill2D("A1vsA2", 800, 0, 20000, 800, 0, 20000, std::get<1>(aCluster.back()), std::get<1>(aCluster.front()), "AvC");
         else
-          plotter->Fill2D("A1vsA2", 800, 0, 20000, 800, 0, 7000, std::get<1>(aCluster.front()), std::get<1>(aCluster.back()), "AvC");
+          plotter->Fill2D("A1vsA2", 800, 0, 20000, 800, 0, 20000, std::get<1>(aCluster.front()), std::get<1>(aCluster.back()), "AvC");
       }
     }
   }
