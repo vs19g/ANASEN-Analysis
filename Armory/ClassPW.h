@@ -61,6 +61,9 @@ public:
   double GetTrackTheta() const { return trackVec.Theta(); }
   double GetTrackPhi() const { return trackVec.Phi(); }
   double GetZ0();
+  
+  Coord Crossover[24][24][2];
+
 
   inline std::tuple<std::pair<TVector3, TVector3>, double, double, double>  GetPseudoWire(const std::vector<std::tuple<int,double,double>>& cluster, std::string type);
 
@@ -115,7 +118,8 @@ private:
   const int nWire = 24;
   const int wireShift = 3;
   //const float zLen = 380; // mm
-  const float zLen = 348.6; // mm
+//  const float zLen = 348.6; // mm
+  const float zLen = 174.3*2; // mm
   const float radiusA = 37;
   const float radiusC = 43;
 
@@ -149,35 +153,71 @@ inline void PW::ConstructGeo()
   std::pair<TVector3, TVector3> p1; // anode
   std::pair<TVector3, TVector3> q1; // cathode
 
-  // anode and cathode start at pos-Y axis and count in right-Hand
-  // anode wire shift is right-hand.
-  // cathode wire shift is left-hand.
+  double k = TMath::TwoPi()/24.; //48 solder thru holes, wires in every other one
+  double offset_a1 = -6*k-3*k;
+  double offset_c1 = -4*k  -2*k - TMath::TwoPi()/48; //correct for a half-turn 
+#include "../scratch/testing.h"
+  double offset_a2 = offset_a1+wireShift*k;
+  double offset_c2 = offset_c1-wireShift*k; 
 
   for (int i = 0; i < nWire; i++)
   {
-    // Anode rotate right-hand
-    p1.first.SetXYZ(radiusA * TMath::Cos(TMath::TwoPi() / nWire * (i) + TMath::PiOver2()),
-                    radiusA * TMath::Sin(TMath::TwoPi() / nWire * (i) + TMath::PiOver2()),
-                    zLen / 2);
-    p1.second.SetXYZ(radiusA * TMath::Cos(TMath::TwoPi() / nWire * (i + wireShift) + TMath::PiOver2()),
-                     radiusA * TMath::Sin(TMath::TwoPi() / nWire * (i + wireShift) + TMath::PiOver2()),
-                     -zLen / 2);
-    An.push_back(p1);
+    // Anode rotate right-hand coming in towards +z riding with the beam. In this frame, +x is to the right, and +y down
+    //updated Feb 2026, Sudarsan B. Photographs indicate that anode wires twist right handed, as one moves from -z to +z with the convention above
+    //wire indices increase leftward as one moves to +z (hence -k factor), but wires themselves twist rightward - as indicated by offset_a2 being more +ve w.r.t offset_a1
+    //'First' is -z locus, 'second' is +z locus
+    p1.first.SetXYZ(radiusA * TMath::Cos(-k*i + offset_a1),
+                    radiusA * TMath::Sin(-k*i + offset_a1),
+                    -zLen / 2);
+    p1.second.SetXYZ(radiusA * TMath::Cos(-k*i + offset_a2),
+                     radiusA * TMath::Sin(-k*i + offset_a2),
+                     +zLen / 2);
 
-    // Cathod rotate left-hand with the 3 wire offset accounted for (+1 from the calculated offset from the PC coincidence spectrum)
-    q1.first.SetXYZ(radiusC * TMath::Cos(TMath::TwoPi() / nWire * (i + wireShift + 1) + TMath::PiOver2()),
-                    radiusC * TMath::Sin(TMath::TwoPi() / nWire * (i + wireShift + 1) + TMath::PiOver2()),
-                    zLen / 2);
-    q1.second.SetXYZ(radiusC * TMath::Cos(TMath::TwoPi() / nWire * (i + 1) + TMath::PiOver2()),
-                     radiusC * TMath::Sin(TMath::TwoPi() / nWire * (i + 1) + TMath::PiOver2()),
-                     -zLen / 2);
+    // Cathodes twist left-hand as indicated by offset_c2 being more negative than offset_c1, under the same system, while wires increase rightward (hence +k factor)
+    q1.first.SetXYZ(radiusC * TMath::Cos(k*i + offset_c1),
+                    radiusC * TMath::Sin(k*i + offset_c1),
+                    -zLen / 2);
+    q1.second.SetXYZ(radiusC * TMath::Cos(k*i + offset_c2),
+                     radiusC * TMath::Sin(k*i + offset_c2),
+                     zLen / 2);
+    An.push_back(p1);
     Ca.push_back(q1);
   }
-  // correcting for the fact that the order of the cathode wires is reversed
-  std::reverse(Ca.begin(), Ca.end());
-  // adjusting for the 3 wire offset, the rbegin and rend are used as the rotation of the wires is done in the opposite direction i.e. 1,2,3 -> 3,1,2
-  // NOT NECESSARY ANY MORE, HAS BEEN IMCORPORATED INTO THE WIREOFFSET IN THE BEGINNING
-  // std::rotate(Ca.rbegin(), Ca.rbegin() + 4, Ca.rend());
+
+
+  // Calculate Crossover Geometry ONCE
+  TVector3 a, c, diff;
+  double a2, ac, c2, adiff, cdiff, denom, alpha;
+
+  for (size_t i = 0; i < An.size(); i++)
+  {
+    //a = An[i].first - An[i].second;
+    a = An[i].second - An[i].first;
+    for (size_t j = 0; j < Ca.size(); j++)
+    {
+      c = Ca[j].second- Ca[j].first;
+      diff = An[i].second - Ca[j].second;
+      a2 = a.Dot(a);
+      c2 = c.Dot(c);
+      ac = a.Dot(c);
+      adiff = a.Dot(diff);
+      cdiff = c.Dot(diff);
+      denom = a2 * c2 - ac * ac;
+      alpha = (ac * cdiff - c2 * adiff) / denom;
+
+      Crossover[i][j][0].x = An[i].second.X() + alpha * a.X();
+      Crossover[i][j][0].y = An[i].second.Y() + alpha * a.Y();
+      Crossover[i][j][0].z = An[i].second.Z() + alpha * a.Z();
+
+      if (Crossover[i][j][0].z < -190 || Crossover[i][j][0].z > 190  || (i+j)%24 == 12) {
+        Crossover[i][j][0].z = 9999999;
+      }
+
+      Crossover[i][j][1].x = alpha;
+      Crossover[i][j][1].y = 0;
+    }
+  }
+
 
   dAngle = wireShift * TMath::TwoPi() / nWire;
   anodeLength = TMath::Sqrt(zLen * zLen + TMath::Power(2 * radiusA * TMath::Sin(dAngle / 2), 2));
@@ -276,8 +316,8 @@ PW::GetPseudoWire(const std::vector<std::tuple<int,double,double>>& cluster, std
 		avgvec.second = avgvec.second*(1.0/sumEnergy);
 		double phi1 = avgvec.first.Phi();
 		double phi2 = avgvec.second.Phi();
-		avgvec.first.SetXYZ(radiusA*TMath::Cos(phi1), radiusA*TMath::Sin(phi1), zLen/2);
-		avgvec.second.SetXYZ(radiusA*TMath::Cos(phi2), radiusA*TMath::Sin(phi2), -zLen/2);
+		avgvec.first.SetXYZ(radiusA*TMath::Cos(phi1), radiusA*TMath::Sin(phi1), -zLen/2);
+		avgvec.second.SetXYZ(radiusA*TMath::Cos(phi2), radiusA*TMath::Sin(phi2), zLen/2);
 		/*if(cluster.size()>1) {
 			std::cout << "\t\t avg1(r,phi,z):" << avgvec.first.Perp() << " " << avgvec.first.Phi()*180/M_PI << " " << avgvec.first.Z() << std::endl;			
 			std::cout << "\t\t avg2(r,phi,z):" << avgvec.second.Perp() << " " << avgvec.second.Phi()*180/M_PI << " " << avgvec.second.Z() << std::endl;			
@@ -296,8 +336,8 @@ PW::GetPseudoWire(const std::vector<std::tuple<int,double,double>>& cluster, std
 		avgvec.second = avgvec.second*(1.0/sumEnergy);
 		double phi1 = avgvec.first.Phi();
 		double phi2 = avgvec.second.Phi();
-		avgvec.first.SetXYZ(radiusC*TMath::Cos(phi1), radiusC*TMath::Sin(phi1), zLen/2);
-		avgvec.second.SetXYZ(radiusC*TMath::Cos(phi2), radiusC*TMath::Sin(phi2), -zLen/2);	
+		avgvec.first.SetXYZ(radiusC*TMath::Cos(phi1), radiusC*TMath::Sin(phi1), -zLen/2);
+		avgvec.second.SetXYZ(radiusC*TMath::Cos(phi2), radiusC*TMath::Sin(phi2), zLen/2);	
 	}
 	return std::tuple(avgvec, sumEnergy, maxEnergy, tsMaxEnergy); 
 }
@@ -317,7 +357,7 @@ inline std::tuple<TVector3,double,double,double,double,double,double,double> PW:
 	if(apSumE && cpSumE) {
     	a = apwire.first - apwire.second;
 		c = cpwire.first - cpwire.second;
-      	diff = apwire.first - cpwire.first;
+      	diff = apwire.first- cpwire.first;
       	a2 = a.Dot(a);
       	c2 = c.Dot(c);
       	ac = a.Dot(c);
