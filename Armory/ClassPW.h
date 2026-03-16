@@ -156,7 +156,6 @@ inline void PW::ConstructGeo()
   double k = TMath::TwoPi()/24.; //48 solder thru holes, wires in every other one
   double offset_a1 = -6*k-3*k;
   double offset_c1 = -4*k  -2*k - TMath::TwoPi()/48; //correct for a half-turn 
-#include "../scratch/testing.h"
   double offset_a2 = offset_a1+wireShift*k;
   double offset_c2 = offset_c1-wireShift*k; 
 

@@ -1,0 +1,103 @@
+Check Keywords Warn
+
+Header
+  Mesh DB "." "wires2d"
+End
+
+Simulation
+  Coordinate System = Cartesian 2D
+  Simulation Type = Steady State
+  Steady State Max Iterations = 1
+  Output File = "elstatics.result"
+  Post File = "elstatics.ep"
+End
+
+Constants
+  Permittivity Of Vacuum = 8.8542e-12
+End
+
+
+Body 1
+  Target Bodies(1) = 13
+  Equation = 1
+  Material = 1
+End
+
+
+Equation 1
+  Active Solvers(2) = 1 2
+End
+
+
+Material 1
+  Relative Permittivity = 1
+End
+
+
+Solver 1
+  Equation = Electrostatics
+  Procedure = "StatElecSolve" "StatElecSolver"
+
+  Variable = Potential
+  Variable DOFs = 1
+
+  Calculate Electric Field = True
+  Calculate Electric Flux = False
+
+  Linear System Solver = Iterative
+  Linear System Iterative Method = CG
+  Linear System Max Iterations = 5000
+  Linear System Convergence Tolerance = 1.0e-8
+  Linear System Preconditioning = ILU1
+  Calculate Vectors = Logical True
+End
+
+Solver 2
+  Equation = "Electric Field"
+  Procedure = "FluxSolver" "FluxSolver"
+  
+  ! Calculate from the potential
+  Target Variable = "Potential"
+  ! Name of the output vector field in VTU
+  Flux Variable = String "Electric Field"
+  
+  ! Use 2D components (x, y)
+  Flux Coefficient = String "Permittivity"
+  
+  Calculate Vectors = Logical True
+End
+
+Solver 3
+  Equation = Result Output
+  Procedure = "ResultOutputSolve" "ResultOutputSolver"
+  Output File Name = elfield_anasen  ! Sets prefix for output files
+  Output Format = Vtu
+  ! Optional: Select specific variables to save
+  Scalar Field 1 = Potential
+  Vector Field 1 = Electric Field
+End
+
+Solver 4
+ Exec Solver = After All
+ Equation = SaveScalars
+ Procedure = "SaveData" "SaveScalars"
+ Filename = "scalars.dat"
+End
+
+
+Boundary Condition 1
+  Target Boundaries = 10
+  Potential = 650
+  Calculate Electric Force = True
+End
+
+
+Boundary Condition 2
+  Target Boundaries = 20
+  Potential = 0
+End
+
+!Boundary Condition 2
+!  Target Boundaries = 30
+!  Potential = 0
+!End

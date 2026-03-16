@@ -8,6 +8,7 @@ EventBuilder*
 *.err
 *.seq
 *.png
+*.gif
 Mapper
 AnasenMS
 
