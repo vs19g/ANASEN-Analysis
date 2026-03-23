@@ -1,4 +1,4 @@
-#!~/ParaView-6.1.0-RC1-MPI-Linux-Python3.12-x86_64/bin/pvbatch
+#!/home/vsitaraman/ParaView-6.1.0-RC1-MPI-Linux-Python3.12-x86_64/bin/pvbatch
 import numpy as np
 import sys
 from paraview.simple import *
@@ -9,7 +9,7 @@ contour_filter = Contour(Input=reader,ContourBy = 'potential')
 contour_filter.Isosurfaces = [i for i in np.arange(0,660,650/24.)]
 
 renderView = GetActiveViewOrCreate('RenderView')
-renderView.ViewSize = [800,800]
+renderView.ViewSize = [2000,2000]
 renderView.OrientationAxesVisibility = 0 # Hide axis
 renderView.UseColorPaletteForBackground=0
 renderView.Background = [0.1, 0.1, 0.1] # Set background to dark gray (RGB 0-1)
@@ -19,13 +19,14 @@ renderView.MultiSamples = 8  # 0 disables it, 4-8 is usually sufficient
 ResetCamera()
 
 contour_display = Show(contour_filter, renderView)
-
+contour_display.LineWidth = 3.0          # Increase this for thicker lines
+contour_display.RenderLinesAsTubes = 1    # Makes lines look smoother at high res
 #colorbar
 contour_display_potentialLUT = GetColorTransferFunction('potential', contour_display, separate=True)
 contour_display_potentialLUT.ApplyPreset('Cool to Warm', True)
 contour_display.SetScalarBarVisibility(renderView, True)
 
-#axesGrid = renderView.AxesGrid
+#axesGrid = renderView.AxesGridrfcxgdtv
 #axesGrid.Visibility = 1
 #axesGrid.XTitle = "x (mm)"
 #axesGrid.YTitle = "y (mm)"

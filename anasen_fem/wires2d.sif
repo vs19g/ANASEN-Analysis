@@ -87,17 +87,17 @@ End
 
 Boundary Condition 1
   Target Boundaries = 10
-  Potential = 650
-  Calculate Electric Force = True
+  Potential = 0
 End
 
 
 Boundary Condition 2
   Target Boundaries = 20
-  Potential = 0
+  Potential = 650
+  Calculate Electric Force = True
 End
 
-!Boundary Condition 2
-!  Target Boundaries = 30
-!  Potential = 0
-!End
+Boundary Condition 3
+  Target Boundaries = 30
+  Potential = 0
+End

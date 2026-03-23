@@ -3,7 +3,7 @@ import gmsh,sys
 
 gmsh.initialize()
 gmsh.model.add("adaptive_mesh")
-gmsh.option.setNumber('General.NumThreads', 4)
+gmsh.option.setNumber('General.NumThreads', 10)
 #gmsh.option.setNumber("Mesh.Adapt.MaxNumberOfElements", 200000)
 #gmsh.option.setNumber("Mesh.Adapt.MaxNumberOfNodes", 200000)
 #gmsh.option.setNumber("Mesh.Adapt.MaxIter",5)
@@ -23,6 +23,12 @@ z_loc = float(sys.argv[1])
 
 k=(2*np.pi/24.)
 
+#guard wires, plane 1 at -zmax/2
+kg=2*np.pi/24.
+offsetg = -4*kg + 2*kg -  np.pi/24 #-pi/4
+xarrg_1 = np.array([32*np.cos(kg*i+offsetg) for i in np.arange(0,24)])
+yarrg_1 = np.array([32*np.sin(kg*i+offsetg) for i in np.arange(0,24)])
+
 #anodes, plane 1 at -zmax/2
 k=-2*np.pi/24.
 offset = 6*k + 3*k #-pi/2
@@ -35,6 +41,11 @@ offsetc = -4*kc + 2*kc -  np.pi/24 #-pi/4
 xarrc_1 = np.array([42*np.cos(kc*i+offsetc) for i in np.arange(0,24)])
 yarrc_1 = np.array([42*np.sin(kc*i+offsetc) for i in np.arange(0,24)])
 
+#guard wires, plane 2 at +zmax/2
+offsetg = offsetg-3*kg
+xarrg_2 = np.array([32*np.cos(kg*i+offsetg) for i in np.arange(0,24)])
+yarrg_2 = np.array([32*np.sin(kg*i+offsetg) for i in np.arange(0,24)])
+
 #anodes, plane 2 at +zmax/2
 offset = offset-3*k
 xarra_2 = np.array([37*np.cos(k*i+offset) for i in np.arange(0,24)])
@@ -45,6 +56,9 @@ offsetc = offsetc-3*kc
 xarrc_2 = np.array([42*np.cos(kc*i+offsetc) for i in np.arange(0,24)])
 yarrc_2 = np.array([42*np.sin(kc*i+offsetc) for i in np.arange(0,24)])
 
+direction_guard_x = xarrg_2 - xarrg_1
+direction_guard_y = yarrg_2 - yarrg_1
+
 direction_anodes_x = xarra_2 - xarra_1
 direction_anodes_y = yarra_2 - yarra_1
 
@@ -52,23 +66,31 @@ direction_cathodes_x = xarrc_2 - xarrc_1
 direction_cathodes_y = yarrc_2 - yarrc_1
 
 t = (z_loc+178.3)/(2*178.3) #z=-178.3 is 0, z=+178.3 is 1
+xloc_g = xarrg_1 + t*direction_guard_x
+yloc_g = yarrg_1 + t*direction_guard_y
 xloc_a = xarra_1 + t*direction_anodes_x
 yloc_a = yarra_1 + t*direction_anodes_y
 xloc_c = xarrc_1 + t*direction_cathodes_x
 yloc_c = yarrc_1 + t*direction_cathodes_y
 
-wire_radius_a = 0.018 #mm
-wire_radius_c = 0.0762 #mm
+# wire_radius_a = 0.018 #mm
+# wire_radius_c = 0.0762 #mm
+# wire_radius_g = 0.0762 #mm
+wire_radius = 0.254 #mm
+guard_wires = []
 anode_wires = []
 cathode_wires = []
+gw_tags = [(3,i+24) for i in range(24)]
 aw_tags = [(3,i) for i in range(24)]
 cw_tags = [(3,i+24) for i in range(24)]
 
 #for i,[xa,ya,xc,yc] in enumerate(zip(xarra_1,yarra_1,xarrc_1,yarrc_1)):
-for i,[xa,ya,xc,yc] in enumerate(zip(xloc_a,yloc_a,xloc_c,yloc_c)):
-    print(i,xa,ya,-178.3,xc,yc,-178.3)
-    adisk = gmsh.model.occ.addDisk(xa,ya,0,wire_radius_a,wire_radius_a)
-    cdisk = gmsh.model.occ.addDisk(xc,yc,0,wire_radius_c,wire_radius_c)
+for i,[xg,yg,xa,ya,xc,yc] in enumerate(zip(xloc_g,yloc_g,xloc_a,yloc_a,xloc_c,yloc_c)):
+    print(i,xg,yg,-178.3,xa,ya,-178.3,xc,yc,-178.3)
+    gdisk = gmsh.model.occ.addDisk(xg,yg,0,wire_radius,wire_radius)
+    adisk = gmsh.model.occ.addDisk(xa,ya,0,wire_radius,wire_radius)
+    cdisk = gmsh.model.occ.addDisk(xc,yc,0,wire_radius,wire_radius)
+    guard_wires.append(gdisk)
     anode_wires.append(adisk)
     cathode_wires.append(cdisk)
 
@@ -80,6 +102,10 @@ gmsh.option.setNumber("Geometry.Tolerance", 1e-6)
 gmsh.option.setNumber("Geometry.OCCFixDegenerated", 1)
 gmsh.model.occ.synchronize()
 
+gwire_surfs = []
+for w in guard_wires:
+    gwire_surfs += [s[1] for s in gmsh.model.getBoundary([(2,w)], oriented=False) if s[0] == 1]
+
 awire_surfs = []
 for w in anode_wires:
     awire_surfs += [s[1] for s in gmsh.model.getBoundary([(2,w)], oriented=False) if s[0] == 1]
@@ -87,7 +113,7 @@ for w in anode_wires:
 cwire_surfs = []
 for w in cathode_wires:
     cwire_surfs += [s[1] for s in gmsh.model.getBoundary([(2,w)], oriented=False) if s[0] == 1]
-gmsh.model.mesh.embed(1,cwire_surfs+awire_surfs,2,anasen_barrel)
+gmsh.model.mesh.embed(1,cwire_surfs+awire_surfs+gwire_surfs,2,anasen_barrel)
 
 for s in gmsh.model.getBoundary([(2,w)],oriented=False):
     if s[0] == 1:
@@ -95,7 +121,7 @@ for s in gmsh.model.getBoundary([(2,w)],oriented=False):
 
 
 f1 = gmsh.model.mesh.field.add("Distance")
-gmsh.model.mesh.field.setNumbers(f1,"CurvesList",cwire_surfs+awire_surfs)
+gmsh.model.mesh.field.setNumbers(f1,"CurvesList",cwire_surfs+awire_surfs+gwire_surfs)
 
 f2 = gmsh.model.mesh.field.add("Threshold")
 gmsh.model.mesh.field.setNumber(f2,"InField",f1)
@@ -106,11 +132,14 @@ gmsh.model.mesh.field.setNumber(f2,"DistMax",20)
 
 gmsh.model.mesh.field.setAsBackgroundMesh(f2)
 
-gmsh.model.addPhysicalGroup(1, awire_surfs, tag=10)
-gmsh.model.setPhysicalName(1,10,"anode_wires")
+gmsh.model.addPhysicalGroup(1, gwire_surfs, tag=10)
+gmsh.model.setPhysicalName(1,10,"guard_wires")
 
-gmsh.model.addPhysicalGroup(1, cwire_surfs, tag=20)
-gmsh.model.setPhysicalName(1,20,"cathode_wires")
+gmsh.model.addPhysicalGroup(1, awire_surfs, tag=20)
+gmsh.model.setPhysicalName(1,20,"anode_wires")
+
+gmsh.model.addPhysicalGroup(1, cwire_surfs, tag=30)
+gmsh.model.setPhysicalName(1,30,"cathode_wires")
 
 #gmsh.model.addPhysicalGroup(1, [anasen_bdry], tag=30)
 #gmsh.model.setPhysicalName(1,30,"barrel_boundary")
