@@ -125,7 +125,7 @@ void MakeVertex::Begin(TTree * /*tree*/)
   }
 
   // Load PC Calibrations
-  std::ifstream inputFile("slope_intercept_results.dat");
+  std::ifstream inputFile("slope_intercept_results_27Al.dat");
   if (inputFile.is_open())
   {
     std::string line;

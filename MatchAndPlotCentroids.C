@@ -12,7 +12,8 @@
 
 void MatchAndPlotCentroids() {
     // Open the centroid data file
-    std::ifstream inputFile("centroids.txt");
+    std::ifstream inputFile("centroids_27Al.txt");
+    // std::ifstream inputFile("centroids_17F.txt");
     if (!inputFile.is_open()) {
         std::cerr << "Error: Could not open Centroids.txt" << std::endl;
         return;
@@ -42,13 +43,17 @@ void MatchAndPlotCentroids() {
 
     // Reference centroids from histogram 24
     const auto& referenceCentroids = centroidData[1];
-    std::ofstream outputFile("slope_intercept_results.txt");
+    std::ofstream outputFile("slope_intercept_results.dat");
     if (!outputFile.is_open()) {
         std::cerr << "Error: Could not open the output file for writing!" << std::endl;
         return;
     }
     outputFile << "Histogram Number\tSlope\tIntercept\n";
     // Loop through histograms 25 to 47
+
+    // 1. Create a SINGLE canvas BEFORE the loop
+    TCanvas *c1 = new TCanvas("c1", "Centroid Fit Viewer", 800, 600);
+
     for (int targetHist = 0; targetHist <= 23; targetHist++) {
         // Ensure the target histogram exists and matches in peak numbers
         if (centroidData.find(targetHist) == centroidData.end() || centroidData[targetHist].size() != referenceCentroids.size()) {
@@ -74,14 +79,15 @@ void MatchAndPlotCentroids() {
         }
 
         // Create a TGraph
-        TCanvas *c1 = new TCanvas(Form("c_centroid_1_vs_%d", targetHist), Form("Centroid 1 vs %d", targetHist), 800, 600);
-        TGraph *graph = new TGraph(xValues.size(), &xValues[0], &yValues[0]);
-        graph->SetTitle(Form("Centroid of Histogram  %d vs 1", targetHist));
+       TGraph *graph = new TGraph(xValues.size(), &xValues[0], &yValues[0]);
+        graph->SetTitle(Form("Centroid of Histogram %d vs 1", targetHist));
         graph->GetYaxis()->SetTitle("Centroid of Histogram 1");
         graph->GetXaxis()->SetTitle(Form("Centroid of Histogram %d", targetHist));
-        graph->SetMarkerStyle(20); // Full circle marker
+        graph->SetMarkerStyle(20); 
         graph->SetMarkerSize(1.0);
         graph->SetMarkerColor(kBlue);
+        
+        graph->Draw("AP");
         // Draw the graph
         graph->Draw("AP");
         double minX = *std::min_element(xValues.begin(), xValues.end());
