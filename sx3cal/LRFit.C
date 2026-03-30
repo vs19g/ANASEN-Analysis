@@ -1,8 +1,8 @@
 {
-    TFile *f = new TFile("../results_SX3_run12.root");
+    TFile *f = new TFile("../results_run19.root");
     f->cd("l_vs_r");
-    f->ls();
-    int clkpos = 3;
+    gDirectory->ls();
+    int clkpos = 13;
     std::ofstream ofile(Form("rightgains%d.dat",clkpos));
     for(int i=1; i<4; i++) {
         TH2F h2(*(TH2F*)(f->Get(Form("l_vs_r/l_vs_r_sx3_id_%d_f%d",clkpos,i))));
@@ -14,7 +14,7 @@
         gPad->Update();
         while(gPad->WaitPrimitive());*/
 
-        int leftbin = hproj.FindFirstBinAbove(hproj.GetMaximum()*0.1);
+        int leftbin = hproj.FindFirstBinAbove(hproj.GetMaximum()*0.4);
         int rightbin = hproj.FindLastBinAbove(hproj.GetMaximum()*0.1);
 
         TH1F h1(*(TH1F*)(h2.ProfileX("_pfx",leftbin,rightbin)));

@@ -1,6 +1,6 @@
 {
-    int index = 3;
-    TFile *f = new TFile("../results_SX3_run12.root");
+    int index = 1;
+    TFile *f = new TFile("../results_run19.root");
     TH2F *h2=NULL;
     TH1F *h1x=NULL, *h1y=NULL;
     //f->cd("evsx");
@@ -17,8 +17,8 @@
         h2 = (TH2F*)(f->Get(Form("evsx/be_vs_x_sx3_id_%d_f%d_b%d",index,i,backnum)));
         auto macro = [&]() {
             h1x = (TH1F*)(h2->ProjectionX("_px"));
-            double xleft = h1x->GetBinCenter(h1x->FindFirstBinAbove(h1x->GetMaximum()*0.25));
-            double xright = h1x->GetBinCenter(h1x->FindLastBinAbove(h1x->GetMaximum()*0.25));
+            double xleft = h1x->GetBinCenter(h1x->FindFirstBinAbove(h1x->GetMaximum()*0.4));
+            double xright = h1x->GetBinCenter(h1x->FindLastBinAbove(h1x->GetMaximum()*0.4));
             //h1x->GetXaxis()->SetRangeUser(4*xleft, xright*4);
             h1x->Draw();
             TLine L1(xleft,0,xleft,h1x->GetMaximum()); L1.SetLineColor(kRed); L1.Draw("SAME");
