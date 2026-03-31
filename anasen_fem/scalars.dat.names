@@ -1,8 +1,8 @@
 Metadata for SaveScalars file: ./scalars.dat
 Elmer version: 26.1
 Elmer compilation date: 2026-03-15
-Solver input file: wires2d/sif_files/wires2d_00_-178.3000.sif
-File started at: 2026/03/31 10:12:11
+Solver input file: wires2d/sif_files/wires2d_11_17.8300.sif
+File started at: 2026/03/31 13:26:51
  
 Variables in columns of matrix: 
    1: res: potential difference

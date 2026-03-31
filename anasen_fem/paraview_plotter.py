@@ -6,7 +6,7 @@ from paraview.simple import *
 reader = XMLUnstructuredGridReader(FileName=["wires2d/elfield_anasen_t0001.vtu"])
 
 contour_filter = Contour(Input=reader,ContourBy = 'potential')
-contour_filter.Isosurfaces = [i for i in np.arange(0,660,650/24.)]
+contour_filter.Isosurfaces = [i for i in np.arange(0,660,650/32.)]
 
 renderView = GetActiveViewOrCreate('RenderView')
 renderView.ViewSize = [2000,2000]
@@ -61,3 +61,59 @@ view.CameraParallelProjection = 1
 Render()
 
 SaveScreenshot("contour_output.png")
+
+#make glyps for field lines
+contour_display.LineWidth = 1.0          # Increase this for thicker lines
+contour_display.RenderLinesAsTubes = 0    # Makes lines look smoother at high res
+
+# 1. Get the active view
+view = GetActiveView()
+
+# 4. Apply settings
+# 1. Set the Focal Point to the middle of the quadrant
+zoom_center = [-25, 25, 0.0] 
+
+# 2. Tighten the Parallel Scale
+view.CameraParallelScale = 15 
+
+# 3. Position the Camera
+# Keep it 0.5m away looking "down" at the new center
+view.CameraPosition = [zoom_center[0], zoom_center[1], 0.5]
+view.CameraFocalPoint = zoom_center
+view.CameraViewUp = [0.0, 1.0, 0.0]
+# pot_threshold = Threshold(Input=reader)
+# pot_threshold.Scalars = ['POINTS', 'potential']
+# pot_threshold.ThresholdMethod = 'Above Upper Threshold'
+# pot_threshold.UpperThreshold = 100.0  
+
+# --- 2. Create the Glyph Filter (The Arrows) ---
+# IMPORTANT: Use 'pot_threshold' as the Input, not the 'reader'
+glyph = Glyph(Input=reader, GlyphType='Arrow')
+
+# Orientation Array: Use the 'electric field' vector from Elmer
+glyph.OrientationArray = ['POINTS', 'electric field']
+glyph.ScaleArray = ['POINTS', 'No scale array']
+glyph.ScaleFactor = 1
+
+# Sampling: Every nth point (Stride 16)
+glyph.GlyphMode = 'Every Nth Point'
+glyph.Stride = 96
+
+# --- 3. Display the Glyphs ---
+glyph_display = Show(glyph, renderView)
+
+# Set the representation to Surface so we see the full arrow colors
+glyph_display.Representation = 'Surface'
+
+# This is the critical line: Color the arrows by the 'potential' scalar
+ColorBy(glyph_display, ('POINTS', 'potential'))
+contour_display_potentialLUT.RescaleTransferFunction(0.0, 660.0)
+glyph_display.LookupTable = contour_display_potentialLUT
+
+# Optional: Disable the scalar bar for the arrows to avoid cluttering 
+# the existing 'potential' scalar bar.
+glyph_display.SetScalarBarVisibility(renderView, False)
+
+# --- 4. Final Render ---
+Render()
+SaveScreenshot("Field_output.png")
