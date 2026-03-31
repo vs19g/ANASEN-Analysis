@@ -6,7 +6,7 @@ from paraview.simple import *
 reader = XMLUnstructuredGridReader(FileName=["wires2d/elfield_anasen_t0001.vtu"])
 
 contour_filter = Contour(Input=reader,ContourBy = 'potential')
-contour_filter.Isosurfaces = [i for i in np.arange(0,660,650/32.)]
+contour_filter.Isosurfaces = [i for i in np.arange(0,660,660/40.)]
 
 renderView = GetActiveViewOrCreate('RenderView')
 renderView.ViewSize = [2000,2000]
@@ -88,7 +88,8 @@ view.CameraViewUp = [0.0, 1.0, 0.0]
 
 # --- 2. Create the Glyph Filter (The Arrows) ---
 # IMPORTANT: Use 'pot_threshold' as the Input, not the 'reader'
-glyph = Glyph(Input=reader, GlyphType='Arrow')
+glyph = Glyph(Input=contour_filter, GlyphType='Arrow') #
+# glyph = Glyph(Input=reader, GlyphType='Arrow') #this uses all field line snot just the ones from the equipotential lines shown
 
 # Orientation Array: Use the 'electric field' vector from Elmer
 glyph.OrientationArray = ['POINTS', 'electric field']
@@ -97,7 +98,7 @@ glyph.ScaleFactor = 1
 
 # Sampling: Every nth point (Stride 16)
 glyph.GlyphMode = 'Every Nth Point'
-glyph.Stride = 96
+glyph.Stride = 24
 
 # --- 3. Display the Glyphs ---
 glyph_display = Show(glyph, renderView)
@@ -105,10 +106,11 @@ glyph_display = Show(glyph, renderView)
 # Set the representation to Surface so we see the full arrow colors
 glyph_display.Representation = 'Surface'
 
+
 # This is the critical line: Color the arrows by the 'potential' scalar
 ColorBy(glyph_display, ('POINTS', 'potential'))
-contour_display_potentialLUT.RescaleTransferFunction(0.0, 660.0)
 glyph_display.LookupTable = contour_display_potentialLUT
+contour_display_potentialLUT.RescaleTransferFunction(0.0, 660.0)
 
 # Optional: Disable the scalar bar for the arrows to avoid cluttering 
 # the existing 'potential' scalar bar.

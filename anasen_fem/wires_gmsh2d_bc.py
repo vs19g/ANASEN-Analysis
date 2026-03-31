@@ -151,6 +151,6 @@ gmsh.option.setNumber("Mesh.Algorithm", 6)
 
 gmsh.model.mesh.generate(dim=2)
 gmsh.model.mesh.refine()
-gmsh.write("wires2d/mesh_files/wires2d.msh")
+gmsh.write("wires2d.msh")
 #gmsh.fltk.run()
 gmsh.finalize()
