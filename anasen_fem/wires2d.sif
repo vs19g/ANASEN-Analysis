@@ -84,20 +84,36 @@ Solver 4
  Filename = "scalars.dat"
 End
 
-
 Boundary Condition 1
+  Target Boundaries = 1
+  Potential = -200
+  Calculate Electric Force = True
+End
+
+Boundary Condition 2
+  Target Boundaries = 2
+  Potential = 150
+  Calculate Electric Force = True
+End
+
+Boundary Condition 3
+  Target Boundaries = 3
+  Potential = 250
+  Calculate Electric Force = True
+End
+
+Boundary Condition 4
   Target Boundaries = 10
   Potential = 0
 End
 
-
-Boundary Condition 2
+Boundary Condition 5
   Target Boundaries = 20
   Potential = 650
   Calculate Electric Force = True
 End
 
-Boundary Condition 3
+Boundary Condition 6
   Target Boundaries = 30
   Potential = 0
 End
