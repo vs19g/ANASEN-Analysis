@@ -15,7 +15,12 @@ while val<178.3+0.1:
     os.system("cp wires2d/elfield_anasen_t0001.vtu wires2d/vtu_files/elfield_anasen_%02d_%1.4f.vtu"%(count,val))
     os.system("cp contour_output.png png/Contour_output_z_%02d_%1.4f.png"%(count,val))
     os.system("cp Field_output.png png/Field_ouput_z_%02d_%1.4f.png"%(count,val))
-
     val=val+17.83
     count = count + 1
-    break
+
+os.system("tar -cvzf wiress2d/mesh.tar.gz wires2d/mesh_files")
+os.system("rm -rf wires2d/mesh_files/*")
+os.system("tar -cvzf wires2d/sif.tar.gz wires2d/sif_files")
+os.system("rm -rf wires2d/sif_files/*")
+os.system("tar -cvzf wires2d/vtu.tar.gz wires2d/vtu_files")
+os.system("rm -rf wires2d/vtu_files/*")
