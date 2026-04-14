@@ -55,10 +55,10 @@ xarra_1 = np.array([37*np.cos(k*i+offset) for i in np.arange(0,24)])
 yarra_1 = np.array([37*np.sin(k*i+offset) for i in np.arange(0,24)])
 
 #cathodes, plane 1 at -zmax/2
-kc=2*np.pi/24.
+kc=2*np.pi/48.
 offsetc = -4*kc + 2*kc -  np.pi/24 #-pi/4
-xarrc_1 = np.array([42*np.cos(kc*i+offsetc) for i in np.arange(0,24)])
-yarrc_1 = np.array([42*np.sin(kc*i+offsetc) for i in np.arange(0,24)])
+xarrc_1 = np.array([42*np.cos(kc*i+offsetc) for i in np.arange(0,48)])
+yarrc_1 = np.array([42*np.sin(kc*i+offsetc) for i in np.arange(0,48)])
 
 #needle at plane 2 at zmax/2
 xarr_needle_2 = np.array([0])
@@ -84,8 +84,8 @@ yarra_2 = np.array([37*np.sin(k*i+offset) for i in np.arange(0,24)])
 
 #cathodes, plane2 at +zmax/2
 offsetc = offsetc-3*kc
-xarrc_2 = np.array([42*np.cos(kc*i+offsetc) for i in np.arange(0,24)])
-yarrc_2 = np.array([42*np.sin(kc*i+offsetc) for i in np.arange(0,24)])
+xarrc_2 = np.array([42*np.cos(kc*i+offsetc) for i in np.arange(0,48)])
+yarrc_2 = np.array([42*np.sin(kc*i+offsetc) for i in np.arange(0,48)])
 
 direction_needle_x = xarr_needle_2 - xarr_needle
 direction_needle_y = yarr_needle_2 - yarr_needle
@@ -144,16 +144,16 @@ for i, (xn, yn) in enumerate(zip(xloc_needle, yloc_needle)):
         needle.append(ndisk)    
 
 #create Guard Wires (48 total)
-for i, (xg, yg) in enumerate(zip(xloc_g, yloc_g)):
+for i, (xg, yg, xc, yc) in enumerate(zip(xloc_g, yloc_g, xloc_c, yloc_c)):
     gdisk = gmsh.model.occ.addDisk(xg, yg, 0, wire_radius, wire_radius)
     guard_wires.append(gdisk)
+    cdisk = gmsh.model.occ.addDisk(xc, yc, 0, wire_radius, wire_radius)
+    cathode_wires.append(cdisk)
 
 #create IC Anode and Cathode Wires (24 total each)
-for i, (xa, ya, xc, yc) in enumerate(zip(xloc_a, yloc_a, xloc_c, yloc_c)):
+for i, (xa, ya) in enumerate(zip(xloc_a, yloc_a)):
     adisk = gmsh.model.occ.addDisk(xa, ya, 0, wire_radius, wire_radius)
-    cdisk = gmsh.model.occ.addDisk(xc, yc, 0, wire_radius, wire_radius)
     anode_wires.append(adisk)
-    cathode_wires.append(cdisk)
     
     # Place IC wires only if flag is True
     if include_ic_wires:
