@@ -1,12 +1,12 @@
 {
-    int index = 1;
-    TFile *f = new TFile("../results_run01.root");
+    int index = 9;
+    TFile *f = new TFile("../results_run05.root");
     TH2F *h2=NULL;
     TH1F *h1x=NULL, *h1y=NULL;
     //f->cd("evsx");
     //f->ls();
 
-    double known_xpos[2][2] = {{0,18.75},{-18.75,0}};
+    double known_xpos[4][2] = {{0,18.75},{-18.75,0}};
     std::vector<double> xpos, xposkn; //first = x = known position, second = y = unknown position
 
     std::ofstream ofb(Form("backgains%d.dat",index));
@@ -25,8 +25,8 @@
             TLine L2(xright,0,xright,h1x->GetMaximum()); L2.SetLineColor(kRed); L2.Draw("SAME");
             gPad->Modified();
             gPad->Update();
-            xpos.push_back(xleft); xposkn.push_back(known_xpos[backnum-1][0]);
-            xpos.push_back(xright); xposkn.push_back(known_xpos[backnum-1][1]);
+            if(backnum==1 || backnum==2) xpos.push_back(xleft); xposkn.push_back(known_xpos[backnum-1][0]);
+            if(backnum==1 || backnum==2) xpos.push_back(xright); xposkn.push_back(known_xpos[backnum-1][1]);
             while(gPad->WaitPrimitive());
 
             h1y = (TH1F*)(h2->ProjectionY("_py"));
@@ -46,6 +46,18 @@
 
         //repeat for pad#1
         backnum=1;
+        h2 = (TH2F*)(f->Get(Form("evsx/be_vs_x_sx3_id_%d_f%d_b%d",index,i,backnum)));
+        if(h2)
+            macro();
+
+        //repeat for pad#2
+        backnum=3;
+        h2 = (TH2F*)(f->Get(Form("evsx/be_vs_x_sx3_id_%d_f%d_b%d",index,i,backnum)));
+        if(h2)
+            macro();
+
+        //repeat for pad3
+        backnum=0;
         h2 = (TH2F*)(f->Get(Form("evsx/be_vs_x_sx3_id_%d_f%d_b%d",index,i,backnum)));
         if(h2)
             macro();

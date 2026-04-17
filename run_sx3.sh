@@ -38,6 +38,7 @@ fi
 if [[ 1 -eq 1 ]] ; then
 export anode_offset=1
 root -q -b -x ../Remapped_files/27Al_Data/root_data/Run_015_mapped.root -e 'tree->Process("MakeVertex.C+O")'; mv Analyzer_SX3.root results_run15.root;
+exit
 root -q -b -x ../Remapped_files/27Al_Data/root_data/Run_017_mapped.root -e 'tree->Process("MakeVertex.C+O")'; mv Analyzer_SX3.root results_run17.root;
 root -q -b -x ../Remapped_files/27Al_Data/root_data/Run_018_mapped.root -e 'tree->Process("MakeVertex.C+O")'; mv Analyzer_SX3.root results_run18.root;
 root -q -b -x ../Remapped_files/27Al_Data/root_data/Run_019_mapped.root -e 'tree->Process("MakeVertex.C+O")'; mv Analyzer_SX3.root results_run19.root;

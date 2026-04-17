@@ -93,6 +93,7 @@ double qqqGain[MAX_QQQ][MAX_RING][MAX_WEDGE] = {{{0}}};
 bool qqqGainValid[MAX_QQQ][MAX_RING][MAX_WEDGE] = {{{false}}};
 double qqqCalib[MAX_QQQ][MAX_RING][MAX_WEDGE] = {{{0}}};
 bool qqqCalibValid[MAX_QQQ][MAX_RING][MAX_WEDGE] = {{{false}}};
+bool Diagnostics = false;
 
 double sx3BackGain[24][4][4] = {{{1.}}};
 double sx3FrontGain[24][4] = {{1.}};

@@ -1,10 +1,10 @@
 {
-    TFile *f = new TFile("../results_run19.root");
+    TFile *f = new TFile("../results_run01.root");
     f->cd("l_vs_r");
     gDirectory->ls();
-    int clkpos = 13;
+    int clkpos = 1;
     std::ofstream ofile(Form("rightgains%d.dat",clkpos));
-    for(int i=1; i<4; i++) {
+    for(int i=0; i<4; i++) {
         TH2F h2(*(TH2F*)(f->Get(Form("l_vs_r/l_vs_r_sx3_id_%d_f%d",clkpos,i))));
         h2.Draw();
 
