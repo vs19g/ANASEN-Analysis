@@ -26,15 +26,16 @@ gas_file = "He96_CO2_4_260Torr.gas"
 
 if not os.path.exists(gas_file):
     print("Generating new Magboltz gas table (260 Torr)...")
+    # --- Optimized Magboltz Settings ---
     gas.SetComposition("he", 96.0, "co2", 4.0)
     gas.SetTemperature(293.15)
-    gas.SetPressure(260.0) # Pressure in Torr
-    
-    # Grid must cover the field at the 18um wire surface (~100kV/cm)
-    gas.SetFieldGrid(10., 150000., 20, True)
-    
-    # 10 iterations is usually plenty for a simple mix
-    gas.GenerateGasTable(10)
+    gas.SetPressure(260.0)
+
+    # 1. Limit the Field Grid: 
+    gas.SetFieldGrid(10., 80000., 20, True) 
+
+    # 2. Reduce the precision slightly for the first run:
+    gas.GenerateGasTable(5) 
     gas.WriteGasFile(gas_file)
 else:
     print(f"Loading existing gas table: {gas_file}")
