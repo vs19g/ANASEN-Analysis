@@ -1,5 +1,6 @@
 #VSitaraman 2024-06-20
-# This script calculates the stopping power and range for protons and alpha particles in a gas mixture of 96% Helium and 4% CO2 at 250 Torr using the Catima library.
+# This script calculates the stopping power and range for protons and alpha particles in a 96% He + 4% CO2 gas mixture at 250 Torr using the PyCatima library
+import pycatima as catima
 import numpy as np
 
 # --- 1. Experimental & Physical Constants ---
