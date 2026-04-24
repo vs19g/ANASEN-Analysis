@@ -4,7 +4,7 @@ import sys
 
 # 1. FIX: Manually load the Garfield library if it's not in the ROOT namespace
 # Update this path to your actual installation location
-garfield_lib_path = "/home/vsitaraman/garfieldpp/install/lib/libGarfield.so"
+garfield_lib_path = "/home/vs19g/garfieldpp/install/lib/libGarfield.so"
 
 if os.path.exists(garfield_lib_path):
     ROOT.gSystem.Load(garfield_lib_path)
@@ -44,12 +44,13 @@ else:
 # --- 3. FIELD MAP SETUP ---
 fm = ROOT.Garfield.ComponentElmer()
 
-# Update these filenames to match your Elmer SIF output exactly
-# Assuming ElmerGrid was run on 'wires2d' directory
-fm.Initialise("wires2d/mesh.nodes", 
+
+fm.Initialise("wires2d/mesh.header", 
               "wires2d/mesh.elements", 
-              "wires2d/mesh.boundary", 
-              "wires2d/elfield_anasen.result", "mm")
+              "wires2d/mesh.nodes", 
+              "wires2d/dielectrics.dat", # Dielectrics (leave as empty string)
+              "wires2d/elstatics.result", 
+              "mm")
 
 # Set the medium (Body 13 from your Gmsh script)
 fm.SetMedium(0, gas)
@@ -73,8 +74,33 @@ x0, y0, z0, t0 = 35.0, 0.0, 0.0, 0.0
 print(f"Simulating heavy ion drift from r={x0}...")
 drift.DriftIon(x0, y0, z0, t0)
 
+# Create a file to store the heavy ion track
+with open("heavy_ion_track.csv", "w") as f:
+    f.write("x,y,z,t\n")
+    
+    # After running drift.DriftIon(x0, y0, z0, t0):
+    n_points = drift.GetNumberOfDriftLinePoints()
+    for i in range(n_points):
+        xi, yi, zi, ti = ROOT.double(0), ROOT.double(0), ROOT.double(0), ROOT.double(0)
+        drift.GetDriftLinePoint(i, xi, yi, zi, ti)
+        f.write(f"{xi},{yi},{zi},{ti}\n")
+
 print(f"Simulating electron avalanche from r={x0}...")
 # AvalancheElectron(x, y, z, t, energy, dx, dy, dz)
 aval.AvalancheElectron(x0, y0, z0, t0, 0.1, 0.0, 0.0, 0.0)
+
+with open("avalanche_endpoints.csv", "w") as f:
+    f.write("x,y,z,t\n")
+    
+    # After aval.AvalancheElectron(...)
+    n_endpoints = aval.GetNumberOfEndpoints()
+    for i in range(n_endpoints):
+        # Get start and end points of each electron in the avalanche
+        x1, y1, z1, t1, e1 = ROOT.double(0), ROOT.double(0), ROOT.double(0), ROOT.double(0), ROOT.double(0)
+        x2, y2, z2, t2, e2, status = ROOT.double(0), ROOT.double(0), ROOT.double(0), ROOT.double(0), ROOT.double(0), ROOT.int(0)
+        
+        aval.GetEndpoint(i, x1, y1, z1, t1, e1, x2, y2, z2, t2, e2, status)
+        # We save the endpoint (x2, y2, z2) where the electron was collected or attached
+        f.write(f"{x2},{y2},{z2},{t2}\n")
 
 print("Simulation complete.")
