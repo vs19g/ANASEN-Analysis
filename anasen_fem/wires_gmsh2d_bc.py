@@ -188,17 +188,17 @@ i2wire_surfs = get_surfs(ic2_wires) if include_ic_wires else []
 all_active_wire_surfs = needle_surfs + gwire_surfs + awire_surfs + cwire_surfs + i1wire_surfs + i2wire_surfs
 gmsh.model.mesh.embed(1, all_active_wire_surfs, 2, anasen_barrel)
     
-# f1 = gmsh.model.mesh.field.add("Distance")
-# gmsh.model.mesh.field.setNumbers(f1, "CurvesList", all_active_wire_surfs)
+f1 = gmsh.model.mesh.field.add("Distance")
+gmsh.model.mesh.field.setNumbers(f1, "CurvesList", all_active_wire_surfs)
 
-# f2 = gmsh.model.mesh.field.add("Threshold")
-# gmsh.model.mesh.field.setNumber(f2, "InField", f1)
-# gmsh.model.mesh.field.setNumber(f2, "SizeMin", 0.1)   # Fine mesh near wires
-# gmsh.model.mesh.field.setNumber(f2, "SizeMax", 10.0)  # Large mesh in empty space
-# gmsh.model.mesh.field.setNumber(f2, "DistMin", 1.0)   # Apply SizeMin within 1mm
-# gmsh.model.mesh.field.setNumber(f2, "DistMax", 20.0)  # Transition to SizeMax by 20mm
+f2 = gmsh.model.mesh.field.add("Threshold")
+gmsh.model.mesh.field.setNumber(f2, "InField", f1)
+gmsh.model.mesh.field.setNumber(f2, "SizeMin", 0.05)   # Fine mesh near wires
+gmsh.model.mesh.field.setNumber(f2, "SizeMax", 5.0)  # Large mesh in empty space
+gmsh.model.mesh.field.setNumber(f2, "DistMin", 0.5)   # Apply SizeMin within 1mm
+gmsh.model.mesh.field.setNumber(f2, "DistMax", 15.0)  # Transition to SizeMax by 20mm
 
-# gmsh.model.mesh.field.setAsBackgroundMesh(f2)
+gmsh.model.mesh.field.setAsBackgroundMesh(f2)
 
 
 # --- Physical Groups ---
@@ -222,8 +222,9 @@ gmsh.model.addPhysicalGroup(2, [anasen_barrel], tag=13, name="gas")
 gmsh.option.setNumber("Mesh.Algorithm", 6)
 
 gmsh.model.mesh.generate(dim=2)
-gmsh.model.mesh.refine()
-gmsh.model.mesh.refine()
+# gmsh.model.mesh.refine()
+# gmsh.model.mesh.refine()
 gmsh.write("wires2d.msh")
+gmsh.model.mesh.setOrder(1)
 #gmsh.fltk.run()
 gmsh.finalize()

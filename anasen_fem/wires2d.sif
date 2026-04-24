@@ -10,6 +10,7 @@ Simulation
   Steady State Max Iterations = 1
   Output File = "elstatics.result"
   Post File = "elstatics.ep"
+  Coordinate Scaling = 0.001  ! Converts mm from Gmsh to meters for Elmer
 End
 
 Constants
@@ -85,7 +86,7 @@ Solver 4
 End
 
 Boundary Condition 1
-  Target Boundaries = 1
+  Target Boundaries = 1 
   Potential = -200
   Calculate Electric Force = True
 End

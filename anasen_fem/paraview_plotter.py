@@ -1,4 +1,4 @@
-#!/home/vsitaraman/ParaView-6.1.0-RC1-MPI-Linux-Python3.12-x86_64/bin/pvbatch
+#!/home/vs19g/ParaView-6.1.0-MPI-Linux-Python3.12-x86_64/bin/pvbatch
 import numpy as np
 import sys
 from paraview.simple import *
@@ -35,15 +35,14 @@ contour_display.SetScalarBarVisibility(renderView, True)
 view = GetActiveView()
 
 # 2. Define your desired coordinate ranges (x_min, x_max, y_min, y_max, z_min, z_max)
-# Example: Look at a box from -10 to 10 in all dimensions
-x_min, x_max = -50.0, 50.0
-y_min, y_max = -50.0, 50.0
-z_min, z_max = -50.0, 50.0
+x_min, x_max = -0.05, 0.05
+y_min, y_max = -0.05, 0.05
+z_min, z_max = -0.05, 0.05
 
 # 3. Calculate Center, Position, and Parallel Scale
 center = [(x_min + x_max) / 2.0, (y_min + y_max) / 2.0, (z_min + z_max) / 2.0]
 # Position the camera far away along Z to look at the center
-position = [center[0], center[1], z_min - 30.0] 
+position = [center[0], center[1], 1.0] 
 # Parallel scale defines how much of the scene is visible. 
 # It is usually half the height of the viewed area.
 view.CameraParallelScale = max((x_max - x_min), (y_max - y_min))/1.6
@@ -69,15 +68,13 @@ contour_display.RenderLinesAsTubes = 0    # Makes lines look smoother at high re
 # 1. Get the active view
 view = GetActiveView()
 
-# 4. Apply settings
-# 1. Set the Focal Point to the middle of the quadrant
-zoom_center = [-25, 25, 0.0] 
+# 1. Set the Focal Point to the middle of the quadrant in metres
+zoom_center = [-0.025, 0.025, 0.0] 
 
-# 2. Tighten the Parallel Scale
-view.CameraParallelScale = 15 
+# 2. Tighten the Parallel Scale 
+view.CameraParallelScale = 0.015 
 
-# 3. Position the Camera
-# Keep it 0.5m away looking "down" at the new center
+# 3. Position the Camera (0.5m away is fine)
 view.CameraPosition = [zoom_center[0], zoom_center[1], 0.5]
 view.CameraFocalPoint = zoom_center
 view.CameraViewUp = [0.0, 1.0, 0.0]
@@ -94,9 +91,8 @@ glyph = Glyph(Input=contour_filter, GlyphType='Arrow') #
 # Orientation Array: Use the 'electric field' vector from Elmer
 glyph.OrientationArray = ['POINTS', 'electric field']
 glyph.ScaleArray = ['POINTS', 'No scale array']
-glyph.ScaleFactor = 1
+glyph.ScaleFactor = 0.001  
 
-# Sampling: Every nth point (Stride 16)
 glyph.GlyphMode = 'Every Nth Point'
 glyph.Stride = 24
 
