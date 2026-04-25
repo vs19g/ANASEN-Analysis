@@ -4,7 +4,8 @@ import sys
 
 # 1. FIX: Manually load the Garfield library if it's not in the ROOT namespace
 # Update this path to your actual installation location
-garfield_lib_path = "/home/vs19g/garfieldpp/install/lib/libGarfield.so"
+# garfield_lib_path = "/home/vs19g/garfieldpp/install/lib/libGarfield.so" #panguin path
+garfield_lib_path = "/home/vsitaraman/garfieldpp/install/lib/libGarfield.so" #laptop path
 
 if os.path.exists(garfield_lib_path):
     ROOT.gSystem.Load(garfield_lib_path)
@@ -48,7 +49,7 @@ fm = ROOT.Garfield.ComponentElmer()
 fm.Initialise("wires2d/mesh.header", 
               "wires2d/mesh.elements", 
               "wires2d/mesh.nodes", 
-              "wires2d/dielectrics.dat", # Dielectrics (leave as empty string)
+              "dielectrics.dat", # Dielectrics (leave as empty string)
               "wires2d/elstatics.result", 
               "mm")
 
