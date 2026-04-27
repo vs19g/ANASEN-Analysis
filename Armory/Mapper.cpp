@@ -125,7 +125,10 @@ int main(int argc, char **argv)
     misc.multi = 0;
 
     sx3.Clear();
+    sx3.Clear();
     qqq.Clear();
+    pc.Clear();
+    misc.Clear();
     pc.Clear();
     misc.Clear();
 

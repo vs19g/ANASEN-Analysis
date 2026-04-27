@@ -7,9 +7,18 @@
 
 class Det
 {
+class Det
+{
 public:
   Det() : multi(0) { Clear(); }
+  Det() : multi(0) { Clear(); }
 
+  unsigned short multi; // max 65535
+  unsigned short id[MAXMULTI];
+  unsigned short ch[MAXMULTI];
+  unsigned short e[MAXMULTI];
+  unsigned long long t[MAXMULTI];
+  unsigned long long tf[MAXMULTI];
   unsigned short multi; // max 65535
   unsigned short id[MAXMULTI];
   unsigned short ch[MAXMULTI];
@@ -19,17 +28,32 @@ public:
 
   unsigned short sn[MAXMULTI];
   unsigned short digiCh[MAXMULTI];
+  unsigned short sn[MAXMULTI];
+  unsigned short digiCh[MAXMULTI];
 
+  unsigned short index[MAXMULTI]; // id * nCh + ch;
+  bool used[MAXMULTI];
   unsigned short index[MAXMULTI]; // id * nCh + ch;
   bool used[MAXMULTI];
 
   void Clear()
   {
+  void Clear()
+  {
     multi = 0;
+    for (int i = 0; i < MAXMULTI; i++)
+    {
     for (int i = 0; i < MAXMULTI; i++)
     {
       id[i] = 0;
       ch[i] = 0;
+      e[i] = 0;
+      t[i] = 0;
+      tf[i] = 0;
+      index[i] = 0;
+      sn[i] = 0;
+      digiCh[i] = 0;
+      used[i] = false;
       e[i] = 0;
       t[i] = 0;
       tf[i] = 0;
@@ -42,6 +66,8 @@ public:
 
   void Print()
   {
+  void Print()
+  {
     printf("=============================== multi : %u\n", multi);
     for (int i = 0; i < multi; i++)
     {
@@ -51,10 +77,17 @@ public:
 
   void SetDetDimension(unsigned short maxID, unsigned maxCh)
   {
+  void SetDetDimension(unsigned short maxID, unsigned maxCh)
+  {
     nID = maxID;
     nCh = maxCh;
   }
 
+  void CalIndex()
+  {
+    for (int i = 0; i < multi; i++)
+    {
+      index[i] = id[i] * nCh + ch[i];
   void CalIndex()
   {
     for (int i = 0; i < multi; i++)
@@ -68,4 +101,5 @@ private:
   unsigned short nCh;
 };
 
+#endif
 #endif
