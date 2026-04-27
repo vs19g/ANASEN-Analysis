@@ -260,6 +260,11 @@ void GenMapping(std::string mapFile)
         detID += 100 + atoi(words[4].c_str());
     }
 
+    if(words[2] == "MISC")
+    {
+      detID += 30000;
+    }
+
     if (words[2] == "blank")
     {
       detID = -1;

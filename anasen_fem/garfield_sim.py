@@ -48,7 +48,7 @@ fm = ROOT.Garfield.ComponentElmer()
 fm.Initialise("wires2d/mesh.header", 
               "wires2d/mesh.elements", 
               "wires2d/mesh.nodes", 
-              "wires2d/dielectrics.dat", # Dielectrics (leave as empty string)
+              "wires2d/dielectrics.dat",
               "wires2d/elstatics.result", 
               "mm")
 

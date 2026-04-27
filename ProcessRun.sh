@@ -13,22 +13,26 @@ timeWindow=$2
 option=$3
 
 # rawFolder=/home/tandem/data1/2024_09_17Fap/data
-rawFolder=/mnt/d/17F
-rootFolder=/mnt/d/Remapped_files/17F_data/root_data
+# rawFolder=/mnt/d/17F
+# rootFolder=/mnt/d/Remapped_files/17F_data/root_data
+# rawFolder=/mnt/data1/vs19g/2024_06_27Al_vs19g/data
+# rootFolder=/home/vs19g/Desktop/27Al_Data/root_data
+rawFolder=/mnt/data1/vs19g/2024_09_17Fap/data
+rootFolder=/home/vs19g/Desktop/17F_Data/root_data
 
 if [ $option -eq 0 ]; then
 
     # rsync -auh --info=progress2 splitpole@128.186.111.223:/media/nvmeData/2024_09_17Fap/*.fsu /home/tandem/data1/2024_09_17Fap/data
 
-    fileList=`\ls -1 ${rawFolder}/*SourceRun_${runID}_*.fsu`
+    fileList=`\ls -1 ${rawFolder}/*Run*_${runID}_*.fsu`
 
-    ./EventBuilder ${timeWindow} 0 0 100000000 ${fileList}
+    time ./EventBuilder ${timeWindow} 0 0 100000000 ${fileList}
 
     outFile=${rawFolder}/*${runID}*${timeWindow}.root
 
     mv -vf ${outFile} ${rootFolder}/.
 
-    ./Mapper ${rootFolder}/*${runID}*${timeWindow}.root
+    time ./Mapper ${rootFolder}/*${runID}*${timeWindow}.root
 fi
 
 # root "processRun.C(\"${rootFolder}/Run_${runID}_mapped.root\")"
