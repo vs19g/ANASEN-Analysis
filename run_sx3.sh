@@ -1,10 +1,11 @@
 #Alpha runs at different spacer positions
-#rm results_run*.root
+rm results_run*.root
 #export flipa=1
 export anode_offset=1
 export DATASET="27Al"
 if [[ 1 -eq 0 ]]; then
-root -b -q -l -x ../Remapped_files/27Al_Data/root_data/Run_009_mapped.root -e 'tree->Process("MakeVertex.C+O","27Al")'; mv Analyzer_SX3.root results_run09.root;
+root -b -q -l -x ../Remapped_files/27Al_Data/root_data/Run_009_mapped.root -e 'tree->Process("MakeVertex.C+O")'; mv Analyzer_SX3.root results_run09.root;
+exit
 root -b -q -l -x ../Remapped_files/27Al_Data/root_data/Run_001_mapped.root -e 'tree->Process("MakeVertex.C+O")'; mv Analyzer_SX3.root results_run01.root;
 root -b -q -l -x ../Remapped_files/27Al_Data/root_data/Run_002_mapped.root -e 'tree->Process("MakeVertex.C+O")'; mv Analyzer_SX3.root results_run02.root;
 root -b -q -l -x ../Remapped_files/27Al_Data/root_data/Run_003_mapped.root -e 'tree->Process("MakeVertex.C+O")'; mv Analyzer_SX3.root results_run03.root;
@@ -35,7 +36,7 @@ fi
 #protons+gas, 27Al
 #export flip180="1"
 #export flip180="0"
-if [[ 1 -eq 1 ]] ; then
+if [[ 1 -eq 0 ]] ; then
 export anode_offset=1
 root -q -b -x ../Remapped_files/27Al_Data/root_data/Run_015_mapped.root -e 'tree->Process("MakeVertex.C+O")'; mv Analyzer_SX3.root results_run15.root;
 exit
@@ -57,7 +58,7 @@ fi
 #exit
 export DATASET="17F"
 export flip180="0"
-if [[ 1 -eq 0 ]]; then
+if [[ 1 -eq 1 ]]; then
 root -q -l -b -x ../Remapped_files/17F_Data/root_data/Source_005_mapped.root -e 'tree->Process("MakeVertex.C+O")'; mv Analyzer_SX3.root results_run05.root;
 root -q -l -b -x ../Remapped_files/17F_Data/root_data/Source_006_mapped.root -e 'tree->Process("MakeVertex.C+O")'; mv Analyzer_SX3.root results_run06.root;
 root -q -l -b -x ../Remapped_files/17F_Data/root_data/Source_007_mapped.root -e 'tree->Process("MakeVertex.C+O")'; mv Analyzer_SX3.root results_run07.root;

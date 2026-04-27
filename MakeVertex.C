@@ -236,10 +236,10 @@ void MakeVertex::Begin(TTree * /*tree*/)
             }
         infile.close();
     }
-    MeV_to_cm = new TGraph("eloss_calculations/alphas_in_250torr_mix_filtered_full.txt","%lf %*lf %lf");
+    MeV_to_cm = new TGraph("ELoss/alpha_lookup_20MeV.dat","%lf %*lf %lf");
     cm_to_MeV=  new TGraph(MeV_to_cm->GetN(), MeV_to_cm->GetY(), MeV_to_cm->GetX());
 
-    MeV_to_cm_p = new TGraph("eloss_calculations/protons_in_250torr_mix_filtered_full.txt","%lf %*lf %lf");
+    MeV_to_cm_p = new TGraph("ELoss/proton_lookup_20MeV.dat","%lf %*lf %lf");
     cm_to_MeVp=  new TGraph(MeV_to_cm->GetN(), MeV_to_cm->GetY(), MeV_to_cm->GetX());
 
     //cm_to_MeV.Eval(MeV_to_cm.Eval(detectedE)-PathLength) gives energy of particle before it traversed 'path length'
@@ -756,9 +756,9 @@ Bool_t MakeVertex::Process(Long64_t entry)
 	std::string aplabel = "a(p,p)";
 	for(auto qqqevent: QQQ_Events) {
 		for(auto sx3event:SX3_Events) {
-			plotter->Fill1D("qqq_sx3_dt",800,-2000,2000,qqqevent.Time1-sx3event.Time1,aplabel);	
+			plotter->Fill1D("qqq_sx3_dt",1024,-4000,4000,qqqevent.Time1-sx3event.Time1,aplabel);	
 			if(TMath::Abs(qqqevent.Time1-sx3event.Time1)>300) continue;
-			plotter->Fill1D("qqq_sx3_dt_timecut",800,-2000,2000,qqqevent.Time1-sx3event.Time1,aplabel);	
+			plotter->Fill1D("qqq_sx3_dt_timecut",1024,-4000,4000,qqqevent.Time1-sx3event.Time1,aplabel);	
 			plotter->Fill1D("qqq_sx3_dphi",180,-360,360,qqqevent.pos.Phi()*180/M_PI - sx3event.pos.Phi()*180/M_PI,aplabel);
 	    	plotter->Fill2D("qqq_sx3_matrix",400,0,10,400,0,10,qqqevent.Energy1,sx3event.Energy1,aplabel);
 
@@ -864,8 +864,8 @@ Bool_t MakeVertex::Process(Long64_t entry)
 
         PCSX3TimeCut=false;
         for(auto sx3event:SX3_Events) {
-            plotter->Fill1D("dt_pcA_sx3B"+std::to_string(sx3event.ch2),640,-2000,2000,sx3event.Time1 - pcevent.Time1,"hTiming");
-            plotter->Fill1D("dt_pcC_sx3B"+std::to_string(sx3event.ch2),640,-2000,2000,sx3event.Time1 - pcevent.Time2,"hTiming");
+            plotter->Fill1D("dt_pcA_sx3B"+std::to_string(sx3event.ch2),1024,-4000,4000,sx3event.Time1 - pcevent.Time1,"hTiming");
+            plotter->Fill1D("dt_pcC_sx3B"+std::to_string(sx3event.ch2),1024,-4000,4000,sx3event.Time1 - pcevent.Time2,"hTiming");
             if(sx3event.Time1 - pcevent.Time1 < 0)//-150 for alphas
                 PCASX3TimeCut = 1;
             if(sx3event.Time1 - pcevent.Time2 < 0)//-200 for alphas
@@ -875,15 +875,15 @@ Bool_t MakeVertex::Process(Long64_t entry)
             bool phicut = sx3event.pos.Phi() <= pcevent.pos.Phi()+TMath::Pi()/4. && sx3event.pos.Phi() >= pcevent.pos.Phi()-TMath::Pi()/4.;
 
 
-            plotter->Fill1D("dt_pcA_sx3B",640,-2000,2000,sx3event.Time1 - pcevent.Time1);
-            plotter->Fill1D("dt_pcC_sx3B",640,-2000,2000,sx3event.Time1 - pcevent.Time2);
-            plotter->Fill2D("dt_pcA_vs_sx3RE",640,-2000,2000,400,0,10,sx3event.Time1-pcevent.Time1, sx3event.Energy1);
+            plotter->Fill1D("dt_pcA_sx3B",1024,-4000,4000,sx3event.Time1 - pcevent.Time1);
+            plotter->Fill1D("dt_pcC_sx3B",1024,-4000,4000,sx3event.Time1 - pcevent.Time2);
+            plotter->Fill2D("dt_pcA_vs_sx3RE",1024,-4000,4000,400,0,10,sx3event.Time1-pcevent.Time1, sx3event.Energy1);
             plotter->Fill2D("dE_E_Anodesx3B",400,0,10,800,0,40000,sx3event.Energy1,pcevent.Energy1);
             plotter->Fill2D("dE_E_Cathodesx3B",400,0,10,800,0,10000,sx3event.Energy1,pcevent.Energy2);
             plotter->Fill2D("sx3phi_vs_pcphi"+std::to_string(sx3event.Time1 - pcevent.Time1<-150),100,-360,360,100,-360,360,sx3event.pos.Phi()*180/M_PI,pcevent.pos.Phi()*180/M_PI);
             if(PCSX3TimeCut) {
-                plotter->Fill1D("dt_pcA_sx3B_timecut",640,-2000,2000,sx3event.Time1 - pcevent.Time1);
-                plotter->Fill1D("dt_pcC_sx3B_timecut",640,-2000,2000,sx3event.Time1 - pcevent.Time2);	
+                plotter->Fill1D("dt_pcA_sx3B_timecut",1024,-4000,4000,sx3event.Time1 - pcevent.Time1);
+                plotter->Fill1D("dt_pcC_sx3B_timecut",1024,-4000,4000,sx3event.Time1 - pcevent.Time2);	
                 plotter->Fill2D("xyplot_sx3"+std::to_string(sx3event.ch2/4),100,-100,100,100,-100,100,sx3event.pos.X(),sx3event.pos.Y());
                 plotter->Fill2D("xyplot_sx3"+std::to_string(sx3event.ch2/4),100,-100,100,100,-100,100,pcevent.pos.X(),pcevent.pos.Y());
                 plotter->Fill2D("pcz_vs_pcphi_TimeCut",600,-200,200,120,-360,360,pcevent.pos.Z(),pcevent.pos.Phi()*180/M_PI); //x-axis is all Si det, y-axis is PC anode+cathode only
@@ -1016,9 +1016,9 @@ Bool_t MakeVertex::Process(Long64_t entry)
 			if(QQQ_Events.at(ii).ch2 == QQQ_Events.at(jj).ch2+1) continue;
 			
 			double dt = QQQ_Events.at(ii).Time1-QQQ_Events.at(jj).Time1;
-			plotter->Fill1D("dt_qqqi_qqqj",800,-2000,2000,dt);
+			plotter->Fill1D("dt_qqqi_qqqj",1024,-4000,4000,dt);
 			if(TMath::Abs(dt) > 150) continue;
-			plotter->Fill1D("dt_qqqi_qqqj_coinc",800,-2000,2000,dt);
+			plotter->Fill1D("dt_qqqi_qqqj_coinc",1024,-4000,4000,dt);
 			double sum_e = QQQ_Events.at(ii).Energy1+QQQ_Events.at(jj).Energy1;
 			plotter->Fill2D("sum_qqqE",400,0,10,400,0,10,QQQ_Events.at(ii).Energy1,sum_e);
 			plotter->Fill2D("qqq_matrix",400,0,10,400,0,10,QQQ_Events.at(ii).Energy1,QQQ_Events.at(jj).Energy1);
@@ -1039,9 +1039,9 @@ Bool_t MakeVertex::Process(Long64_t entry)
 	}
     for(auto pcevent: PC_Events) {
         for(auto qqqevent: QQQ_Events) {
-            plotter->Fill1D("dt_pcA_qqqR",640,-2000,2000,qqqevent.Time1 - pcevent.Time1);
-            plotter->Fill2D("dt_pcA_qqqR_vs_qqqRE",640,-2000,2000,400,0,10,qqqevent.Time1-pcevent.Time1, qqqevent.Energy1);
-            plotter->Fill1D("dt_pcC_qqqW",640,-2000,2000,qqqevent.Time2 - pcevent.Time2);
+            plotter->Fill1D("dt_pcA_qqqR",1024,-4000,4000,qqqevent.Time1 - pcevent.Time1);
+            plotter->Fill2D("dt_pcA_qqqR_vs_qqqRE",1024,-4000,4000,400,0,10,qqqevent.Time1-pcevent.Time1, qqqevent.Energy1);
+            plotter->Fill1D("dt_pcC_qqqW",1024,-4000,4000,qqqevent.Time2 - pcevent.Time2);
             plotter->Fill2D("phiPC_vs_phiQQQ",180,-360,360,180,-360,360,qqqevent.pos.Phi()*180/M_PI,pcevent.pos.Phi()*180/M_PI);
             double sinTheta = TMath::Sin((qqqevent.pos - TVector3(0,0,source_vertex)).Theta());///TMath::Sin((TVector3(51.5,0,128.) - TVector3(0,0,85)).Theta());
             
@@ -1099,8 +1099,8 @@ Bool_t MakeVertex::Process(Long64_t entry)
             	//plotter->Fill2D("dE_E_AnodeQQQ(R/4)"+std::to_string(floor((qqqevent.ch1%16)/4))+"_TC1PC"+std::to_string(phicut),400,0,10,400,0,20000,qqqevent.Energy1,pcevent.Energy1);
 
 
-                plotter->Fill1D("dt_pcA_qqqR_timecut",640,-2000,2000,qqqevent.Time1 - pcevent.Time1);
-                plotter->Fill1D("dt_pcC_qqqW_timecut",640,-2000,2000,qqqevent.Time2 - pcevent.Time2);
+                plotter->Fill1D("dt_pcA_qqqR_timecut",1024,-4000,4000,qqqevent.Time1 - pcevent.Time1);
+                plotter->Fill1D("dt_pcC_qqqW_timecut",1024,-4000,4000,qqqevent.Time2 - pcevent.Time2);
                 plotter->Fill2D("dE_theta_AnodeQQQR",90,0,90,400,0,20000,(qqqevent.pos - TVector3(0,0,source_vertex)).Theta()*180/M_PI,pcevent.Energy1);
                 plotter->Fill2D("dE2_theta_AnodeQQQR_zoomin",60,0,30,400,0,5000,(qqqevent.pos - TVector3(0,0,source_vertex)).Theta()*180/M_PI,pcevent.Energy1*sinTheta);
                 plotter->Fill2D("dE2_theta_AnodeQQQR",90,0,90,400,0,20000,(qqqevent.pos - TVector3(0,0,source_vertex)).Theta()*180/M_PI,pcevent.Energy1*sinTheta);
