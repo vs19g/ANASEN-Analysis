@@ -4,8 +4,8 @@ import sys
 
 # 1. FIX: Manually load the Garfield library if it's not in the ROOT namespace
 # Update this path to your actual installation location
-# garfield_lib_path = "/home/vs19g/garfieldpp/install/lib/libGarfield.so" #panguin path
-garfield_lib_path = "/home/vsitaraman/garfieldpp/install/lib/libGarfield.so" #laptop path
+garfield_lib_path = "/home/vs19g/garfieldpp/install/lib/libGarfield.so" #penguin path
+# garfield_lib_path = "/home/vsitaraman/garfieldpp/install/lib/libGarfield.so" #laptop path
 
 if os.path.exists(garfield_lib_path):
     ROOT.gSystem.Load(garfield_lib_path)
@@ -18,7 +18,6 @@ try:
     test_gas = ROOT.Garfield.MediumMagboltz()
 except AttributeError:
     print("ERROR: Garfield shared library loaded, but 'Garfield' namespace not found.")
-    print("Ensure Garfield was compiled with -DWITH_PYTHON=ON")
     sys.exit(1)
 
 # --- 2. GAS SETUP (96% He, 4% CO2) ---
@@ -36,7 +35,7 @@ if not os.path.exists(gas_file):
     gas.SetFieldGrid(10., 80000., 20, True) 
 
     # 2. Reduce the precision slightly for the first run:
-    gas.GenerateGasTable(5) 
+    gas.GenerateGasTable(8) 
     gas.WriteGasFile(gas_file)
 else:
     print(f"Loading existing gas table: {gas_file}")
@@ -49,7 +48,7 @@ fm = ROOT.Garfield.ComponentElmer()
 fm.Initialise("wires2d/mesh.header", 
               "wires2d/mesh.elements", 
               "wires2d/mesh.nodes", 
-              "dielectrics.dat", # Dielectrics (leave as empty string)
+              "dielectrics.dat", 
               "wires2d/elstatics.result", 
               "mm")
 
