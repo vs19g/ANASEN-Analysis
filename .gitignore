@@ -34,3 +34,4 @@ anasen_fem/scalars.dat.names
 myenv/
 eloss_calculations/
 anasen_fem/He96_CO2_4_260Torr.gas
+anasen_fem/heavy_ion_track.csv
