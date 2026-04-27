@@ -42,7 +42,7 @@ else:
     gas.LoadGasFile(gas_file)
 
 # --- 3. FIELD MAP SETUP ---
-fm = ROOT.Garfield.ComponentElmer()
+fm = ROOT.Garfield.ComponentElmer2d()
 
 
 fm.Initialise("wires2d/mesh.header", 
@@ -58,6 +58,7 @@ fm.SetMedium(0, gas)
 # --- 4. SENSOR AND DRIFT SETUP ---
 sensor = ROOT.Garfield.Sensor()
 sensor.AddComponent(fm)
+sensor.SetArea(-50.0, -50.0, -5.0, 50.0, 50.0, 5.0) #hardcoding the sesnsor area to define a psuedo 3d geometry
 
 # Heavy Ion Drift (RKF) - Best for the general track
 drift = ROOT.Garfield.DriftLineRKF()
@@ -69,7 +70,7 @@ aval.SetSensor(sensor)
 
 # --- 5. EXECUTION ---
 # Starting position (e.g., near the IC wires at r=23mm or closer to Anodes)
-x0, y0, z0, t0 = 35.0, 0.0, 0.0, 0.0
+x0, y0, z0, t0 = 3.50, 0.0, 0.0, 0.0
 
 print(f"Simulating heavy ion drift from r={x0}...")
 drift.DriftIon(x0, y0, z0, t0)
