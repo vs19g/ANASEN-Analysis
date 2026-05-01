@@ -36,7 +36,7 @@ private:
     inline void FillN_All_Histograms();
 public:
     HistPlotter(std::string outfile, std::string type);
-    inline void FlushToDisk(); //!< Writes all objects to file before closing, nesting objects in folders as is found necessary
+    inline void FlushToDisk(int integral); //!< Writes all objects to file before closing, nesting objects in folders as is found necessary
     inline void PrintObjects(); //!< Dump objects to std::cout for inspection
     inline void ReadCuts(std::string); 
     inline TCutG* FindCut(std::string cut) {
@@ -117,7 +117,8 @@ void HistPlotter::FillN_All_Histograms() {
     }
     std::cout << "." << std::endl;
 }
-void HistPlotter::FlushToDisk() {
+
+void HistPlotter::FlushToDisk(int min_integral=0) {
     /*! \fn void FlushToDisk()
         \brief         Function that can be used at any point to exit smoothly by saving all ROOT objects in memory
         to the output file before closing it. Obeys the binding of histograms to separate folders, if so specified.
@@ -143,7 +144,8 @@ void HistPlotter::FlushToDisk() {
         } else {
             ofile->cd(); //toplevel for all default histograms. Default setting
         }
-        it->second->Write();
+        if(((TH1F*)it->second)->Integral()>min_integral)
+	        it->second->Write();
     }
 
     //Create a directory for all cuts, and save all cuts in them
