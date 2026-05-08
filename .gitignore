@@ -10,6 +10,7 @@ EventBuilder*
 *.png
 *.gif
 *.msh
+*.vtk
 Mapper
 AnasenMS
 
@@ -26,12 +27,8 @@ MakePlotsQQQ.C
 MakePlotsQQQ.h
 MakePlotsSX3.C
 MakePlotsSX3.h
-qqq_gains_det3.dat
-qqq_relative_gains.dat
 Armory/CorrelateQQQ.h
 QQQStage2.C
 anasen_fem/scalars.dat.names
-myenv/
-eloss_calculations/
 anasen_fem/He96_CO2_4_260Torr.gas
 anasen_fem/heavy_ion_track.csv
