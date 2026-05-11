@@ -1,4 +1,3 @@
-EventBuilder*
 *.d
 *.so
 *.pcm
@@ -32,3 +31,5 @@ QQQStage2.C
 anasen_fem/scalars.dat.names
 anasen_fem/He96_CO2_4_260Torr.gas
 anasen_fem/heavy_ion_track.csv
+Armory/EventBuilder
+EventBuilder

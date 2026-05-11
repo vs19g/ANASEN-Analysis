@@ -1,5 +1,5 @@
 #Alpha runs at different spacer positions
-rm results_run*.root
+# rm results_run*.root
 export flipa=0
 export anode_offset=0
 export DATASET="27Al"
@@ -22,7 +22,7 @@ export flip180="0"
 #root -q -b -x ../ANASEN_analysis/data/27Al_Data/Run_009_mapped.root -e 'tree->Process("MakeVertex.C+O")'; mv Analyzer_SX3.root results_run09.root;
 if [[ 1 -eq 1 ]]; then
 #export timecut_low=230.0;
-# export timecut_low=400.0;
+export timecut_low=400.0;
 #export timecut_high=400.0;
 #unset timecut_low, timecut_high
 #export source_vertex=53.44; root -q -b -x ../ANASEN_analysis/data/27Al_Data/Run_009_mapped.root -e 'tree->Process("MakeVertex.C+O")'; mv Analyzer_SX3.root results_run09.root;

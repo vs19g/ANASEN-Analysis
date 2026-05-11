@@ -1164,7 +1164,8 @@ Bool_t MakeVertex::Process(Long64_t entry)
             plotter->Fill2D("pcz_vs_sx3z_strip="+std::to_string(sx3event.ch2)+"_a"+std::to_string(pcevent.multi1)+"_c"+std::to_string(pcevent.multi2),300,0,100,600,-200,200,sx3z,pcevent.pos.Z(),"sx3_vs_pc_zcorr");
 
             plotter->Fill2D("pcdEC_vs_sx3z_strip="+std::to_string(sx3event.ch2)+"_a"+std::to_string(pcevent.multi1)+"_c"+std::to_string(pcevent.multi2),800,0,20000,600,-200,200,pcevent.Energy2,sx3z,"sx3_vs_pc_zcorr");
-            plotter->Fill2D("pcdEA_vs_sx3z_strip="+std::to_string(sx3event.ch2)+"_a"+std::to_string(pcevent.multi1)+"_c"+std::to_string(pcevent.multi2),800,0,20000,600,-200,200,pcevent.Energy1,sx3z,"sx3_vs_pc_zcorr");*/
+            plotter->Fill2D("pcdEA_vs_sx3z_strip="+std::to_string(sx3event.ch2)+"_a"+std::to_string(pcevent.multi1)+"_c"+std::to_string(pcevent.multi2),800,0,20000,600,-200,200,pcevent.Energy1,sx3z,"sx3_vs_pc_zcorr");
+            */
 
             /*for(auto cc: cClusters)
              for(auto ac: aClusters) {
