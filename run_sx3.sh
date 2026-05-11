@@ -37,7 +37,7 @@ fi
 #protons+gas, 27Al
 #export flip180="1"
 #export flip180="0"
-if [[ 1 -eq 1 ]] ; then
+if [[ 1 -eq 0 ]]; then
 export flipa=0
 export anode_offset=0
 export source_vertex=-200.0; #put the 'source' on the entrance window
