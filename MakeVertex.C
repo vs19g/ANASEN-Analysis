@@ -889,6 +889,25 @@ Bool_t MakeVertex::Process(Long64_t entry)
                 }
             }
         } // for 'i' loop
+
+        for (const auto acluster : aClusters)
+        {
+            auto [apwire, apSumE, apMaxE, apTSMaxE] = pwinstance.GetPseudoWire(acluster, "ANODE");
+            int a_number = acluster.size();
+            TVector3 pc_closest = pwinstance.getClosestWirePosAtWirePhi(apwire, sx3event.pos.Phi());
+            if (sx3event.Time1 - apTSMaxE < -150)
+            {
+                plotter->Fill2D("dEa_interp_Esx3_TC1_ignC" + std::to_string(acluster.size()), 400, 0, 10, 800, 0, 40000, sx3event.Energy1, apSumE, "ainterp_noc");
+                plotter->Fill2D("aPhi_interp_sx3Phi_TC1_ignC" + std::to_string(acluster.size()), 120, -360, 360, 120, -360, 360, pc_closest.Phi() * 180. / M_PI, sx3event.pos.Phi() * 180. / M_PI, "ainterp_noc");
+                plotter->Fill2D("aZ_interp_sx3Z_TC1_ignC" + std::to_string(acluster.size()), 400, -200, 200, 300, -100, 200, pc_closest.Z(), sx3event.pos.Z(), "ainterp_noc");
+                TVector3 x2(pc_closest), x1(sx3event.pos);
+                TVector3 v = x2 - x1;
+                double t_minimum = -1.0 * (x1.X() * v.X() + x1.Y() * v.Y()) / (v.X() * v.X() + v.Y() * v.Y());
+                TVector3 vector_closest_to_axis = x1 + t_minimum * v;
+                plotter->Fill2D("vertexZ_interp_sx3Z_TC1_ignC" + std::to_string(acluster.size()), 400, -200, 200, 300, -100, 200, vector_closest_to_axis.Z(), sx3event.pos.Z(), "ainterp_noc");
+                plotter->Fill2D("vertexXY_interp_TC1_ignC" + std::to_string(acluster.size()), 200, -100, 100, 200, -100, 100, vector_closest_to_axis.X(), vector_closest_to_axis.Y(), "ainterp_noc");
+            }
+        }
     }
 
     for (auto qqqevent : QQQ_Events)
@@ -1233,67 +1252,118 @@ Bool_t MakeVertex::Process(Long64_t entry)
     }*/
 
     ///////////////////Single wire analysis for the anodes///////////////////
-    /*
-        if (aClusters.size() == 1 && cClusters.size() == 0 && SX3_Events.size() > 0)
+
+    if (aClusters.size() == 1 && cClusters.size() == 0)
+    {
+        // Extract the primary anode hit properties
+        auto anodeHit = aClusters.front().front();
+        int aWireID = std::get<0>(anodeHit);
+        double aEnergy = std::get<1>(anodeHit);
+        double aTime = std::get<2>(anodeHit);
+
+        // Get the 3D endpoints of the fired twisted anode wire from your geometry class
+        TVector3 a1 = pwinstance.An[aWireID].first;
+        TVector3 wireVec = pwinstance.An[aWireID].first - pwinstance.An[aWireID].second;
+
+        // Loop over SX3_Events directly
+        for (auto sx3event : SX3_Events)
         {
-            // Extract the primary anode hit properties
-            auto anodeHit = aClusters.front().front();
-            int aWireID = std::get<0>(anodeHit);
-            double aEnergy = std::get<1>(anodeHit);
-            double aTime = std::get<2>(anodeHit);
-
-            // Get the 3D endpoints of the fired twisted anode wire from your geometry class
-            TVector3 a1 = pwinstance.An[aWireID].first;
-            TVector3 wireVec = pwinstance.An[aWireID].first - pwinstance.An[aWireID].second;
-
-            // Loop over SX3_Events directly
-            for (auto sx3event : SX3_Events)
+            if (sx3event.Time1 - aTime < -150) // Time cut for protons
             {
-                if (sx3event.Time1 - aTime < -150) // Time cut for protons
-                {
-                    // 1. Define the plane of the track (Z-axis to SX3 hit)
-                    TVector3 planeNormal(-TMath::Sin(sx3event.pos.Phi()), TMath::Cos(sx3event.pos.Phi()), 0.0);
+                // 1. Define the plane of the track (Z-axis to SX3 hit)
+                TVector3 planeNormal(-TMath::Sin(sx3event.pos.Phi()), TMath::Cos(sx3event.pos.Phi()), 0.0);
 
-                    // 2. Find intersection of the twisted wire with this track plane
-                    double dot_wireVec = wireVec.Dot(planeNormal);
+                // 2. Find intersection of the twisted wire with this track plane
+                double dot_wireVec = wireVec.Dot(planeNormal);
 
-                    // Prevent divide-by-zero if wire is perfectly parallel to the track plane
-                    if (TMath::Abs(dot_wireVec) < 1e-6)
-                        continue;
+                // Prevent divide-by-zero if wire is perfectly parallel to the track plane
+                if (TMath::Abs(dot_wireVec) < 1e-6)
+                    continue;
 
-                    double t_intersect = -(a1.Dot(planeNormal)) / dot_wireVec;
+                double t_intersect = -(a1.Dot(planeNormal)) / dot_wireVec;
 
-                    // Calculate the exact 3D coordinate on the wire that matches the SX3 phi
-                    TVector3 pcz_intersect = a1 + t_intersect * wireVec;
+                // Calculate the exact 3D coordinate on the wire that matches the SX3 phi
+                TVector3 pcz_intersect = a1 + t_intersect * wireVec;
 
-                    // 3. Reconstruct Vertex Z
-                    double deltaRho = sx3event.pos.Perp() - pcz_intersect.Perp();
-                    double deltaZ = sx3event.pos.Z() - pcz_intersect.Z();
+                // 3. Reconstruct Vertex Z
+                double deltaRho = sx3event.pos.Perp() - pcz_intersect.Perp();
+                double deltaZ = sx3event.pos.Z() - pcz_intersect.Z();
 
-                    double vertex_recon = sx3event.pos.Z() - sx3event.pos.Perp() * (deltaZ / deltaRho);
+                double vertex_recon = sx3event.pos.Z() - sx3event.pos.Perp() * (deltaZ / deltaRho);
 
-                    // 4. Energy Loss Correction in Silicon
-                    double path_length = (sx3event.pos - TVector3(0, 0, vertex_recon)).Mag() * 0.1;
-                    double sx3Efix = cm_to_MeVp->Eval(MeV_to_cm_p->Eval(sx3event.Energy1) - path_length);
+                // 4. Energy Loss Correction in Silicon
+                double path_length = (sx3event.pos - TVector3(0, 0, vertex_recon)).Mag() * 0.1;
+                double sx3Efix = cm_to_MeVp->Eval(MeV_to_cm_p->Eval(sx3event.Energy1) - path_length);
 
-                    double theta_recon = (sx3event.pos - TVector3(0, 0, vertex_recon)).Theta();
-                    double sinTheta = TMath::Sin(theta_recon);
+                double theta_recon = (sx3event.pos - TVector3(0, 0, vertex_recon)).Theta();
+                double sinTheta = TMath::Sin(theta_recon);
 
-                    // 5. Fill Diagnostics
-                    plotter->Fill1D("1A0C_twisted_pcz_recon_Phi" + std::to_string(PCSX3PhiCut), 600, -300, 300, pcz_intersect.Z(), "1wire");
-                    plotter->Fill1D("1A0C_twisted_vertex_recon_Phi" + std::to_string(PCSX3PhiCut), 600, -300, 300, vertex_recon, "1wire");
+                // 5. Fill Diagnostics
+                plotter->Fill1D("1A0C_twisted_pcz_recon_Phi_SX3" + std::to_string(PCSX3PhiCut), 600, -300, 300, pcz_intersect.Z(), "1A0C");
+                plotter->Fill1D("1A0C_twisted_vertex_recon_Phi_SX3" + std::to_string(PCSX3PhiCut), 600, -300, 300, vertex_recon, "1A0C");
 
-                    plotter->Fill2D("1A0C_sx3_E_vs_theta_raw_Phi" + std::to_string(PCSX3PhiCut), 180, 0, 180, 400, 0, 30, theta_recon * 180. / M_PI, sx3event.Energy1, "1wire");
-                    plotter->Fill2D("1A0C_sx3_E_vs_theta_corr_Phi" + std::to_string(PCSX3PhiCut), 180, 0, 180, 400, 0, 30, theta_recon * 180. / M_PI, sx3Efix, "1wire");
+                plotter->Fill2D("1A0C_sx3_E_vs_theta_raw_Phi_SX3" + std::to_string(PCSX3PhiCut), 180, 0, 180, 400, 0, 30, theta_recon * 180. / M_PI, sx3event.Energy1, "1A0C");
+                plotter->Fill2D("1A0C_sx3_E_vs_theta_corr_Phi_SX3" + std::to_string(PCSX3PhiCut), 180, 0, 180, 400, 0, 30, theta_recon * 180. / M_PI, sx3Efix, "1A0C");
 
-                    plotter->Fill2D("1A0C_dE_Ecorr_Anode_SX3_Phi" + std::to_string(PCSX3PhiCut), 400, 0, 30, 800, 0, 40000, sx3Efix, aEnergy * sinTheta, "1wire");
+                plotter->Fill2D("1A0C_dE_Ecorr_Anode_SX3_Phi" + std::to_string(PCSX3PhiCut), 400, 0, 30, 800, 0, 40000, sx3Efix, aEnergy * sinTheta, "1A0C");
 
-                    // Track where on the wire the hit occurred (0 to 1 is inside the physical PC)
-                    plotter->Fill1D("1A0C_wire_t_parameter_Phi" + std::to_string(PCSX3PhiCut), 200, -0.5, 1.5, t_intersect, "1wire");
-                }
+                // Track where on the wire the hit occurred (0 to 1 is inside the physical PC)
+                plotter->Fill1D("1A0C_wire_t_parameter_Phi" + std::to_string(PCSX3PhiCut), 200, -0.5, 1.5, t_intersect, "1A0C");
             }
         }
-    */
+
+        // Loop over QQQ_Events directly
+
+        for (auto qqqevent : QQQ_Events)
+        {
+            if (qqqevent.Time1 - aTime < -150) // Time cut for protons
+            {
+                // 1. Define the plane of the track (Z-axis to SX3 hit)
+                TVector3 planeNormal(-TMath::Sin(qqqevent.pos.Phi()), TMath::Cos(qqqevent.pos.Phi()), 0.0);
+
+                // 2. Find intersection of the twisted wire with this track plane
+                double dot_wireVec = wireVec.Dot(planeNormal);
+
+                // Prevent divide-by-zero if wire is perfectly parallel to the track plane
+                if (TMath::Abs(dot_wireVec) < 1e-6)
+                    continue;
+
+                double t_intersect_QQQ = -(a1.Dot(planeNormal)) / dot_wireVec;
+
+                // Calculate the exact 3D coordinate on the wire that matches the SX3 phi
+                TVector3 pcz_intersect = a1 + t_intersect_QQQ * wireVec;
+
+                // 3. Reconstruct Vertex Z
+                double deltaRho = qqqevent.pos.Perp() - pcz_intersect.Perp();
+                double deltaZ = qqqevent.pos.Z() - pcz_intersect.Z();
+
+                double vertex_recon = qqqevent.pos.Z() - qqqevent.pos.Perp() * (deltaZ / deltaRho);
+
+                // 4. Energy Loss Correction in Silicon
+                double path_length = (qqqevent.pos - TVector3(0, 0, vertex_recon)).Mag() * 0.1;
+
+                // FIXED: Changed sx3Efix to qqqEfix
+                double qqqEfix = cm_to_MeVp->Eval(MeV_to_cm_p->Eval(qqqevent.Energy1) - path_length);
+
+                double theta_recon = (qqqevent.pos - TVector3(0, 0, vertex_recon)).Theta();
+                double sinTheta = TMath::Sin(theta_recon);
+
+                // 5. Fill Diagnostics
+                plotter->Fill1D("1A0C_twisted_pcz_recon_Phi_QQQ" + std::to_string(PCSX3PhiCut), 600, -300, 300, pcz_intersect.Z(), "1A0C");
+                plotter->Fill1D("1A0C_twisted_vertex_recon_Phi_QQQ" + std::to_string(PCSX3PhiCut), 600, -300, 300, vertex_recon, "1A0C");
+
+                // FIXED: Changed "sx3" to "qqq" in the histogram names to avoid overwriting your barrel data
+                plotter->Fill2D("1A0C_qqq_E_vs_theta_raw_Phi_" + std::to_string(PCSX3PhiCut), 180, 0, 180, 400, 0, 30, theta_recon * 180. / M_PI, qqqevent.Energy1, "1A0C");
+                plotter->Fill2D("1A0C_qqq_E_vs_theta_corr_Phi_" + std::to_string(PCSX3PhiCut), 180, 0, 180, 400, 0, 30, theta_recon * 180. / M_PI, qqqEfix, "1A0C");
+
+                plotter->Fill2D("1A0C_dE_Ecorr_Anode_QQQ_Phi" + std::to_string(PCSX3PhiCut), 400, 0, 30, 800, 0, 40000, qqqEfix, aEnergy * sinTheta, "1A0C");
+
+                // Track where on the wire the hit occurred (0 to 1 is inside the physical PC)
+                plotter->Fill1D("1A0C_wire_t_parameter_QQQ_Phi" + std::to_string(PCSX3PhiCut), 200, -0.5, 1.5, t_intersect_QQQ, "1A0C");
+            }
+        }
+    }
+
     for (auto pcevent : PC_Events)
     {
         for (auto qqqevent : QQQ_Events)
