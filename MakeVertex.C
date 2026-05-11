@@ -1084,6 +1084,8 @@ Bool_t MakeVertex::Process(Long64_t entry)
                         plotter->Fill2D("Benchmark_SX3_VertexZ_Twisted_vs_0Cathode_sx3" + std::to_string(sx3event.ch2), 400, -200, 200, 400, -200, 200, r_rhoMin_fix.Z(), vertex_recon, "1wire");
                         plotter->Fill2D("Benchmark_SX3_VertexZ_Twisted_vs_0Cathode_anode" + std::to_string(aWireID), 400, -200, 200, 400, -200, 200, r_rhoMin_fix.Z(), vertex_recon, "1wire");
                         plotter->Fill2D("Benchmark_SX3XY" + std::to_string(sx3event.ch2), 400, -100, 100, 400, -100, 100, vector_minimisedto_z.X(), vector_minimisedto_z.Y(), "1wire");
+                        plotter->Fill2D("Benchmark_SX3z_vs_VertexZ0C", 400, -200, 200, 400, -200, 200,sx3event.pos.Z(), vertex_recon , "1wire");
+                        
                     }
                 }
                 // ==============================================================================
@@ -1140,7 +1142,7 @@ Bool_t MakeVertex::Process(Long64_t entry)
                     // ==============================================================================
                     // Look at how close we actually got to the Si Phi.
                     // If min_delta_phi > 0.1 radians, it means the track never truly matched the wire!
-                    plotter->Fill1D("Benchmark_SX3_Min_DeltaPhi", 5000, -10, 10, min_delta_phi, "1wire");
+                    plotter->Fill1D("Benchmark_SX3_Min_DeltaPhi", 5000, -200, 200, min_delta_phi/TMath::Pi()*180, "1wire");
 
                     // Standard benchmarking comparisons against the A1C2 Cathode baseline
                     plotter->Fill1D("Benchmark_SX3_PCZ_Diff_Scan", 800, -180, 180, pcz_minimized - pcevent.pos.Z(), "1wire");
@@ -1530,7 +1532,6 @@ Bool_t MakeVertex::Process(Long64_t entry)
                             plotter->Fill2D("Benchmark_PCZ_Twisted_vs_Cathode", 400, -200, 200, 400, -200, 200, pcevent.pos.Z(), pcz_intersect.Z(), "1wire");
 
                             // B. Compare the Vertex Z-coordinate
-                            plotter->Fill1D("Benchmark_VertexZ_Difference", 400, -100, 100, vertex_recon_twisted - r_rhoMin_fix.Z(), "1wire");
                             plotter->Fill1D("Benchmark_VertexZ_Difference", 400, -100, 100, vertex_recon_twisted - r_rhoMin_fix.Z(), "1wire");
                             plotter->Fill2D("Benchmark_VertexZ_Twisted_vs_Cathode", 400, -200, 200, 400, -200, 200, r_rhoMin_fix.Z(), vertex_recon_twisted, "1wire");
 

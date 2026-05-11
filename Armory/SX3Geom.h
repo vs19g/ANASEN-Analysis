@@ -72,6 +72,7 @@ public:
 
 void sx3::fillevent(const std::string& positionstring, const int subchannel, const float value) {
     assert(subchannel>=0 && subchannel<4);
+    foundevent=1;
     if(positionstring=="FRONT_L") {
         frontL[subchannel].push_back(value);
         unmatched_front_chans.insert(subchannel);
@@ -127,7 +128,7 @@ void sx3::validate() {
 			for(auto thing: frontL[chan]) std::cout << thing << " " << std::flush;
 			std::cout << "\nR:" << std::endl;
 			for(auto thing: frontR[chan]) std::cout << thing << " " << std::flush;*/
-            if(frontL[chan].at(0) + frontR[chan].at(0)> maxFE) {
+            if(frontL[chan].at(0) + frontR[chan].at(0)>= maxFE) {
                 maxFE = frontL[chan].at(0) + frontR[chan].at(0);
                 //zpos = (frontL[chan].at(0)-frontR[chan].at(0))/maxFE;
                 fchan = chan;
@@ -144,7 +145,7 @@ void sx3::validate() {
             	printf("foo\n");
             	//continue;
             }
-            if(back[chan].at(0) > maxBE) {
+            if(back[chan].at(0) >= maxBE) {
                 maxBE = back[chan].at(0);
                 bchan = chan;
             }
@@ -156,6 +157,12 @@ void sx3::validate() {
         		- Total F and B energies (frontE, backE) *are*.
         	Sudarsan B, 31 Oct 2024
         */
+        
+        if(fchan==-1 || bchan==-1) {
+        	std::cout << "how" << std::endl;
+        	std::cout << "fc " << std::flush; for(auto fc : valid_front_chans) std::cout << fc << " (" << frontL[fc].at(0) << "," << frontR[fc].at(0)<< ") "; std::cout << std::endl;
+        	std::cout << "bc " << std::flush; for(auto bc : valid_back_chans) std::cout << bc << " " << back[bc].at(0) << std::flush; std::cout << std::endl;
+       	}
         float Eleft = frontL[fchan].at(0);
         float Eright = frontR[fchan].at(0);
         frontEL = Eleft;
