@@ -46,6 +46,7 @@ std::string dataset;
 TF1 pcfix_func("func", model_invert, -200, 200);
 TGraph *MeV_to_cm = NULL, *cm_to_MeV = NULL;
 TGraph *MeV_to_cm_p = NULL, *cm_to_MeVp = NULL;
+TGraph *MeV_to_cm_beam = NULL, *cm_to_MeV_beam = NULL;
 
 TApplication *app = NULL;
 TH1F *hha = NULL, *hhc = NULL;
@@ -255,6 +256,10 @@ void MakeVertex::Begin(TTree * /*tree*/)
 
     MeV_to_cm_p = new TGraph("eloss_calculations/proton_lookup_20MeV.dat", "%lf %*lf %lf");
     cm_to_MeVp = new TGraph(MeV_to_cm_p->GetN(), MeV_to_cm_p->GetY(), MeV_to_cm_p->GetX());
+
+    // Add these alongside your existing proton and alpha tables
+    MeV_to_cm_beam = new TGraph("eloss_calculations/aluminum_lookup_80MeV.dat", "%lf %*lf %lf");
+    cm_to_MeV_beam = new TGraph(MeV_to_cm_beam->GetN(), MeV_to_cm_beam->GetY(), MeV_to_cm_beam->GetX());
 
     // cm_to_MeV.Eval(MeV_to_cm.Eval(detectedE)-PathLength) gives energy of particle before it traversed 'path length'
 
@@ -1252,19 +1257,6 @@ Bool_t MakeVertex::Process(Long64_t entry)
             }
         }
     }*/
-// ==========================================================
-    // Kinematics for Inverse 27Al + Alpha Scattering
-    // Format: (m_beam, m_target, m_ejectile, m_recoil, beam_energy_in_MeV)
-    // ==========================================================
-
-    double beam_energy = 72.0; 
-
-    //Reaction
-    Kinematics apkin_p(26.981538, 4.002603, 1.007825, 29.973770, beam_energy); 
-
-    //(Elastic Scattering)
-    Kinematics apkin_a(26.981538, 4.002603, 4.002603, 26.981538, beam_energy);
-
 
     ///////////////////Single wire analysis for the anodes///////////////////
 
@@ -1306,6 +1298,19 @@ Bool_t MakeVertex::Process(Long64_t entry)
                 double deltaZ = sx3event.pos.Z() - pcz_intersect.Z();
 
                 double vertex_recon = sx3event.pos.Z() - sx3event.pos.Perp() * (deltaZ / deltaRho);
+
+                // ==========================================================
+                // DYNAMIC BEAM ENERGY CALCULATION (MUST BE HERE!)
+                // ==========================================================
+                double z_entrance = -174.3;
+                double beam_path_length = TMath::Abs(vertex_recon - z_entrance) * 0.1;
+                double initial_beam_energy = 72.0;
+                double beam_energy_at_vertex = cm_to_MeV_beam->Eval(
+                    MeV_to_cm_beam->Eval(initial_beam_energy) - beam_path_length);
+
+                Kinematics apkin_p(26.981538, 4.002603, 1.007825, 29.973770, beam_energy_at_vertex);
+                Kinematics apkin_a(26.981538, 4.002603, 4.002603, 26.981538, beam_energy_at_vertex);
+
                 std::string vtx_gate = "";
 
                 if (vertex_recon >= -176.0 && vertex_recon < -100.0)
@@ -1336,24 +1341,35 @@ Bool_t MakeVertex::Process(Long64_t entry)
                 // 4. Energy Loss Correction in Silicon
                 double path_length = (sx3event.pos - TVector3(0, 0, vertex_recon)).Mag() * 0.1;
                 double sx3Efix = cm_to_MeVp->Eval(MeV_to_cm_p->Eval(sx3event.Energy1) - path_length);
+                double sx3Efixalpha = cm_to_MeV->Eval(MeV_to_cm->Eval(sx3event.Energy1) - path_length);
 
                 double theta_recon = (sx3event.pos - TVector3(0, 0, vertex_recon)).Theta();
                 double sinTheta = TMath::Sin(theta_recon);
 
+                // Now these functions will use the correct, event-specific beam energy!
+                double Ex_from_proton = apkin_p.getExc(sx3Efix, theta_recon * 180. / M_PI);
+                double Ex_from_alpha = apkin_a.getExc(sx3Efixalpha, theta_recon * 180. / M_PI);
+
                 // 5. Fill Diagnostics
                 plotter->Fill2D("1A0C_dE_Ecorr_Anode_SX3", 400, 0, 30, 800, 0, 40000, sx3Efix, aEnergy * sinTheta, "1A0C");
+                plotter->Fill1D("1A0C_Ex_from_protons_SX3", 200, -10, 10, Ex_from_proton, "1A0C");
+                plotter->Fill1D("1A0C_Ex_from_alphas_SX3", 200, -10, 10, Ex_from_alpha, "1A0C");
+
+                plotter->Fill2D("1A0C_sx3_E_vs_theta_raw_SX3", 180, 0, 180, 400, 0, 30, theta_recon * 180. / M_PI, sx3event.Energy1, "1A0C");
+                plotter->Fill2D("1A0C_sx3_E_vs_theta_corr_SX3", 180, 0, 180, 400, 0, 30, theta_recon * 180. / M_PI, sx3Efix, "1A0C");
+
                 if (vtx_gate != "")
                 {
-                    plotter->Fill1D("1A0C_twisted_pcz_recon_SX3" + vtx_gate, 600, -300, 300, pcz_intersect.Z(), "1A0C");
                     plotter->Fill1D("1A0C_twisted_vertex_recon_SX3" + vtx_gate, 600, -300, 300, vertex_recon, "1A0C");
-
-                    plotter->Fill2D("1A0C_sx3_E_vs_theta_raw_SX3" + vtx_gate, 180, 0, 180, 400, 0, 30, theta_recon * 180. / M_PI, sx3event.Energy1, "1A0C");
-                    plotter->Fill2D("1A0C_sx3_E_vs_theta_corr_SX3" + vtx_gate, 180, 0, 180, 400, 0, 30, theta_recon * 180. / M_PI, sx3Efix, "1A0C");
+                    plotter->Fill1D("1A0C_twisted_pcz_recon_SX3" + vtx_gate, 600, -300, 300, pcz_intersect.Z(), "1A0C");
 
                     plotter->Fill2D("1A0C_dE_Ecorr_Anode_SX3" + vtx_gate, 400, 0, 30, 800, 0, 40000, sx3Efix, aEnergy * sinTheta, "1A0C");
 
+                    plotter->Fill1D("1A0C_Ex_from_protons_SX3" + vtx_gate, 200, -10, 10, Ex_from_proton, "1A0C");
+                    plotter->Fill1D("1A0C_Ex_from_alphas_SX3" + vtx_gate, 200, -10, 10, Ex_from_alpha, "1A0C");
+
                     // Track where on the wire the hit occurred (0 to 1 is inside the physical PC)
-                    plotter->Fill1D("1A0C_wire_t_parameter" + vtx_gate, 200, -0.5, 1.5, t_intersect, "1A0C");
+                    // plotter->Fill1D("1A0C_wire_t_parameter" + vtx_gate, 200, -0.5, 1.5, t_intersect, "1A0C");
                 }
             }
         }
@@ -1385,6 +1401,19 @@ Bool_t MakeVertex::Process(Long64_t entry)
 
                 double vertex_recon = qqqevent.pos.Z() - qqqevent.pos.Perp() * (deltaZ / deltaRho);
 
+                // ==========================================================
+                // DYNAMIC BEAM ENERGY CALCULATION (MUST BE HERE TOO!)
+                // ==========================================================
+                double z_entrance = -174.3;
+                double beam_path_length = TMath::Abs(vertex_recon - z_entrance) * 0.1;
+                double initial_beam_energy = 72.0;
+                double beam_energy_at_vertex = cm_to_MeV_beam->Eval(
+                    MeV_to_cm_beam->Eval(initial_beam_energy) - beam_path_length);
+
+                Kinematics apkin_p(26.981538, 4.002603, 1.007825, 29.973770, beam_energy_at_vertex);
+                Kinematics apkin_a(26.981538, 4.002603, 4.002603, 26.981538, beam_energy_at_vertex);
+                // ==========================================================
+
                 std::string vtx_gate = "";
 
                 if (vertex_recon >= -176.0 && vertex_recon < -100.0)
@@ -1415,24 +1444,31 @@ Bool_t MakeVertex::Process(Long64_t entry)
                 // 4. Energy Loss Correction in Silicon
                 double path_length = (qqqevent.pos - TVector3(0, 0, vertex_recon)).Mag() * 0.1;
 
-                // FIXED: Changed sx3Efix to qqqEfix
                 double qqqEfix = cm_to_MeVp->Eval(MeV_to_cm_p->Eval(qqqevent.Energy1) - path_length);
+                double qqqEfixalpha = cm_to_MeV->Eval(MeV_to_cm->Eval(qqqevent.Energy2) - path_length);
 
                 double theta_recon = (qqqevent.pos - TVector3(0, 0, vertex_recon)).Theta();
                 double sinTheta = TMath::Sin(theta_recon);
 
+                double Ex_from_proton = apkin_p.getExc(qqqEfix, theta_recon * 180. / M_PI);
+                double Ex_from_alpha = apkin_a.getExc(qqqEfixalpha, theta_recon * 180. / M_PI);
+
                 // 5. Fill Diagnostics
                 plotter->Fill2D("1A0C_dE_Ecorr_Anode_QQQ", 400, 0, 30, 800, 0, 40000, qqqEfix, aEnergy * sinTheta, "1A0C");
+                plotter->Fill1D("1A0C_Ex_from_alphas_QQQ" + vtx_gate, 200, -10, 10, Ex_from_alpha, "1A0C");
+                plotter->Fill1D("1A0C_Ex_from_protons_QQQ" + vtx_gate, 200, -10, 10, Ex_from_proton, "1A0C");
+                plotter->Fill2D("1A0C_qqq_E_vs_theta_raw_QQQ", 180, 0, 180, 400, 0, 30, theta_recon * 180. / M_PI, qqqevent.Energy1, "1A0C");
+                plotter->Fill2D("1A0C_qqq_E_vs_theta_corr_QQQ", 180, 0, 180, 400, 0, 30, theta_recon * 180. / M_PI, qqqEfix, "1A0C");
 
                 if (vtx_gate != "")
                 {
                     plotter->Fill1D("1A0C_twisted_pcz_recon_QQQ" + vtx_gate, 600, -300, 300, pcz_intersect.Z(), "1A0C");
                     plotter->Fill1D("1A0C_twisted_vertex_recon_QQQ" + vtx_gate, 600, -300, 300, vertex_recon, "1A0C");
 
-                    plotter->Fill2D("1A0C_qqq_E_vs_theta_raw_QQQ" + vtx_gate, 180, 0, 180, 400, 0, 30, theta_recon * 180. / M_PI, qqqevent.Energy1, "1A0C");
-                    plotter->Fill2D("1A0C_qqq_E_vs_theta_corr_QQQ" + vtx_gate, 180, 0, 180, 400, 0, 30, theta_recon * 180. / M_PI, qqqEfix, "1A0C");
-
                     plotter->Fill2D("1A0C_dE_Ecorr_Anode_QQQ" + vtx_gate, 400, 0, 30, 800, 0, 40000, qqqEfix, aEnergy * sinTheta, "1A0C");
+                    plotter->Fill2D("1A0C_dE_Ecorr_Anode_QQQ_alpha" + vtx_gate, 400, 0, 30, 800, 0, 40000, qqqEfixalpha, aEnergy * sinTheta, "1A0C");
+                    plotter->Fill1D("1A0C_Ex_from_alphas_QQQ" + vtx_gate, 200, -10, 10, Ex_from_alpha, "1A0C");
+                    plotter->Fill1D("1A0C_Ex_from_protons_QQQ" + vtx_gate, 200, -10, 10, Ex_from_proton, "1A0C");
 
                     // Track where on the wire the hit occurred (0 to 1 is inside the physical PC)
                     plotter->Fill1D("1A0C_wire_t_parameter_QQQ" + vtx_gate, 200, -0.5, 1.5, t_intersect_QQQ, "1A0C");
