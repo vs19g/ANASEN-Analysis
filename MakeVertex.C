@@ -1084,6 +1084,7 @@ Bool_t MakeVertex::Process(Long64_t entry)
                         plotter->Fill2D("Benchmark_SX3_VertexZ_Twisted_vs_0Cathode_sx3" + std::to_string(sx3event.ch2), 400, -200, 200, 400, -200, 200, r_rhoMin_fix.Z(), vertex_recon, "1wire");
                         plotter->Fill2D("Benchmark_SX3_VertexZ_Twisted_vs_0Cathode_anode" + std::to_string(aWireID), 400, -200, 200, 400, -200, 200, r_rhoMin_fix.Z(), vertex_recon, "1wire");
                         plotter->Fill2D("Benchmark_SX3XY" + std::to_string(sx3event.ch2), 400, -100, 100, 400, -100, 100, vector_minimisedto_z.X(), vector_minimisedto_z.Y(), "1wire");
+                        plotter->Fill2D("Benchmark_SX3z_vs_VertexZ0C", 400, -200, 200, 400, -200, 200, sx3event.pos.Z(), vertex_recon, "1wire");
                     }
                 }
                 // ==============================================================================
@@ -1140,7 +1141,7 @@ Bool_t MakeVertex::Process(Long64_t entry)
                     // ==============================================================================
                     // Look at how close we actually got to the Si Phi.
                     // If min_delta_phi > 0.1 radians, it means the track never truly matched the wire!
-                    plotter->Fill1D("Benchmark_SX3_Min_DeltaPhi", 5000, -10, 10, min_delta_phi, "1wire");
+                    plotter->Fill1D("Benchmark_SX3_Min_DeltaPhi", 5000, -200, 200, min_delta_phi / TMath::Pi() * 180, "1wire");
 
                     // Standard benchmarking comparisons against the A1C2 Cathode baseline
                     plotter->Fill1D("Benchmark_SX3_PCZ_Diff_Scan", 800, -180, 180, pcz_minimized - pcevent.pos.Z(), "1wire");
@@ -1282,6 +1283,7 @@ Bool_t MakeVertex::Process(Long64_t entry)
         // Loop over SX3_Events directly
         for (auto sx3event : SX3_Events)
         {
+
             if (sx3event.Time1 - aTime < -150) // Time cut for protons
             {
                 // 1. Define the plane of the track (Z-axis to SX3 hit)
@@ -1304,6 +1306,32 @@ Bool_t MakeVertex::Process(Long64_t entry)
                 double deltaZ = sx3event.pos.Z() - pcz_intersect.Z();
 
                 double vertex_recon = sx3event.pos.Z() - sx3event.pos.Perp() * (deltaZ / deltaRho);
+                std::string vtx_gate = "";
+
+                if (vertex_recon >= -176.0 && vertex_recon < -100.0)
+                {
+                    vtx_gate = "_Z[-176_to_-100]";
+                }
+                else if (vertex_recon >= -100.0 && vertex_recon < -50.0)
+                {
+                    vtx_gate = "_Z[-100_to_-50]";
+                }
+                else if (vertex_recon >= -50.0 && vertex_recon < 0.0)
+                {
+                    vtx_gate = "_Z[-50_to_0]";
+                }
+                else if (vertex_recon >= 0.0 && vertex_recon < 50.0)
+                {
+                    vtx_gate = "_Z[0_to_50]";
+                }
+                else if (vertex_recon >= 50.0 && vertex_recon < 100.0)
+                {
+                    vtx_gate = "_Z[50_to_100]";
+                }
+                else if (vertex_recon >= 100.0 && vertex_recon < 176.0)
+                {
+                    vtx_gate = "_Z[100_to_176]";
+                }
 
                 // 4. Energy Loss Correction in Silicon
                 double path_length = (sx3event.pos - TVector3(0, 0, vertex_recon)).Mag() * 0.1;
@@ -1313,16 +1341,20 @@ Bool_t MakeVertex::Process(Long64_t entry)
                 double sinTheta = TMath::Sin(theta_recon);
 
                 // 5. Fill Diagnostics
-                plotter->Fill1D("1A0C_twisted_pcz_recon_Phi_SX3" + std::to_string(PCSX3PhiCut), 600, -300, 300, pcz_intersect.Z(), "1A0C");
-                plotter->Fill1D("1A0C_twisted_vertex_recon_Phi_SX3" + std::to_string(PCSX3PhiCut), 600, -300, 300, vertex_recon, "1A0C");
+                plotter->Fill2D("1A0C_dE_Ecorr_Anode_SX3", 400, 0, 30, 800, 0, 40000, sx3Efix, aEnergy * sinTheta, "1A0C");
+                if (vtx_gate != "")
+                {
+                    plotter->Fill1D("1A0C_twisted_pcz_recon_SX3" + vtx_gate, 600, -300, 300, pcz_intersect.Z(), "1A0C");
+                    plotter->Fill1D("1A0C_twisted_vertex_recon_SX3" + vtx_gate, 600, -300, 300, vertex_recon, "1A0C");
 
-                plotter->Fill2D("1A0C_sx3_E_vs_theta_raw_Phi_SX3" + std::to_string(PCSX3PhiCut), 180, 0, 180, 400, 0, 30, theta_recon * 180. / M_PI, sx3event.Energy1, "1A0C");
-                plotter->Fill2D("1A0C_sx3_E_vs_theta_corr_Phi_SX3" + std::to_string(PCSX3PhiCut), 180, 0, 180, 400, 0, 30, theta_recon * 180. / M_PI, sx3Efix, "1A0C");
+                    plotter->Fill2D("1A0C_sx3_E_vs_theta_raw_SX3" + vtx_gate, 180, 0, 180, 400, 0, 30, theta_recon * 180. / M_PI, sx3event.Energy1, "1A0C");
+                    plotter->Fill2D("1A0C_sx3_E_vs_theta_corr_SX3" + vtx_gate, 180, 0, 180, 400, 0, 30, theta_recon * 180. / M_PI, sx3Efix, "1A0C");
 
-                plotter->Fill2D("1A0C_dE_Ecorr_Anode_SX3_Phi" + std::to_string(PCSX3PhiCut), 400, 0, 30, 800, 0, 40000, sx3Efix, aEnergy * sinTheta, "1A0C");
+                    plotter->Fill2D("1A0C_dE_Ecorr_Anode_SX3" + vtx_gate, 400, 0, 30, 800, 0, 40000, sx3Efix, aEnergy * sinTheta, "1A0C");
 
-                // Track where on the wire the hit occurred (0 to 1 is inside the physical PC)
-                plotter->Fill1D("1A0C_wire_t_parameter_Phi" + std::to_string(PCSX3PhiCut), 200, -0.5, 1.5, t_intersect, "1A0C");
+                    // Track where on the wire the hit occurred (0 to 1 is inside the physical PC)
+                    plotter->Fill1D("1A0C_wire_t_parameter" + vtx_gate, 200, -0.5, 1.5, t_intersect, "1A0C");
+                }
             }
         }
 
@@ -1353,6 +1385,33 @@ Bool_t MakeVertex::Process(Long64_t entry)
 
                 double vertex_recon = qqqevent.pos.Z() - qqqevent.pos.Perp() * (deltaZ / deltaRho);
 
+                std::string vtx_gate = "";
+
+                if (vertex_recon >= -176.0 && vertex_recon < -100.0)
+                {
+                    vtx_gate = "_Z[-176_to_-100]";
+                }
+                else if (vertex_recon >= -100.0 && vertex_recon < -50.0)
+                {
+                    vtx_gate = "_Z[-100_to_-50]";
+                }
+                else if (vertex_recon >= -50.0 && vertex_recon < 0.0)
+                {
+                    vtx_gate = "_Z[-50_to_0]";
+                }
+                else if (vertex_recon >= 0.0 && vertex_recon < 50.0)
+                {
+                    vtx_gate = "_Z[0_to_50]";
+                }
+                else if (vertex_recon >= 50.0 && vertex_recon < 100.0)
+                {
+                    vtx_gate = "_Z[50_to_100]";
+                }
+                else if (vertex_recon >= 100.0 && vertex_recon < 176.0)
+                {
+                    vtx_gate = "_Z[100_to_176]";
+                }
+
                 // 4. Energy Loss Correction in Silicon
                 double path_length = (qqqevent.pos - TVector3(0, 0, vertex_recon)).Mag() * 0.1;
 
@@ -1363,17 +1422,21 @@ Bool_t MakeVertex::Process(Long64_t entry)
                 double sinTheta = TMath::Sin(theta_recon);
 
                 // 5. Fill Diagnostics
-                plotter->Fill1D("1A0C_twisted_pcz_recon_Phi_QQQ" + std::to_string(PCSX3PhiCut), 600, -300, 300, pcz_intersect.Z(), "1A0C");
-                plotter->Fill1D("1A0C_twisted_vertex_recon_Phi_QQQ" + std::to_string(PCSX3PhiCut), 600, -300, 300, vertex_recon, "1A0C");
+                plotter->Fill2D("1A0C_dE_Ecorr_Anode_QQQ", 400, 0, 30, 800, 0, 40000, qqqEfix, aEnergy * sinTheta, "1A0C");
 
-                // FIXED: Changed "sx3" to "qqq" in the histogram names to avoid overwriting your barrel data
-                plotter->Fill2D("1A0C_qqq_E_vs_theta_raw_Phi_" + std::to_string(PCSX3PhiCut), 180, 0, 180, 400, 0, 30, theta_recon * 180. / M_PI, qqqevent.Energy1, "1A0C");
-                plotter->Fill2D("1A0C_qqq_E_vs_theta_corr_Phi_" + std::to_string(PCSX3PhiCut), 180, 0, 180, 400, 0, 30, theta_recon * 180. / M_PI, qqqEfix, "1A0C");
+                if (vtx_gate != "")
+                {
+                    plotter->Fill1D("1A0C_twisted_pcz_recon_QQQ" + vtx_gate, 600, -300, 300, pcz_intersect.Z(), "1A0C");
+                    plotter->Fill1D("1A0C_twisted_vertex_recon_QQQ" + vtx_gate, 600, -300, 300, vertex_recon, "1A0C");
 
-                plotter->Fill2D("1A0C_dE_Ecorr_Anode_QQQ_Phi" + std::to_string(PCSX3PhiCut), 400, 0, 30, 800, 0, 40000, qqqEfix, aEnergy * sinTheta, "1A0C");
+                    plotter->Fill2D("1A0C_qqq_E_vs_theta_raw_QQQ" + vtx_gate, 180, 0, 180, 400, 0, 30, theta_recon * 180. / M_PI, qqqevent.Energy1, "1A0C");
+                    plotter->Fill2D("1A0C_qqq_E_vs_theta_corr_QQQ" + vtx_gate, 180, 0, 180, 400, 0, 30, theta_recon * 180. / M_PI, qqqEfix, "1A0C");
 
-                // Track where on the wire the hit occurred (0 to 1 is inside the physical PC)
-                plotter->Fill1D("1A0C_wire_t_parameter_QQQ_Phi" + std::to_string(PCSX3PhiCut), 200, -0.5, 1.5, t_intersect_QQQ, "1A0C");
+                    plotter->Fill2D("1A0C_dE_Ecorr_Anode_QQQ" + vtx_gate, 400, 0, 30, 800, 0, 40000, qqqEfix, aEnergy * sinTheta, "1A0C");
+
+                    // Track where on the wire the hit occurred (0 to 1 is inside the physical PC)
+                    plotter->Fill1D("1A0C_wire_t_parameter_QQQ" + vtx_gate, 200, -0.5, 1.5, t_intersect_QQQ, "1A0C");
+                }
             }
         }
     }
@@ -1543,7 +1606,6 @@ Bool_t MakeVertex::Process(Long64_t entry)
                             plotter->Fill2D("Benchmark_PCZ_Twisted_vs_Cathode", 400, -200, 200, 400, -200, 200, pcevent.pos.Z(), pcz_intersect.Z(), "1wire");
 
                             // B. Compare the Vertex Z-coordinate
-                            plotter->Fill1D("Benchmark_VertexZ_Difference", 400, -100, 100, vertex_recon_twisted - r_rhoMin_fix.Z(), "1wire");
                             plotter->Fill1D("Benchmark_VertexZ_Difference", 400, -100, 100, vertex_recon_twisted - r_rhoMin_fix.Z(), "1wire");
                             plotter->Fill2D("Benchmark_VertexZ_Twisted_vs_Cathode", 400, -200, 200, 400, -200, 200, r_rhoMin_fix.Z(), vertex_recon_twisted, "1wire");
 

@@ -1,4 +1,4 @@
-#rm results_run*.root
+rm results_run*.root
 export DATASET="27Al"
 export flip180="0"
 export flipa=0
@@ -11,7 +11,7 @@ export anode_offset=1
 #done
 
 declare -i run=50
-while [[ $run -lt 59 ]]; do #runs 1 to 84
+while [[ $run -lt 55 ]]; do #runs 1 to 84
     wrun=$(printf "%03d" $run)
     root -q -l -b -x ../ANASEN_analysis/data/27Al_Data/Run_"$wrun"_mapped.root -e 'tree->Process("MakeVertex.C+O","Analyzer_27Al.root")'; mv Analyzer_27Al.root 27Al_output/results_run$wrun.root;
     run=run+1
