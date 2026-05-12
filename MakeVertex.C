@@ -1251,6 +1251,19 @@ Bool_t MakeVertex::Process(Long64_t entry)
             }
         }
     }*/
+// ==========================================================
+    // Kinematics for Inverse 27Al + Alpha Scattering
+    // Format: (m_beam, m_target, m_ejectile, m_recoil, beam_energy_in_MeV)
+    // ==========================================================
+
+    double beam_energy = 72.0; 
+
+    //Reaction
+    Kinematics apkin_p(26.981538, 4.002603, 1.007825, 29.973770, beam_energy); 
+
+    //(Elastic Scattering)
+    Kinematics apkin_a(26.981538, 4.002603, 4.002603, 26.981538, beam_energy);
+
 
     ///////////////////Single wire analysis for the anodes///////////////////
 
