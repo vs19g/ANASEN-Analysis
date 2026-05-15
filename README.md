@@ -24,32 +24,32 @@ Raw .fsu files  (FSUNSCL digitizer output)
       ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │  1. EVENT BUILDING                                              │
-│  Binary: EventBuilder  (Armory/EventBuilder.cpp)               │
-│  Script: buildEvents.sh  or  ProcessRun.sh <run> <tw> 0        │
-│  Input : *.fsu files                                           │
-│  Output: Run_NNN_<timeWindow>ns.root  (raw, unmapped TTree)    │
-│  Hits within a configurable time window are grouped as events. │
+│  Binary: EventBuilder  (Armory/EventBuilder.cpp)                │
+│  Script: buildEvents.sh  or  ProcessRun.sh <run> <tw> 0         │
+│  Input : *.fsu files                                            │
+│  Output: Run_NNN_<timeWindow>ns.root  (raw, unmapped TTree)     │
+│  Hits within a configurable time window are grouped as events.  │
 └─────────────────────────────────────────────────────────────────┘
       │
       ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│  3. PRE-ANALYSIS CHECKS  (optional)                            │
-│  Macro: PreAnalysis.C                                          │
-│  Plots raw rates and energy spectra per channel from unmapped  │
-│  data — useful for identifying dead/noisy channels before      │
-│  mapping.                                                      │
+│  3. PRE-ANALYSIS CHECKS  (optional)                             │
+│  Macro: PreAnalysis.C                                           │
+│  Plots raw rates and energy spectra per channel from unmapped   │
+│  data — useful for identifying dead/noisy channels before       │
+│  mapping.                                                       │
 └─────────────────────────────────────────────────────────────────┘
       │
       ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │  2. CHANNEL MAPPING                                             │
-│  Binary: Mapper  (Armory/Mapper.cpp)                           │
-│  Script: ProcessRun.sh <run> <tw> 0  (calls Mapper internally) │
-│  Config: mapping.h                                             │
-│  Input : eventbuilt ROOT tree                                  │
-│  Output: Run_NNN_mapped.root                                   │
-│  Translates hardware (digitizer SN, channel) to logical        │
-│  detector identity (SX3/QQQ/PC, strip/wire number).            │
+│  Binary: Mapper  (Armory/Mapper.cpp)                            │
+│  Script: ProcessRun.sh <run> <tw> 0  (calls Mapper internally)  │
+│  Config: mapping.h                                              │
+│  Input : eventbuilt ROOT tree                                   │
+│  Output: Run_NNN_mapped.root                                    │
+│  Translates hardware (digitizer SN, channel) to logical         │
+│  detector identity (SX3/QQQ/PC, strip/wire number).             │
 └─────────────────────────────────────────────────────────────────┘
       │
       ▼
