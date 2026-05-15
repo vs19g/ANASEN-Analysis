@@ -1,6 +1,6 @@
 # ANASEN Analysis
 
-Analysis code for the **Array for Nuclear Astrophysics and Structure with Exotic Nuclei (ANASEN)** detector at FSU. Processes raw FSUNSCL data through event building, channel mapping, calibration, and physics-level vertex reconstruction for transfer reaction experiments (e.g. ²⁷Al(α,p) and ¹⁷F(α,p)).
+Analysis code for the **Array for Nuclear Astrophysics and Structure with Exotic Nuclei (ANASEN)** detector at FSU. Processes raw .fsu data through event building, channel mapping, calibration, and physics-level vertex reconstruction for transfer reaction experiments.
 
 ---
 
@@ -19,7 +19,7 @@ The PC uses 24 twisted anode wires and 24 cathode wires. Wire geometry, crossove
 ## Full Analysis Chain
 
 ```
-Raw .fsu files  (FSUNSCL digitizer output)
+Raw .fsu files  (FSU digitizer output)
       │
       ▼
 ┌─────────────────────────────────────────────────────────────────┐
@@ -46,7 +46,7 @@ Raw .fsu files  (FSUNSCL digitizer output)
 │  Binary: Mapper  (Armory/Mapper.cpp)                            │
 │  Script: ProcessRun.sh <run> <tw> 0  (calls Mapper internally)  │
 │  Config: mapping.h                                              │
-│  Input : eventbuilt ROOT tree                                   │
+│  Input : Eventbuilt ROOT tree                                   │
 │  Output: Run_NNN_mapped.root                                    │
 │  Translates hardware (digitizer SN, channel) to logical         │
 │  detector identity (SX3/QQQ/PC, strip/wire number).             │
@@ -55,13 +55,22 @@ Raw .fsu files  (FSUNSCL digitizer output)
       ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │  4. CALIBRATION                                                 │
-│  ├── sx3cal/EXFit.C / EXFit2.C                                  │
-│  │       Fit SX3 front-strip position vs back-strip energy      │
-│  │       to extract front/back gain coefficients                │
-│  ├── sx3cal/LRFit.C                                             │
-│  │       Left-right ratio fit for SX3 position calibration      │
-│  │       Output: sx3cal/{17F,27Al}/  (frontgains.dat,           │
-│  │               backgains.dat, rightgains.dat per run set)     │
+│                                                                 │
+|  SX3 — two-pass procedure:                                      │
+│  Pass 1 — Left/Right matching  (sx3cal/LRFit.C)                 │
+│  │  Start with unity gains:                                     │
+│  │  LRFit.C fits the left/right charge ratio                    │
+│  │  Collate per-detector results into a single rightgains.dat   │
+|  │                                                              │
+│  Pass 2 — Back/Front gain matching  (sx3cal/EXFit.C)            │
+│  │  Run on data that is unity-gain sorted but L/R matched       │
+│  │  EXFit.C :                                                   │
+│  │    1) gain-matches the back strips (backgains.dat)           │
+│  │    2) corrects dynamic range non-linearity in the fronts     │
+│  │       (frontgains.dat)                                       │
+│  │  Run for every detector, collate into master backgains.dat   │
+│  │  and frontgains.dat.                                         │
+│  │                                                              |
 │  ├── GainMatchQQQ.C                                             │
 │  │       QQQ ring/wedge gain matching                           │
 │  │       Output: qqq_GainMatch.dat                              │

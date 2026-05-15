@@ -4,7 +4,7 @@ import os
 # val=-178.3
 val=89.15
 count=11   
-while val<178.3+0.1:
+while val<89.15+0.1:
     print(val)
     os.system("python3 wires_gmsh2d_bc.py "+str(val))
     os.system("ElmerGrid 14 2 wires2d.msh -2d")

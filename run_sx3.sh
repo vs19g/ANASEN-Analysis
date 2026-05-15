@@ -20,7 +20,7 @@ fi
 export DATASET="27Al"
 export flip180="0"
 #root -q -b -x ../ANASEN_analysis/data/27Al_Data/Run_009_mapped.root -e 'tree->Process("MakeVertex.C+O")'; mv Analyzer_SX3.root results_run09.root;
-if [[ 1 -eq 1 ]]; then
+if [[ 1 -eq 0 ]]; then
 #export timecut_low=230.0;
 export timecut_low=400.0;
 #export timecut_high=400.0;
@@ -37,7 +37,7 @@ fi
 #protons+gas, 27Al
 #export flip180="1"
 #export flip180="0"
-if [[ 1 -eq 0 ]]; then
+if [[ 1 -eq 1 ]]; then
 export flipa=0
 export anode_offset=0
 export source_vertex=-200.0; #put the 'source' on the entrance window

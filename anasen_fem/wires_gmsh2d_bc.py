@@ -72,20 +72,26 @@ yarr_i12 = np.array([23 * np.sin(ki * i) for i in range(24)])
 xarr_i22 = np.array([23 * np.cos(ki * i + ki/2.0) for i in range(24)])
 yarr_i22 = np.array([23 * np.sin(ki * i + ki/2.0) for i in range(24)])
 
-#guard wires, plane 2 at +zmax/2
-offsetg = offsetg-3*kg
+# guard wires, plane 2 at +zmax/2
+# Old 3-wire shift: offsetg = offsetg - 3*kg 
+# For a 4-wire shift (relative to the 24-wire geometry, 4 anodes = 8 guard positions):
+offsetg = offsetg - 8 * kg
 xarrg_2 = np.array([32*np.cos(kg*i+offsetg) for i in np.arange(0,48)])
 yarrg_2 = np.array([32*np.sin(kg*i+offsetg) for i in np.arange(0,48)])
 
-#anodes, plane 2 at +zmax/2
-offset = offset-3*k
+# anodes, plane 2 at +zmax/2
+# Old 3-wire shift: offset = offset - 3*k
+# For a 4-wire shift:
+offset = offset - 4 * k
 xarra_2 = np.array([37*np.cos(k*i+offset) for i in np.arange(0,24)])
 yarra_2 = np.array([37*np.sin(k*i+offset) for i in np.arange(0,24)])
 
-#cathodes, plane2 at +zmax/2
-offsetc = offsetc-3*kc
+# cathodes, plane 2 at +zmax/2
+# Old 3-wire shift: offsetc = offsetc - 3*kc
+# For a 4-wire shift (matching guard wire rotation):
+offsetc = offsetc - 4 * kc
 xarrc_2 = np.array([42*np.cos(kc*i+offsetc) for i in np.arange(0,48)])
-yarrc_2 = np.array([42*np.sin(kc*i+offsetc) for i in np.arange(0,48)])
+yarra_2 = np.array([42*np.sin(kc*i+offsetc) for i in np.arange(0,48)])
 
 direction_needle_x = xarr_needle_2 - xarr_needle
 direction_needle_y = yarr_needle_2 - yarr_needle
