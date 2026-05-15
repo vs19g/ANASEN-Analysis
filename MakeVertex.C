@@ -1,5 +1,15 @@
 #define MakeVertex_cxx
 
+// Comment out any line below to disable that diagnostic section
+// #define DIAG_WIREMULT   // anode/cathode cluster multiplicity plots
+#define DIAG_1WIRE      // raw per-wire dE vs Si (no PC required)
+#define DIAG_PC_SX3     // PC-SX3 coincidence analysis
+// #define DIAG_1A0C_SX3   // 1A0C single-wire vertex with SX3
+// #define DIAG_1A0C_QQQ   // 1A0C single-wire vertex with QQQ
+#define DIAG_NA0C_SX3   // nA0C (n>=2) pseudo-wire vertex with SX3
+#define DIAG_NA0C_QQQ   // nA0C (n>=2) pseudo-wire vertex with QQQ
+#define DIAG_PC_QQQ     // PC-QQQ coincidence analysis
+
 Int_t colors[40] = {
     kBlack, kRed, kGreen, kBlue, kYellow, kMagenta, kCyan, kOrange,
     kSpring, kTeal, kAzure, kViolet, kPink, kGray, kWhite,
@@ -851,6 +861,7 @@ Bool_t MakeVertex::Process(Long64_t entry)
     if (QQQ_Events.size() && PC_Events.size())
         plotter->Fill2D("PCEv_vs_QQQEv", 20, 0, 20, 20, 0, 20, QQQ_Events.size(), PC_Events.size());
 
+#ifdef DIAG_WIREMULT
     plotter->Fill2D("ac_vs_cc", 20, 0, 20, 20, 0, 20, aClusters.size(), cClusters.size(), "wiremult");
     for (auto cluster : aClusters)
     {
@@ -865,7 +876,9 @@ Bool_t MakeVertex::Process(Long64_t entry)
     {
         plotter->Fill2D("ac_vs_cc_ign0", 20, 0, 20, 20, 0, 20, aClusters.size(), cClusters.size(), "wiremult");
     }
+#endif // DIAG_WIREMULT
 
+#ifdef DIAG_1WIRE
     for (auto sx3event : SX3_Events)
     {
         for (int i = 0; i < 24; i++)
@@ -940,7 +953,9 @@ Bool_t MakeVertex::Process(Long64_t entry)
             }
         } // for 'i' loop
     }
+#endif // DIAG_1WIRE
 
+#ifdef DIAG_PC_SX3
     bool PCSX3PhiCut = false;
     for (auto pcevent : PC_Events)
     {
@@ -1225,6 +1240,7 @@ Bool_t MakeVertex::Process(Long64_t entry)
             }*/
         }
     } // end PC-SX3 coincidence
+#endif // DIAG_PC_SX3
 
     /*for(size_t ii=0; ii<QQQ_Events.size(); ii++) {
         for(size_t jj=ii+1; jj<QQQ_Events.size(); jj++) {
@@ -1260,6 +1276,7 @@ Bool_t MakeVertex::Process(Long64_t entry)
 
     ///////////////////Single wire analysis for the anodes///////////////////
 
+#if defined(DIAG_1A0C_SX3) || defined(DIAG_1A0C_QQQ)
     if (aClusters.size() == 1 && cClusters.size() == 0)
     {
         // Extract the primary anode hit properties
@@ -1273,6 +1290,7 @@ Bool_t MakeVertex::Process(Long64_t entry)
         TVector3 wireVec = pwinstance.An[aWireID].first - pwinstance.An[aWireID].second;
 
         // Loop over SX3_Events directly
+#ifdef DIAG_1A0C_SX3
         for (auto sx3event : SX3_Events)
         {
 
@@ -1369,9 +1387,10 @@ Bool_t MakeVertex::Process(Long64_t entry)
                 }
             }
         }
+#endif // DIAG_1A0C_SX3
 
         // Loop over QQQ_Events directly
-
+#ifdef DIAG_1A0C_QQQ
         for (auto qqqevent : QQQ_Events)
         {
             if (qqqevent.Time1 - aTime < -150) // Time cut for protons
@@ -1468,8 +1487,154 @@ Bool_t MakeVertex::Process(Long64_t entry)
                 }
             }
         }
+#endif // DIAG_1A0C_QQQ
     }
+#endif // DIAG_1A0C_SX3 || DIAG_1A0C_QQQ
 
+    ///////////////////nA0C analysis using pseudo-wire (GetPseudoWire + getClosestWirePosAtWirePhi)///////////////////
+
+#if defined(DIAG_NA0C_SX3) || defined(DIAG_NA0C_QQQ)
+    if (cClusters.size() == 0 && aClusters.size() >= 2)
+    {
+        std::string nA0C_label = std::to_string(aClusters.size()) + "A0C";
+
+        // Flatten all anode clusters into a combined hit list for the pseudo-wire
+        std::vector<std::tuple<int, double, double>> allAnodeHits;
+        for (const auto &acluster : aClusters)
+            for (const auto &hit : acluster)
+                allAnodeHits.push_back(hit);
+
+        auto [apwire, apSumE, apMaxE, apTSMaxE] = pwinstance.GetPseudoWire(allAnodeHits, "ANODE");
+
+#ifdef DIAG_NA0C_SX3
+        for (auto sx3event : SX3_Events)
+        {
+            if (sx3event.Time1 - apTSMaxE < -150)
+            {
+                TVector3 pcz_intersect = pwinstance.getClosestWirePosAtWirePhi(apwire, sx3event.pos.Phi());
+
+                double deltaRho = sx3event.pos.Perp() - pcz_intersect.Perp();
+                double deltaZ = sx3event.pos.Z() - pcz_intersect.Z();
+                double vertex_recon = sx3event.pos.Z() - sx3event.pos.Perp() * (deltaZ / deltaRho);
+
+                double z_entrance = -274.3;
+                double beam_path_length = TMath::Abs(vertex_recon - z_entrance) * 0.1;
+                double initial_beam_energy = 72.0;
+                double beam_energy_at_vertex = cm_to_MeV_beam->Eval(
+                    MeV_to_cm_beam->Eval(initial_beam_energy) - beam_path_length);
+
+                Kinematics apkin_p(26.981538, 4.002603, 1.007825, 29.973770, beam_energy_at_vertex);
+                Kinematics apkin_a(26.981538, 4.002603, 4.002603, 26.981538, beam_energy_at_vertex);
+
+                std::string vtx_gate = "";
+                if (vertex_recon >= -176.0 && vertex_recon < -100.0)
+                    vtx_gate = "_Z[-176_to_-100]";
+                else if (vertex_recon >= -100.0 && vertex_recon < -50.0)
+                    vtx_gate = "_Z[-100_to_-50]";
+                else if (vertex_recon >= -50.0 && vertex_recon < 0.0)
+                    vtx_gate = "_Z[-50_to_0]";
+                else if (vertex_recon >= 0.0 && vertex_recon < 50.0)
+                    vtx_gate = "_Z[0_to_50]";
+                else if (vertex_recon >= 50.0 && vertex_recon < 100.0)
+                    vtx_gate = "_Z[50_to_100]";
+                else if (vertex_recon >= 100.0 && vertex_recon < 176.0)
+                    vtx_gate = "_Z[100_to_176]";
+
+                double path_length = (sx3event.pos - TVector3(0, 0, vertex_recon)).Mag() * 0.1;
+                double sx3Efix = cm_to_MeVp->Eval(MeV_to_cm_p->Eval(sx3event.Energy1) - path_length);
+                double sx3Efixalpha = cm_to_MeV->Eval(MeV_to_cm->Eval(sx3event.Energy1) - path_length);
+
+                double theta_recon = (sx3event.pos - TVector3(0, 0, vertex_recon)).Theta();
+                double sinTheta = TMath::Sin(theta_recon);
+
+                double Ex_from_proton = apkin_p.getExc(sx3Efix, theta_recon * 180. / M_PI);
+                double Ex_from_alpha = apkin_a.getExc(sx3Efixalpha, theta_recon * 180. / M_PI);
+
+                plotter->Fill2D(nA0C_label + "_dE_Ecorr_Anode_SX3", 400, 0, 30, 800, 0, 40000, sx3Efix, apSumE * sinTheta, nA0C_label);
+                plotter->Fill1D(nA0C_label + "_Ex_from_alphas_SX3" + vtx_gate, 200, -10, 10, Ex_from_alpha, nA0C_label);
+                plotter->Fill1D(nA0C_label + "_Ex_from_protons_SX3" + vtx_gate, 200, -10, 10, Ex_from_proton, nA0C_label);
+                plotter->Fill2D(nA0C_label + "_sx3_E_vs_theta_raw_SX3", 180, 0, 180, 400, 0, 30, theta_recon * 180. / M_PI, sx3event.Energy1, nA0C_label);
+                plotter->Fill2D(nA0C_label + "_sx3_E_vs_theta_corr_SX3", 180, 0, 180, 400, 0, 30, theta_recon * 180. / M_PI, sx3Efix, nA0C_label);
+
+                if (vtx_gate != "")
+                {
+                    plotter->Fill1D(nA0C_label + "_twisted_pcz_recon_SX3" + vtx_gate, 600, -300, 300, pcz_intersect.Z(), nA0C_label);
+                    plotter->Fill1D(nA0C_label + "_twisted_vertex_recon_SX3" + vtx_gate, 600, -300, 300, vertex_recon, nA0C_label);
+                    plotter->Fill2D(nA0C_label + "_dE_Ecorr_Anode_SX3" + vtx_gate, 400, 0, 30, 800, 0, 40000, sx3Efix, apSumE * sinTheta, nA0C_label);
+                    plotter->Fill2D(nA0C_label + "_dE_Ecorr_Anode_SX3_alpha" + vtx_gate, 400, 0, 30, 800, 0, 40000, sx3Efixalpha, apSumE * sinTheta, nA0C_label);
+                    plotter->Fill1D(nA0C_label + "_Ex_from_alphas_SX3" + vtx_gate, 200, -10, 10, Ex_from_alpha, nA0C_label);
+                    plotter->Fill1D(nA0C_label + "_Ex_from_protons_SX3" + vtx_gate, 200, -10, 10, Ex_from_proton, nA0C_label);
+                }
+            }
+        }
+#endif // DIAG_NA0C_SX3
+
+#ifdef DIAG_NA0C_QQQ
+        for (auto qqqevent : QQQ_Events)
+        {
+            if (qqqevent.Time1 - apTSMaxE < -150)
+            {
+                TVector3 pcz_intersect = pwinstance.getClosestWirePosAtWirePhi(apwire, qqqevent.pos.Phi());
+
+                double deltaRho = qqqevent.pos.Perp() - pcz_intersect.Perp();
+                double deltaZ = qqqevent.pos.Z() - pcz_intersect.Z();
+                double vertex_recon = qqqevent.pos.Z() - qqqevent.pos.Perp() * (deltaZ / deltaRho);
+
+                double z_entrance = -274.3;
+                double beam_path_length = TMath::Abs(vertex_recon - z_entrance) * 0.1;
+                double initial_beam_energy = 72.0;
+                double beam_energy_at_vertex = cm_to_MeV_beam->Eval(
+                    MeV_to_cm_beam->Eval(initial_beam_energy) - beam_path_length);
+
+                Kinematics apkin_p(26.981538, 4.002603, 1.007825, 29.973770, beam_energy_at_vertex);
+                Kinematics apkin_a(26.981538, 4.002603, 4.002603, 26.981538, beam_energy_at_vertex);
+
+                std::string vtx_gate = "";
+                if (vertex_recon >= -176.0 && vertex_recon < -100.0)
+                    vtx_gate = "_Z[-176_to_-100]";
+                else if (vertex_recon >= -100.0 && vertex_recon < -50.0)
+                    vtx_gate = "_Z[-100_to_-50]";
+                else if (vertex_recon >= -50.0 && vertex_recon < 0.0)
+                    vtx_gate = "_Z[-50_to_0]";
+                else if (vertex_recon >= 0.0 && vertex_recon < 50.0)
+                    vtx_gate = "_Z[0_to_50]";
+                else if (vertex_recon >= 50.0 && vertex_recon < 100.0)
+                    vtx_gate = "_Z[50_to_100]";
+                else if (vertex_recon >= 100.0 && vertex_recon < 176.0)
+                    vtx_gate = "_Z[100_to_176]";
+
+                double path_length = (qqqevent.pos - TVector3(0, 0, vertex_recon)).Mag() * 0.1;
+                double qqqEfix = cm_to_MeVp->Eval(MeV_to_cm_p->Eval(qqqevent.Energy1) - path_length);
+                double qqqEfixalpha = cm_to_MeV->Eval(MeV_to_cm->Eval(qqqevent.Energy2) - path_length);
+
+                double theta_recon = (qqqevent.pos - TVector3(0, 0, vertex_recon)).Theta();
+                double sinTheta = TMath::Sin(theta_recon);
+
+                double Ex_from_proton = apkin_p.getExc(qqqEfix, theta_recon * 180. / M_PI);
+                double Ex_from_alpha = apkin_a.getExc(qqqEfixalpha, theta_recon * 180. / M_PI);
+
+                plotter->Fill2D(nA0C_label + "_dE_Ecorr_Anode_QQQ", 400, 0, 30, 800, 0, 40000, qqqEfix, apSumE * sinTheta, nA0C_label);
+                plotter->Fill1D(nA0C_label + "_Ex_from_alphas_QQQ" + vtx_gate, 200, -10, 10, Ex_from_alpha, nA0C_label);
+                plotter->Fill1D(nA0C_label + "_Ex_from_protons_QQQ" + vtx_gate, 200, -10, 10, Ex_from_proton, nA0C_label);
+                plotter->Fill2D(nA0C_label + "_qqq_E_vs_theta_raw_QQQ", 180, 0, 180, 400, 0, 30, theta_recon * 180. / M_PI, qqqevent.Energy1, nA0C_label);
+                plotter->Fill2D(nA0C_label + "_qqq_E_vs_theta_corr_QQQ", 180, 0, 180, 400, 0, 30, theta_recon * 180. / M_PI, qqqEfix, nA0C_label);
+
+                if (vtx_gate != "")
+                {
+                    plotter->Fill1D(nA0C_label + "_twisted_pcz_recon_QQQ" + vtx_gate, 600, -300, 300, pcz_intersect.Z(), nA0C_label);
+                    plotter->Fill1D(nA0C_label + "_twisted_vertex_recon_QQQ" + vtx_gate, 600, -300, 300, vertex_recon, nA0C_label);
+                    plotter->Fill2D(nA0C_label + "_dE_Ecorr_Anode_QQQ" + vtx_gate, 400, 0, 30, 800, 0, 40000, qqqEfix, apSumE * sinTheta, nA0C_label);
+                    plotter->Fill2D(nA0C_label + "_dE_Ecorr_Anode_QQQ_alpha" + vtx_gate, 400, 0, 30, 800, 0, 40000, qqqEfixalpha, apSumE * sinTheta, nA0C_label);
+                    plotter->Fill1D(nA0C_label + "_Ex_from_alphas_QQQ" + vtx_gate, 200, -10, 10, Ex_from_alpha, nA0C_label);
+                    plotter->Fill1D(nA0C_label + "_Ex_from_protons_QQQ" + vtx_gate, 200, -10, 10, Ex_from_proton, nA0C_label);
+                }
+            }
+        }
+#endif // DIAG_NA0C_QQQ
+    }
+#endif // DIAG_NA0C_SX3 || DIAG_NA0C_QQQ
+
+#ifdef DIAG_PC_QQQ
     for (auto pcevent : PC_Events)
     {
         for (auto qqqevent : QQQ_Events)
@@ -1664,6 +1829,7 @@ Bool_t MakeVertex::Process(Long64_t entry)
             }
         }
     } // end PC QQQ coincidence
+#endif // DIAG_PC_QQQ
     // HALFTIME! Can stop here in future versions
     // return kTRUE;
     if (anodeHits.size() >= 1 && cathodeHits.size() >= 1)
