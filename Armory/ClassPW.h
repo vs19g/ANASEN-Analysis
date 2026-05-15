@@ -64,9 +64,8 @@ public:
 
   Coord Crossover[24][24][2];
 
+  inline TVector3 getClosestWirePosAtWirePhi(std::pair<TVector3, TVector3>, double phi);
   inline std::tuple<std::pair<TVector3, TVector3>, double, double, double> GetPseudoWire(const std::vector<std::tuple<int, double, double>> &cluster, std::string type);
-
-  inline TVector3 getClosestWirePosAtWirePhi(std::pair<TVector3, TVector3> awire, double sx3phi_radian);
 
   inline std::tuple<TVector3, double, double, double, double, double, double, double>
   FindCrossoverProperties(const std::vector<std::tuple<int, double, double>> &a_cluster, const std::vector<std::tuple<int, double, double>> &c_cluster);
@@ -117,7 +116,7 @@ private:
   TVector3 trackVec;
 
   const int nWire = 24;
-  const int wireShift = 3;
+  const int wireShift = 4;
   // const float zLen = 380; // mm
   //  const float zLen = 348.6; // mm
   const float zLen = 174.3 * 2; // mm
@@ -157,6 +156,8 @@ inline void PW::ConstructGeo()
   double k = TMath::TwoPi() / 24.; // 48 solder thru holes, wires in every other one
   double offset_a1 = -6 * k - 3 * k;
   double offset_c1 = -4 * k - 2 * k - TMath::TwoPi() / 48; // correct for a half-turn
+  // std::cerr << "Here!" << std::endl;
+  // #include "../scratch/testing.h"
   double offset_a2 = offset_a1 + wireShift * k;
   double offset_c2 = offset_c1 - wireShift * k;
 
@@ -208,9 +209,14 @@ inline void PW::ConstructGeo()
       Crossover[i][j][0].y = An[i].second.Y() + alpha * a.Y();
       Crossover[i][j][0].z = An[i].second.Z() + alpha * a.Z();
 
-      if (Crossover[i][j][0].z < -190 || Crossover[i][j][0].z > 190 || (i + j) % 24 == 12)
+      if (Crossover[i][j][0].z < -190 || Crossover[i][j][0].z > 190)
+      {
+        // std::cout << "Weird crossover but ok" << std::endl;
+      }
+      if ((i + j) % 24 == 12 || Crossover[i][j][0].z < -190 || Crossover[i][j][0].z > 190)
       {
         Crossover[i][j][0].z = 9999999;
+        // std::cout << "Weird crossover" << std::endl;
       }
 
       Crossover[i][j][1].x = alpha;
@@ -221,6 +227,42 @@ inline void PW::ConstructGeo()
   dAngle = wireShift * TMath::TwoPi() / nWire;
   anodeLength = TMath::Sqrt(zLen * zLen + TMath::Power(2 * radiusA * TMath::Sin(dAngle / 2), 2));
   cathodeLength = TMath::Sqrt(zLen * zLen + TMath::Power(2 * radiusC * TMath::Sin(dAngle / 2), 2)); // chord length subtending an angle alpha is 2rsin(alpha/2)
+}
+
+inline TVector3 PW::getClosestWirePosAtWirePhi(std::pair<TVector3, TVector3> awire, double sx3phi_radian)
+{
+  // 1. Get wire geometry
+  TVector3 a1 = awire.first;  // Top of the wire
+  TVector3 a2 = awire.second; // Bottom of the wire
+  TVector3 wireVec = a2 - a1; // Vector pointing down the wire
+
+  // Variables to track our minimums during the scan
+  double min_delta_phi = 9999.0;
+  double best_t = -1.0;
+  TVector3 best_pcz_intersect;
+
+  // 2. THE SCAN: Walk down the wire in 1000 tiny steps
+  // (For a 380mm wire, this is checking every 0.38 mm)
+  int num_steps = 1000;
+  for (int i = 0; i <= num_steps; ++i)
+  {
+    double t_test = (double)i / num_steps;    // Ranges from 0.0 to 1.0
+    TVector3 test_pt = a1 + t_test * wireVec; // The 3D point at this step
+
+    // Calculate absolute Delta Phi between Si hit and this specific point on the wire
+    if (TMath::IsNaN(sx3phi_radian - test_pt.Phi()))
+      continue;
+    double dPhi = TMath::Abs(TVector2::Phi_mpi_pi(sx3phi_radian - test_pt.Phi())); // Phi_mpi_pi just puts the angle in the range -180 to 180
+
+    // If this is the smallest Delta Phi we've seen so far, save it!
+    if (dPhi < min_delta_phi)
+    {
+      min_delta_phi = dPhi;
+      best_t = t_test;
+      best_pcz_intersect = test_pt;
+    }
+  }
+  return best_pcz_intersect;
 }
 
 inline std::vector<std::vector<std::tuple<int, double, double>>>
@@ -354,40 +396,6 @@ PW::GetPseudoWire(const std::vector<std::tuple<int, double, double>> &cluster, s
     avgvec.second.SetXYZ(radiusC * TMath::Cos(phi2), radiusC * TMath::Sin(phi2), zLen / 2);
   }
   return std::tuple(avgvec, sumEnergy, maxEnergy, tsMaxEnergy);
-}
-
-inline TVector3 PW::getClosestWirePosAtWirePhi(std::pair<TVector3, TVector3> awire, double sx3phi_radian)
-{
-  // 1. Get wire geometry
-  TVector3 a1 = awire.first;  // Top of the wire
-  TVector3 a2 = awire.second; // Bottom of the wire
-  TVector3 wireVec = a2 - a1; // Vector pointing down the wire
-
-  // Variables to track our minimums during the scan
-  double min_delta_phi = 9999.0;
-  double best_t = -1.0;
-  TVector3 best_pcz_intersect;
-
-  // 2. THE SCAN: Walk down the wire in 1000 tiny steps
-  // (For a 380mm wire, this is checking every 0.38 mm)
-  int num_steps = 1000;
-  for (int i = 0; i <= num_steps; ++i)
-  {
-    double t_test = (double)i / num_steps;    // Ranges from 0.0 to 1.0
-    TVector3 test_pt = a1 + t_test * wireVec; // The 3D point at this step
-
-    // Calculate absolute Delta Phi between Si hit and this specific point on the wire
-    double dPhi = TMath::Abs(TVector2::Phi_mpi_pi(sx3phi_radian - test_pt.Phi())); // Phi_mpi_pi just puts the angle in the range -180 to 180
-
-    // If this is the smallest Delta Phi we've seen so far, save it!
-    if (dPhi < min_delta_phi)
-    {
-      min_delta_phi = dPhi;
-      best_t = t_test;
-      best_pcz_intersect = test_pt;
-    }
-  }
-  return best_pcz_intersect;
 }
 
 inline std::tuple<TVector3, double, double, double, double, double, double, double> PW::FindCrossoverProperties(const std::vector<std::tuple<int, double, double>> &a_cluster,

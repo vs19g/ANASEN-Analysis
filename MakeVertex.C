@@ -1296,13 +1296,9 @@ Bool_t MakeVertex::Process(Long64_t entry)
                 // 3. Reconstruct Vertex Z
                 double deltaRho = sx3event.pos.Perp() - pcz_intersect.Perp();
                 double deltaZ = sx3event.pos.Z() - pcz_intersect.Z();
-
                 double vertex_recon = sx3event.pos.Z() - sx3event.pos.Perp() * (deltaZ / deltaRho);
 
-                // ==========================================================
-                // DYNAMIC BEAM ENERGY CALCULATION (MUST BE HERE!)
-                // ==========================================================
-                double z_entrance = -174.3;
+                double z_entrance = -274.3;
                 double beam_path_length = TMath::Abs(vertex_recon - z_entrance) * 0.1;
                 double initial_beam_energy = 72.0;
                 double beam_energy_at_vertex = cm_to_MeV_beam->Eval(
@@ -1401,10 +1397,7 @@ Bool_t MakeVertex::Process(Long64_t entry)
 
                 double vertex_recon = qqqevent.pos.Z() - qqqevent.pos.Perp() * (deltaZ / deltaRho);
 
-                // ==========================================================
-                // DYNAMIC BEAM ENERGY CALCULATION (MUST BE HERE TOO!)
-                // ==========================================================
-                double z_entrance = -174.3;
+                double z_entrance = -274.3;
                 double beam_path_length = TMath::Abs(vertex_recon - z_entrance) * 0.1;
                 double initial_beam_energy = 72.0;
                 double beam_energy_at_vertex = cm_to_MeV_beam->Eval(
