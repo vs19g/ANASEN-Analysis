@@ -1,5 +1,5 @@
-#!/home/vsitaraman/ParaView-6.1.0-RC1-MPI-Linux-Python3.12-x86_64/bin/pvbatch
-######## !/home/vs19g/ParaView-6.1.0-MPI-Linux-Python3.12-x86_64/bin/pvbatch
+#!/home/vsitaraman/ParaView-6.1.0-MPI-Linux-Python3.12-x86_64/bin/pvbatch
+########### !/home/vsitaraman/ParaView-6.1.0-RC1-MPI-Linux-Python3.12-x86_64/bin/pvbatch
 import numpy as np
 import sys
 from paraview.simple import *

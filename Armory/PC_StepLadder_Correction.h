@@ -32,7 +32,7 @@ double model_invert(double* y, double* p) {
  			break;
  		}
  	}
-    return result+80;
+    return result;
 }
 
 double model_a1c1(double* x, double* p) {

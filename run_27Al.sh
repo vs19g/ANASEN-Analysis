@@ -2,7 +2,9 @@ rm results_run*.root
 export DATASET="27Al"
 export flip180="0"
 export flipa=0
+export flipc=0
 export anode_offset=0
+export cathode_offset=0
 #declare -i run=28
 #while [[ $run -lt 34 ]]; do #runs 1 to 84
 #    wrun=$(printf "%03d" $run)
