@@ -153,9 +153,9 @@ inline void PW::ConstructGeo()
   std::pair<TVector3, TVector3> p1; // anode
   std::pair<TVector3, TVector3> q1; // cathode
 
-  double k = TMath::TwoPi() / 24.; // 48 solder thru holes, wires in every other one
-  double offset_a1 = -5 * k - 5 * k;
-  double offset_c1 = -5 * k - 2 * k - TMath::TwoPi() / 48; // correct for a half-turn
+  double k = TMath::TwoPi() / 24.;     // 48 solder thru holes, wires in every other one
+  double offset_a1 = -6 * k - 4 * k;   // -6 to go from 0,0 to 90degree up, and 4 for the wire offset //old version -5 * k - 5 * k;
+  double offset_c1 = -6 * k + k / 2.0; // correct for a half-turn
   // std::cerr << "Here!" << std::endl;
   // #include "../scratch/testing.h"
   double offset_a2 = offset_a1 + wireShift * k;

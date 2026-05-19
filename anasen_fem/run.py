@@ -1,10 +1,10 @@
 import code
 import os
 
-# val=-178.3
-val=89.15
+# val=-174.3
+val=0
 count=11   
-while val<178.3+0.1:
+while val<174.3+0.1:
     print(val)
     os.system("python3 wires_gmsh2d_bc.py "+str(val))
     os.system("ElmerGrid 14 2 wires2d.msh -2d")
@@ -16,9 +16,9 @@ while val<178.3+0.1:
     os.system("cp wires2d/elfield_anasen_t0001.vtu wires2d/vtu_files/elfield_anasen_%02d_%1.4f.vtu"%(count,val))
     os.system("cp contour_output.png png/Contour_output_z_%02d_%1.4f.png"%(count,val))
     os.system("cp Field_output.png png/Field_ouput_z_%02d_%1.4f.png"%(count,val))
-    val=val+17.83
+    val=val+17.43
     count = count + 1
-    break
+    # break
 
 # os.system("tar -cvzf wiress2d/mesh.tar.gz wires2d/mesh_files")
 # os.system("rm -rf wires2d/mesh_files/*")

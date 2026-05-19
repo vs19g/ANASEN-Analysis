@@ -95,7 +95,7 @@ glyph.ScaleArray = ['POINTS', 'No scale array']
 glyph.ScaleFactor = 0.001  
 
 glyph.GlyphMode = 'Every Nth Point'
-glyph.Stride = 24
+glyph.Stride = 32
 
 # --- 3. Display the Glyphs ---
 glyph_display = Show(glyph, renderView)
