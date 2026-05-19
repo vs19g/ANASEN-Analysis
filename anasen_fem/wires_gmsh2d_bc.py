@@ -25,7 +25,9 @@ if len(sys.argv) < 2:
 
 z_loc = float(sys.argv[1])
 
-k=(2*np.pi/24.)
+wireShift = 4.0
+k = (2 * np.pi / 24.0)
+kg = (2 * np.pi / 48.0)
 
 #1 needle, 24 ic1, 24 ic2, 48 guard wires, 24 anodes, 24 cathodes
 
@@ -42,23 +44,20 @@ yarr_i11 = np.array([23 * np.sin(ki * i) for i in range(24)])
 xarr_i21 = np.array([23 * np.cos(ki * i + ki/2.0) for i in range(24)])
 yarr_i21 = np.array([23 * np.sin(ki * i + ki/2.0) for i in range(24)])
 
-#guard wires, plane 1 at -zmax/2
-kg=2*np.pi/48. 
-offsetg = -4*kg + 2*kg -  np.pi/24 #-pi/4
-xarrg_1 = np.array([32*np.cos(kg*i+offsetg) for i in np.arange(0,48)])
-yarrg_1 = np.array([32*np.sin(kg*i+offsetg) for i in np.arange(0,48)])
+# Guard wires (48 total) - aligned with Cathode phasing
+offset_g1 = -5 * k - 2 * k - (np.pi / 24.0)
+xarrg_1 = np.array([32 * np.cos(kg * i + offset_g1) for i in range(48)])
+yarrg_1 = np.array([32 * np.sin(kg * i + offset_g1) for i in range(48)])
 
-#anodes, plane 1 at -zmax/2
-k=-2*np.pi/24.
-offset = 6*k + 3*k #-pi/2
-xarra_1 = np.array([37*np.cos(k*i+offset) for i in np.arange(0,24)])
-yarra_1 = np.array([37*np.sin(k*i+offset) for i in np.arange(0,24)])
+# Anodes (24 total) - index increases leftward (-k)
+offset_a1 = -5 * k - 5 * k
+xarra_1 = np.array([37 * np.cos(-k * i + offset_a1) for i in range(24)])
+yarra_1 = np.array([37 * np.sin(-k * i + offset_a1) for i in range(24)])
 
-#cathodes, plane 1 at -zmax/2
-kc=2*np.pi/48.
-offsetc = -4*kc + 2*kc -  np.pi/24 #-pi/4
-xarrc_1 = np.array([42*np.cos(kc*i+offsetc) for i in np.arange(0,48)])
-yarrc_1 = np.array([42*np.sin(kc*i+offsetc) for i in np.arange(0,48)])
+# Cathodes (24 total) - index increases rightward (+k)
+offset_c1 = -5 * k - 2 * k - (np.pi / 24.0)
+xarrc_1 = np.array([42 * np.cos(k * i + offset_c1) for i in range(24)])
+yarrc_1 = np.array([42 * np.sin(k * i + offset_c1) for i in range(24)])
 
 #needle at plane 2 at zmax/2
 xarr_needle_2 = np.array([0])
@@ -72,26 +71,20 @@ yarr_i12 = np.array([23 * np.sin(ki * i) for i in range(24)])
 xarr_i22 = np.array([23 * np.cos(ki * i + ki/2.0) for i in range(24)])
 yarr_i22 = np.array([23 * np.sin(ki * i + ki/2.0) for i in range(24)])
 
-# guard wires, plane 2 at +zmax/2
-# Old 3-wire shift: offsetg = offsetg - 3*kg 
-# For a 4-wire shift (relative to the 24-wire geometry, 4 anodes = 8 guard positions):
-offsetg = offsetg - 8 * kg
-xarrg_2 = np.array([32*np.cos(kg*i+offsetg) for i in np.arange(0,48)])
-yarrg_2 = np.array([32*np.sin(kg*i+offsetg) for i in np.arange(0,48)])
+# Guard wires (48 total) - twists leftward to match cathodes
+offset_g2 = offset_g1 - (wireShift * k)
+xarrg_2 = np.array([32 * np.cos(kg * i + offset_g2) for i in range(48)])
+yarrg_2 = np.array([32 * np.sin(kg * i + offset_g2) for i in range(48)])
 
-# anodes, plane 2 at +zmax/2
-# Old 3-wire shift: offset = offset - 3*k
-# For a 4-wire shift:
-offset = offset - 4 * k
-xarra_2 = np.array([37*np.cos(k*i+offset) for i in np.arange(0,24)])
-yarra_2 = np.array([37*np.sin(k*i+offset) for i in np.arange(0,24)])
+# Anodes (24 total) - twists rightward (+shift)
+offset_a2 = offset_a1 + (wireShift * k)
+xarra_2 = np.array([37 * np.cos(-k * i + offset_a2) for i in range(24)])
+yarra_2 = np.array([37 * np.sin(-k * i + offset_a2) for i in range(24)])
 
-# cathodes, plane 2 at +zmax/2
-# Old 3-wire shift: offsetc = offsetc - 3*kc
-# For a 4-wire shift (matching guard wire rotation):
-offsetc = offsetc - 4 * kc
-xarrc_2 = np.array([42*np.cos(kc*i+offsetc) for i in np.arange(0,48)])
-yarra_2 = np.array([42*np.sin(kc*i+offsetc) for i in np.arange(0,48)])
+# Cathodes (24 total) - twists leftward (-shift)
+offset_c2 = offset_c1 - (wireShift * k)
+xarrc_2 = np.array([42 * np.cos(k * i + offset_c2) for i in range(24)])
+yarrc_2 = np.array([42 * np.sin(k * i + offset_c2) for i in range(24)])
 
 direction_needle_x = xarr_needle_2 - xarr_needle
 direction_needle_y = yarr_needle_2 - yarr_needle
@@ -150,9 +143,12 @@ for i, (xn, yn) in enumerate(zip(xloc_needle, yloc_needle)):
         needle.append(ndisk)    
 
 #create Guard Wires (48 total)
-for i, (xg, yg, xc, yc) in enumerate(zip(xloc_g, yloc_g, xloc_c, yloc_c)):
+for xg, yg in zip(xloc_g, yloc_g):
     gdisk = gmsh.model.occ.addDisk(xg, yg, 0, wire_radius, wire_radius)
     guard_wires.append(gdisk)
+
+#create Cathode Wires (24 total)
+for xc, yc in zip(xloc_c, yloc_c):
     cdisk = gmsh.model.occ.addDisk(xc, yc, 0, wire_radius, wire_radius)
     cathode_wires.append(cdisk)
 
