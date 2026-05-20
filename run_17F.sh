@@ -4,6 +4,7 @@ export flip180="0"
 export flipa=0
 export anode_offset=2
 export cathode_offset=0
+export productionrun=1
 #root -q -l -b -x ../ANASEN_analysis/data/17F_Data/Source_005_mapped.root -e 'tree->Process("MakeVertex.C+O")'; mv Analyzer_SX3.root results_run05.root;
 #root -q -l -b -x ../ANASEN_analysis/data/17F_Data/Source_006_mapped.root -e 'tree->Process("MakeVertex.C+O")'; mv Analyzer_SX3.root results_run06.root;
 #root -q -l -b -x ../ANASEN_analysis/data/17F_Data/Source_007_mapped.root -e 'tree->Process("MakeVertex.C+O")'; mv Analyzer_SX3.root results_run07.root;
@@ -29,11 +30,19 @@ export cathode_offset=0
 #17F reaction data
 # export flip180="0"
 declare -i run=322 #49
-while [[ $run -lt 399 ]]; do #392
+# while [[ $run -lt 399 ]]; do #392
+#     wrun=$(printf "%03d" $run)
+#     file_exists=$(test -f ../ANASEN_analysis/data/17F_Data/Run_"$wrun"_mapped.root)
+#     if [[ $file_exists -ne 0 ]]; then continue; fi
+#     root -q -l -b -x ../ANASEN_analysis/data/17F_Data/Run_"$wrun"_mapped.root -e 'tree->Process("MakeVertex.C+O","Analyzer_17F.root")'; mv Analyzer_17F.root 17F_output/results_run$wrun.root;
+#     run=run+1
+# done
+
+while [[ $run -lt 323 ]]; do #392
     wrun=$(printf "%03d" $run)
     file_exists=$(test -f ../ANASEN_analysis/data/17F_Data/Run_"$wrun"_mapped.root)
     if [[ $file_exists -ne 0 ]]; then continue; fi
-    root -q -l -b -x ../ANASEN_analysis/data/17F_Data/Run_"$wrun"_mapped.root -e 'tree->Process("MakeVertex.C+O","Analyzer_17F.root")'; mv Analyzer_17F.root 17F_output/results_run$wrun.root;
+    root -q -l -b -x ../ANASEN_analysis/data/17F_Data/Run_"$wrun"_mapped.root -e 'tree->Process("VertexRecon.C+O","Analyzer_17F.root")'; mv Analyzer_17F.root 17F_output/results_run$wrun.root;
     run=run+1
 done
 
