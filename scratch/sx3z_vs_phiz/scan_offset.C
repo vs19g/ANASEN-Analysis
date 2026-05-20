@@ -1,4 +1,4 @@
-#include "testmodel.h"
+#include "../../Armory/PC_StepLadder_Correction.h"
 
 int quit=0;
 void handler(int){quit=0;}
@@ -9,12 +9,12 @@ void scan_offset(){
    TCanvas c("c1","c1",0,0,1600,800);
    c.Divide(2,1);
 
-    TF1 f1("model",model,-200,200,2);
-    f1.SetNpx(10000);
-    std::vector<double> pars = {0.0,1.};
-    f1.SetParameters(pars.data());
-    f1.SetLineColor(kGreen+2);
-    f1.SetLineStyle(kLine);
+    // TF1 f1("model",model,-200,200,2);
+    // f1.SetNpx(10000);
+    // std::vector<double> pars = {0.0,1.};
+    // f1.SetParameters(pars.data());
+    // f1.SetLineColor(kGreen+2);
+    // f1.SetLineStyle(kLine);
 
 
 
@@ -45,7 +45,7 @@ void scan_offset(){
             //h2->Draw("colz same");
             h2->SetLineColorAlpha(colors[ctr],0.75);
             h2->Draw("box same");
-            f1.Draw("same");
+            // f1.Draw("same");
         }
         TF1 eqline("x","x",-200,200);
         eqline.Draw("SAME");

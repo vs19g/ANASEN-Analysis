@@ -3,8 +3,10 @@
 
 #include <TROOT.h>
 #include <TChain.h>
+#include <TApplication.h>
 #include <TFile.h>
 #include <TSelector.h>
+#include <iomanip>
 #include <vector>         // Required for vectors
 #include <utility>        // Required for std::pair
 
@@ -56,7 +58,10 @@ public :
    std::vector<std::pair<int, double>> anodeHits;
    std::vector<std::pair<int, double>> cathodeHits;
    std::vector<std::pair<int, double>> corrcatMax;
-
+   std::vector<std::pair<int, double>> corranoMax;
+   std::vector<double> cathodeTimes;
+   std::vector<double> anodeTimes;
+   
    TrackRecon(TTree * /*tree*/ =0) : fChain(0) { }
    virtual ~TrackRecon() { }
    virtual Int_t   Version() const { return 2; }
@@ -112,6 +117,7 @@ void TrackRecon::Init(TTree *tree){
    fChain->SetBranchAddress("miscCh",    &misc.ch, &b_miscCh);
    fChain->SetBranchAddress("miscE",     &misc.e, &b_miscE);
    fChain->SetBranchAddress("miscT",     &misc.t, &b_miscT);
+   fChain->SetBranchAddress("miscf",    &misc.tf, &b_miscTf);
 }
 
 Bool_t TrackRecon::Notify(){
