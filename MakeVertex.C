@@ -1328,21 +1328,21 @@ Bool_t MakeVertex::Process(Long64_t entry)
                 double Ex_from_proton = apkin_p.getExc(sx3Efix, theta_recon * 180. / M_PI);
                 double Ex_from_alpha = apkin_a.getExc(sx3Efixalpha, theta_recon * 180. / M_PI);
 
-                plotter->Fill2D(nA_label + "_dE_Ecorr_Anode_SX3", 400, 0, 30, 800, 0, 40000, sx3Efix, apSumE * sinTheta, nA_label);
+                plotter->Fill2D(nA_label + "_dE_Ecorr_Anode_SX3", 800, 0, 30, 1600, 0, 20000, sx3Efix, apSumE * sinTheta, nA_label);
                 plotter->Fill1D(nA_label + "_Ex_from_alphas_SX3" + vtx_gate, 200, -10, 10, Ex_from_alpha, nA_label);
                 plotter->Fill1D(nA_label + "_Ex_from_protons_SX3" + vtx_gate, 200, -10, 10, Ex_from_proton, nA_label);
                 plotter->Fill2D(nA_label + "_sx3_E_vs_theta_raw_SX3", 180, 0, 180, 400, 0, 30, theta_recon * 180. / M_PI, sx3event.Energy1, nA_label);
                 plotter->Fill2D(nA_label + "_sx3_E_vs_theta_corr_SX3", 180, 0, 180, 400, 0, 30, theta_recon * 180. / M_PI, sx3Efix, nA_label);
 
-                if (vtx_gate != "")
-                {
-                    plotter->Fill1D(nA_label + "_twisted_pcz_recon_SX3" + vtx_gate, 600, -300, 300, pcz_intersect.Z(), nA_label);
-                    plotter->Fill1D(nA_label + "_twisted_vertex_recon_SX3" + vtx_gate, 600, -300, 300, vertex_recon, nA_label);
-                    plotter->Fill2D(nA_label + "_dE_Ecorr_Anode_SX3" + vtx_gate, 400, 0, 30, 800, 0, 40000, sx3Efix, apSumE * sinTheta, nA_label);
-                    plotter->Fill2D(nA_label + "_dE_Ecorr_Anode_SX3_alpha" + vtx_gate, 400, 0, 30, 800, 0, 40000, sx3Efixalpha, apSumE * sinTheta, nA_label);
-                    plotter->Fill1D(nA_label + "_Ex_from_alphas_SX3" + vtx_gate, 200, -10, 10, Ex_from_alpha, nA_label);
-                    plotter->Fill1D(nA_label + "_Ex_from_protons_SX3" + vtx_gate, 200, -10, 10, Ex_from_proton, nA_label);
-                }
+                // if (vtx_gate != "")
+                // {
+                //     plotter->Fill1D(nA_label + "_twisted_pcz_recon_SX3" + vtx_gate, 600, -300, 300, pcz_intersect.Z(), nA_label);
+                //     plotter->Fill1D(nA_label + "_twisted_vertex_recon_SX3" + vtx_gate, 600, -300, 300, vertex_recon, nA_label);
+                //     plotter->Fill2D(nA_label + "_dE_Ecorr_Anode_SX3" + vtx_gate, 400, 0, 30, 800, 0, 40000, sx3Efix, apSumE * sinTheta, nA_label);
+                //     plotter->Fill2D(nA_label + "_dE_Ecorr_Anode_SX3_alpha" + vtx_gate, 400, 0, 30, 800, 0, 40000, sx3Efixalpha, apSumE * sinTheta, nA_label);
+                //     plotter->Fill1D(nA_label + "_Ex_from_alphas_SX3" + vtx_gate, 200, -10, 10, Ex_from_alpha, nA_label);
+                //     plotter->Fill1D(nA_label + "_Ex_from_protons_SX3" + vtx_gate, 200, -10, 10, Ex_from_proton, nA_label);
+                // }
             }
         }
 #endif // DIAG_nA_SX3
@@ -1391,21 +1391,21 @@ Bool_t MakeVertex::Process(Long64_t entry)
                 double Ex_from_proton = apkin_p.getExc(qqqEfix, theta_recon * 180. / M_PI);
                 double Ex_from_alpha = apkin_a.getExc(qqqEfixalpha, theta_recon * 180. / M_PI);
 
-                plotter->Fill2D(nA_label + "_dE_Ecorr_Anode_QQQ", 400, 0, 30, 800, 0, 40000, qqqEfix, apSumE * sinTheta, nA_label);
+                plotter->Fill2D(nA_label + "_dE_Ecorr_Anode_QQQ", 800, 0, 30, 800, 0, 20000, qqqEfix, apSumE * sinTheta, nA_label);
                 plotter->Fill1D(nA_label + "_Ex_from_alphas_QQQ" + vtx_gate, 200, -10, 10, Ex_from_alpha, nA_label);
                 plotter->Fill1D(nA_label + "_Ex_from_protons_QQQ" + vtx_gate, 200, -10, 10, Ex_from_proton, nA_label);
                 plotter->Fill2D(nA_label + "_qqq_E_vs_theta_raw_QQQ", 180, 0, 180, 400, 0, 30, theta_recon * 180. / M_PI, qqqevent.Energy1, nA_label);
                 plotter->Fill2D(nA_label + "_qqq_E_vs_theta_corr_QQQ", 180, 0, 180, 400, 0, 30, theta_recon * 180. / M_PI, qqqEfix, nA_label);
 
-                if (vtx_gate != "")
-                {
-                    plotter->Fill1D(nA_label + "_twisted_pcz_recon_QQQ" + vtx_gate, 600, -300, 300, pcz_intersect.Z(), nA_label);
-                    plotter->Fill1D(nA_label + "_twisted_vertex_recon_QQQ" + vtx_gate, 600, -300, 300, vertex_recon, nA_label);
-                    plotter->Fill2D(nA_label + "_dE_Ecorr_Anode_QQQ" + vtx_gate, 400, 0, 30, 800, 0, 40000, qqqEfix, apSumE * sinTheta, nA_label);
-                    plotter->Fill2D(nA_label + "_dE_Ecorr_Anode_QQQ_alpha" + vtx_gate, 400, 0, 30, 800, 0, 40000, qqqEfixalpha, apSumE * sinTheta, nA_label);
-                    plotter->Fill1D(nA_label + "_Ex_from_alphas_QQQ" + vtx_gate, 200, -10, 10, Ex_from_alpha, nA_label);
-                    plotter->Fill1D(nA_label + "_Ex_from_protons_QQQ" + vtx_gate, 200, -10, 10, Ex_from_proton, nA_label);
-                }
+                // if (vtx_gate != "")
+                // {
+                //     plotter->Fill1D(nA_label + "_twisted_pcz_recon_QQQ" + vtx_gate, 600, -300, 300, pcz_intersect.Z(), nA_label);
+                //     plotter->Fill1D(nA_label + "_twisted_vertex_recon_QQQ" + vtx_gate, 600, -300, 300, vertex_recon, nA_label);
+                //     plotter->Fill2D(nA_label + "_dE_Ecorr_Anode_QQQ" + vtx_gate, 400, 0, 30, 800, 0, 40000, qqqEfix, apSumE * sinTheta, nA_label);
+                //     plotter->Fill2D(nA_label + "_dE_Ecorr_Anode_QQQ_alpha" + vtx_gate, 400, 0, 30, 800, 0, 40000, qqqEfixalpha, apSumE * sinTheta, nA_label);
+                //     plotter->Fill1D(nA_label + "_Ex_from_alphas_QQQ" + vtx_gate, 200, -10, 10, Ex_from_alpha, nA_label);
+                //     plotter->Fill1D(nA_label + "_Ex_from_protons_QQQ" + vtx_gate, 200, -10, 10, Ex_from_proton, nA_label);
+                // }
             }
         }
 #endif // DIAG_nA_QQQ

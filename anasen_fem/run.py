@@ -3,7 +3,7 @@ import os
 
 # val=-174.3
 val=0
-count=11   
+count=10   
 while val<174.3+0.1:
     print(val)
     os.system("python3 wires_gmsh2d_bc.py "+str(val))
