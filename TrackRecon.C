@@ -530,7 +530,7 @@ Bool_t TrackRecon::Process(Long64_t entry)
           // we found a 12mm shift towards the vertex later --> 116
           Event qqqevent(TVector3(rho * TMath::Cos(theta), rho * TMath::Sin(theta), qqq_z), eRingMeV, eWedgeMeV, tRing, tWedge, chRing + qqq.id[i] * 16, chWedge + qqq.id[i] * 16);
           Event qqqeventr(TVector3(rho * TMath::Cos(theta), rho * TMath::Sin(theta), qqq_z), eRing, eWedge, tRing, tWedge, chRing + qqq.id[i] * 16, chWedge + qqq.id[i] * 16);
-          if (qqq.id[i] >= 1)
+          if (qqq.id[i] >= 0)
           {
             QQQ_Events.push_back(qqqevent);
             QQQ_Events_Raw.push_back(qqqeventr);
