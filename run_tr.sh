@@ -27,7 +27,7 @@ export timecut_low=400.0;
 #export source_vertex=53.44; root -q -b -x ../ANASEN_analysis/data/27Al_Data/Run_010_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root results_run10.root;
 #export source_vertex=53.44; root -q -b -x ../ANASEN_analysis/data/27Al_Data/Run_011_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root results_run11.root;
 export source_vertex=53.44; root -q -b -x ../ANASEN_analysis/data/27Al_Data/Run_012_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root results_run12.root;
-# exit
+exit
 #export source_vertex=53.44; root -q -b -x ../ANASEN_analysis/data/27Al_Data/Run_013_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root results_run13.root;
 #exit
 fi
@@ -80,9 +80,9 @@ fi
 #17F alpha run with gas
 if [[ 1 -eq 1 ]]; then
 export source_vertex=53.44; root -q -l -b -x ../ANASEN_analysis/data/17F_Data/SourceRun_018_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root results_run18.root;
-# export source_vertex=14.24; root -q -l -b -x ../ANASEN_analysis/data/17F_Data/SourceRun_019_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root results_run19.root;
-# export source_vertex=-24.96; root -q -l -b -x ../ANASEN_analysis/data/17F_Data/SourceRun_020_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root results_run20.root;
-# export source_vertex=-73.96; root -q -l -b -x ../ANASEN_analysis/data/17F_Data/SourceRun_021_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root results_run21.root;
+export source_vertex=14.24; root -q -l -b -x ../ANASEN_analysis/data/17F_Data/SourceRun_019_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root results_run19.root;
+export source_vertex=-24.96; root -q -l -b -x ../ANASEN_analysis/data/17F_Data/SourceRun_020_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root results_run20.root;
+export source_vertex=-73.96; root -q -l -b -x ../ANASEN_analysis/data/17F_Data/SourceRun_021_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root results_run21.root;
 fi
 #17F reaction data
 #export flip180="0"

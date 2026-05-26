@@ -1,5 +1,10 @@
 #define TrackRecon_cxx
 
+// #define RAW_HISTOS
+// #define VTX_GATES
+#define AL_BEAM
+// #define F_BEAM
+
 Int_t colors[40] = {
     kBlack, kRed, kGreen, kBlue, kYellow, kMagenta, kCyan, kOrange,
     kSpring, kTeal, kAzure, kViolet, kPink, kGray, kWhite,
@@ -33,8 +38,10 @@ Int_t colors[40] = {
 bool process_alpha_proton_scattering = true;
 bool doPCSX3ClusterAnalysis = true;
 bool doPCQQQClusterAnalysis = true;
+bool do27AlapAnalysis = true;
 double source_vertex = 53; // 53
 const double qqq_z = 100.0;
+double z_entrance = -174.3 - 9.7 - 100.0;
 const double anode_gain = 1.5146e-5; // channels --> MeV
 std::string dataset;
 bool productionrun = false;
@@ -42,7 +49,16 @@ bool productionrun = false;
 TF1 pcfix_func("func", model_invert, -200, 200);
 TGraph *MeV_to_cm = NULL, *cm_to_MeV = NULL;
 TGraph *MeV_to_cm_p = NULL, *cm_to_MeVp = NULL;
-TGraph *MeV_to_cm_beam = NULL, *cm_to_MeV_beam = NULL;
+TGraph *MeV_to_cm_27Al = NULL, *cm_to_MeV_27Al = NULL;
+TGraph *MeV_to_cm_17F = NULL, *cm_to_MeV_17F = NULL;
+
+// declaring masses for kinematics calculations
+double mass_27Al = 26.981538;
+double mass_4He = 4.002603;
+double mass_1H = 1.007825;
+double mass_30Si = 29.973770;
+double mass_17F = 17.002095;
+double mass_20Ne = 19.992440;
 
 /*
 double z_to_crossover_rho(double z)
@@ -127,20 +143,17 @@ void TrackRecon::Begin(TTree * /*tree*/)
 
   pwinstance.ConstructGeo();
 
-  // ---------------------------------------------------------
-  // 1. CRITICAL FIX: Initialize PC Arrays to Default (Raw)
-  // ---------------------------------------------------------
   for (int i = 0; i < 48; i++)
   {
-    pcSlope[i] = 1.0;     // Default slope = 1 (preserves Raw energy)
-    pcIntercept[i] = 0.0; // Default intercept = 0
+    pcSlope[i] = 1.0;
+    pcIntercept[i] = 0.0;
   }
 
   if (getenv("DATASET"))
     dataset = std::string(getenv("DATASET"));
   if (getenv("source_vertex"))
     source_vertex = (double)std::atof(std::string(getenv("source_vertex")).c_str());
-  if(dataset == "17F" && getenv("PRODUCTION"))
+  if (dataset == "17F" && getenv("PRODUCTION"))
     productionrun = true;
   std::cout << "Dataset set to  " << dataset << std::endl;
   std::cout << "source_vertex set to  " << source_vertex << std::endl;
@@ -238,8 +251,11 @@ void TrackRecon::Begin(TTree * /*tree*/)
   cm_to_MeVp = new TGraph(MeV_to_cm_p->GetN(), MeV_to_cm_p->GetY(), MeV_to_cm_p->GetX());
 
   // Add these alongside your existing proton and alpha tables
-  MeV_to_cm_beam = new TGraph("eloss_calculations/aluminum_lookup_80MeV.dat", "%lf %*lf %lf");
-  cm_to_MeV_beam = new TGraph(MeV_to_cm_beam->GetN(), MeV_to_cm_beam->GetY(), MeV_to_cm_beam->GetX());
+  MeV_to_cm_27Al = new TGraph("eloss_calculations/aluminum_lookup_80MeV.dat", "%lf %*lf %lf");
+  cm_to_MeV_27Al = new TGraph(MeV_to_cm_27Al->GetN(), MeV_to_cm_27Al->GetY(), MeV_to_cm_27Al->GetX());
+
+  MeV_to_cm_17F = new TGraph("eloss_calculations/fluorine_lookup_70MeV.dat", "%lf %*lf %lf");
+  cm_to_MeV_17F = new TGraph(MeV_to_cm_17F->GetN(), MeV_to_cm_17F->GetY(), MeV_to_cm_17F->GetX());
 
   // cm_to_MeV.Eval(MeV_to_cm.Eval(detectedE)-PathLength) gives energy of particle before it traversed 'path length'
 }
@@ -323,7 +339,9 @@ Bool_t TrackRecon::Process(Long64_t entry)
         if (id < 12)
           Fsx3.at(id).fillevent("BACK", sx3ch, value);
         Fsx3.at(id).ts = static_cast<double>(sx3.t[i]);
+#ifdef RAW_HISTOS
         plotter->Fill2D("sx3backs_all_raw", 100, 0, 100, 800, 0, 4096, gch, sx3.e[i]);
+#endif
       }
       else
       {
@@ -400,10 +418,12 @@ Bool_t TrackRecon::Process(Long64_t entry)
         // plotter->Fill2D("SX3CartesianPlot", 200, -100, 100, 200, -100, 100, 88.0*TMath::Cos(phi_n),88.0*TMath::Sin(phi_n), "hCalSX3");
         plotter->Fill2D("SX3CartesianPlot" + std::to_string(id), 200, -100, 100, 200, -100, 100, 88.0 * TMath::Cos(phi_n), 88.0 * TMath::Sin(phi_n), "hCalSX3");
       }
+#ifdef RAW_HISTOS
       if (det.valid && det.stripF != DEFAULT_NULL && det.stripB != DEFAULT_NULL)
       {
         plotter->Fill2D("sx3backs_raw", 100, 0, 100, 800, 0, 8192, det.stripB + 4 * id, det.backE);
       }
+#endif
     }
   }
   // return kTRUE;
@@ -452,6 +472,7 @@ Bool_t TrackRecon::Process(Long64_t entry)
   bool PCCQQQTimeCut = false;
   for (int i = 0; i < qqq.multi; i++)
   {
+#ifdef RAW_HISTOS
     plotter->Fill2D("QQQ_Index_Vs_Energy", 16 * 8, 0, 16 * 8, 2000, 0, 16000, qqq.index[i], qqq.e[i], "hRawQQQ");
 
     for (int j = 0; j < qqq.multi; j++)
@@ -473,7 +494,7 @@ Bool_t TrackRecon::Process(Long64_t entry)
         plotter->Fill2D("QQQ_Vs_Cathode_Energy", 400, 0, 4000, 1000, 0, 16000, qqq.e[i], pc.e[k], "hRawQQQ");
       }
     }
-
+#endif
     for (int j = i + 1; j < qqq.multi; j++)
     {
       if (qqq.id[i] == qqq.id[j])
@@ -511,8 +532,10 @@ Bool_t TrackRecon::Process(Long64_t entry)
           continue;
 
         plotter->Fill1D("Wedgetime_Vs_Ringtime", 100, -1000, 1000, tWedge - tRing, "hTiming");
+#ifdef RAW_HISTOS
         plotter->Fill2D("RingE_vs_Index", 16 * 4, 0, 16 * 4, 1000, 0, 16000, chRing + qqq.id[i] * 16, eRing, "hRawQQQ");
         plotter->Fill2D("WedgeE_vs_Index", 16 * 4, 0, 16 * 4, 1000, 0, 16000, chWedge + qqq.id[i] * 16, eWedge, "hRawQQQ");
+#endif
         plotter->Fill2D("WedgeE_Vs_RingECal", 1000, 0, 10, 1000, 0, 10, eWedgeMeV, eRingMeV, "hCalQQQ");
 
         if (qqqCalibValid[qqq.id[i]][chWedge][chRing])
@@ -530,12 +553,11 @@ Bool_t TrackRecon::Process(Long64_t entry)
           // we found a 12mm shift towards the vertex later --> 116
           Event qqqevent(TVector3(rho * TMath::Cos(theta), rho * TMath::Sin(theta), qqq_z), eRingMeV, eWedgeMeV, tRing, tWedge, chRing + qqq.id[i] * 16, chWedge + qqq.id[i] * 16);
           Event qqqeventr(TVector3(rho * TMath::Cos(theta), rho * TMath::Sin(theta), qqq_z), eRing, eWedge, tRing, tWedge, chRing + qqq.id[i] * 16, chWedge + qqq.id[i] * 16);
-          if (qqq.id[i] >= 0)
-          {
-            QQQ_Events.push_back(qqqevent);
-            QQQ_Events_Raw.push_back(qqqeventr);
-            plotter->Fill2D("WedgeE_Vs_RingECal_selected", 1000, 0, 10, 1000, 0, 10, eWedgeMeV, eRingMeV, "hCalQQQ");
-          }
+
+          QQQ_Events.push_back(qqqevent);
+          QQQ_Events_Raw.push_back(qqqeventr);
+          plotter->Fill2D("WedgeE_Vs_RingECal_selected", 1000, 0, 10, 1000, 0, 10, eWedgeMeV, eRingMeV, "hCalQQQ");
+
           plotter->Fill2D("QQQCartesianPlot", 200, -100, 100, 200, -100, 100, rho * TMath::Cos(theta), rho * TMath::Sin(theta), "hCalQQQ");
           plotter->Fill2D("QQQCartesianPlot" + std::to_string(qqq.id[i]), 200, -100, 100, 200, -100, 100, rho * TMath::Cos(theta), rho * TMath::Sin(theta), "hCalQQQ");
           plotter->Fill2D("PC_XY_Projection_QQQ" + std::to_string(qqq.id[i]), 400, -100, 100, 400, -100, 100, rho * TMath::Cos(theta), rho * TMath::Sin(theta), "hPCQQQ");
@@ -545,12 +567,13 @@ Bool_t TrackRecon::Process(Long64_t entry)
 
         for (int k = 0; k < pc.multi; k++)
         {
+#ifdef RAW_HISTOS
           plotter->Fill2D("RingCh_vs_Anode_Index", 16 * 4, 0, 16 * 4, 24, 0, 24, chRing + qqq.id[i] * 16, pc.index[k], "hRawQQQ");
           plotter->Fill2D("WedgeCh_vs_Anode_Index", 16 * 4, 0, 16 * 4, 24, 0, 24, chWedge + qqq.id[i] * 16, pc.index[k], "hRawQQQ");
-          plotter->Fill2D("WedgeCh_vs_Anode_Index" + std::to_string(qqq.id[i]), 16 * 4, 0, 16 * 4, 24, 0, 24, chWedge + qqq.id[i] * 16, pc.index[k]);
+          plotter->Fill2D("WedgeCh_vs_Anode_Index" + std::to_string(qqq.id[i]), 16 * 4, 0, 16 * 4, 24, 0, 24, chWedge + qqq.id[i] * 16, pc.index[k], "hRawQQQ");
           plotter->Fill2D("RingCh_vs_Cathode_Index", 16 * 4, 0, 16 * 4, 24, 24, 48, chRing + qqq.id[i] * 16, pc.index[k], "hRawQQQ");
           plotter->Fill2D("WedgeCh_vs_Cathode_Index", 16 * 4, 0, 16 * 4, 24, 24, 48, chWedge + qqq.id[i] * 16, pc.index[k], "hRawQQQ");
-
+#endif
           if (pc.index[k] < 24 && pc.e[k] > 10)
           {
             plotter->Fill2D("Timing_Difference_QQQ_PC", 500, -2000, 2000, 16, 0, 16, tRing - static_cast<double>(pc.t[k]), chRing, "hTiming");
@@ -591,8 +614,9 @@ Bool_t TrackRecon::Process(Long64_t entry)
   } // i loop end
 
   PCQQQTimeCut = PCAQQQTimeCut && PCCQQQTimeCut;
+#ifdef RAW_HISTOS
   plotter->Fill1D("QQQ_Multiplicity", 10, 0, 10, qqqCount, "hRawQQQ");
-
+#endif
   typedef std::unordered_map<int, std::tuple<int, double, double>> WireEvent; // this stores nearest neighbour wire events, or a 'cluster'
   WireEvent aWireEvents, cWireEvents;                                         // naming for book keeping
 
@@ -608,14 +632,12 @@ Bool_t TrackRecon::Process(Long64_t entry)
   for (int i = 0; i < pc.multi; i++)
   {
     // std::cout << pc.index[i] << " " << pc.e[i] << " " << std::endl;
+#ifdef RAW_HISTOS
     if (pc.e[i] > 10)
     {
       plotter->Fill2D("PC_Index_Vs_Energy", 48, 0, 48, 2000, 0, 30000, pc.index[i], static_cast<double>(pc.e[i]), "hRawPC");
     }
-    else
-    {
-      continue;
-    }
+#endif
 
     if (pc.index[i] < 48)
     {
@@ -667,8 +689,10 @@ Bool_t TrackRecon::Process(Long64_t entry)
 
     for (int j = i + 1; j < pc.multi; j++)
     {
+#ifdef RAW_HISTOS
       plotter->Fill2D("PC_Coincidence_Matrix", 48, 0, 48, 48, 0, 48, pc.index[i], pc.index[j], "hRawPC");
       plotter->Fill2D("PC_Coincidence_Matrix_anodeMinusCathode_lt_-200_" + std::to_string(anodeT - cathodeT < -200), 48, 0, 48, 48, 0, 48, pc.index[i], pc.index[j], "hRawPC");
+#endif
       plotter->Fill2D("Anode_V_Anode", 24, 0, 24, 24, 0, 24, pc.index[i], pc.index[j], "hGMPC");
     }
   }
@@ -748,7 +772,7 @@ Bool_t TrackRecon::Process(Long64_t entry)
     protonAlphaHistograms(plotter, QQQ_Events, SX3_Events, PC_Events);
     // return kTRUE;
   } // end if(process_alpha_proton_scattering)
-
+#ifdef RAW_HISTOS
   if (QQQ_Events.size() && PC_Events.size())
     plotter->Fill2D("PCEv_vs_QQQEv", 20, 0, 20, 20, 0, 20, QQQ_Events.size(), PC_Events.size());
 
@@ -766,6 +790,7 @@ Bool_t TrackRecon::Process(Long64_t entry)
   {
     plotter->Fill2D("ac_vs_cc_ign0", 20, 0, 20, 20, 0, 20, aClusters.size(), cClusters.size(), "wiremult");
   }
+#endif
 
   for (auto sx3event : SX3_Events)
   {
@@ -850,282 +875,195 @@ Bool_t TrackRecon::Process(Long64_t entry)
   {
     PCQQQClusterAnalysis(plotter, QQQ_Events, SX3_Events, PC_Events);
   }
-  return kTRUE;
 
-  ///////////////////Single wire analysis for the anodes///////////////////
-
-  if (aClusters.size() == 1 && cClusters.size() == 0)
+  ///////////////////nA analysis using pseudo-wire (GetPseudoWire + getClosestWirePosAtWirePhi)///////////////////
+  if (aClusters.size() > 0)
   {
-    // Extract the primary anode hit properties
-    auto anodeHit = aClusters.front().front();
-    int aWireID = std::get<0>(anodeHit);
-    double aEnergy = std::get<1>(anodeHit);
-    double aTime = std::get<2>(anodeHit);
-
-    // Get the 3D endpoints of the fired twisted anode wire from your geometry class
-    TVector3 a1 = pwinstance.An[aWireID].first;
-    TVector3 wireVec = pwinstance.An[aWireID].first - pwinstance.An[aWireID].second;
-
-    // Loop over SX3_Events directly
+    // ---------------------------------------------------------
+    // PROTON LOOP (SX3 BARREL)
+    // ---------------------------------------------------------
     for (auto sx3event : SX3_Events)
     {
+      // Pick the anode cluster closest in phi to this SX3 hit
+      const std::vector<std::tuple<int, double, double>> *bestCluster = &aClusters[0];
+      double bestDphi = 9999.0;
 
-      if (sx3event.Time1 - aTime < -150) // Time cut for protons
+      for (const auto &acluster : aClusters)
       {
-        // 1. Define the plane of the track (Z-axis to SX3 hit)
-        TVector3 planeNormal(-TMath::Sin(sx3event.pos.Phi()), TMath::Cos(sx3event.pos.Phi()), 0.0);
-
-        // 2. Find intersection of the twisted wire with this track plane
-        double dot_wireVec = wireVec.Dot(planeNormal);
-
-        // Prevent divide-by-zero if wire is perfectly parallel to the track plane
-        if (TMath::Abs(dot_wireVec) < 1e-6)
-          continue;
-
-        double t_intersect = -(a1.Dot(planeNormal)) / dot_wireVec;
-
-        // Calculate the exact 3D coordinate on the wire that matches the SX3 phi
-        TVector3 pcz_intersect = a1 + t_intersect * wireVec;
-
-        // 3. Reconstruct Vertex Z
-        double deltaRho = sx3event.pos.Perp() - pcz_intersect.Perp();
-        double deltaZ = sx3event.pos.Z() - pcz_intersect.Z();
-        double vertex_recon = sx3event.pos.Z() - sx3event.pos.Perp() * (deltaZ / deltaRho);
-
-        double z_entrance = -274.3;
-        double beam_path_length = TMath::Abs(vertex_recon - z_entrance) * 0.1;
-        double initial_beam_energy = 72.0;
-        double beam_energy_at_vertex = cm_to_MeV_beam->Eval(
-            MeV_to_cm_beam->Eval(initial_beam_energy) - beam_path_length);
-
-        Kinematics apkin_p(26.981538, 4.002603, 1.007825, 29.973770, beam_energy_at_vertex);
-        Kinematics apkin_a(26.981538, 4.002603, 4.002603, 26.981538, beam_energy_at_vertex);
-
-        std::string vtx_gate = "";
-
-        if (vertex_recon >= -176.0 && vertex_recon < -100.0)
+        auto [pw, sumE, maxE, tsMax] = pwinstance.GetPseudoWire(acluster, "ANODE");
+        TVector3 pos = pwinstance.getClosestWirePosAtWirePhi(pw, sx3event.pos.Phi());
+        double dphi = TMath::Abs(TVector2::Phi_mpi_pi(sx3event.pos.Phi() - pos.Phi()));
+        if (dphi < bestDphi)
         {
-          vtx_gate = "_Z[-176_to_-100]";
-        }
-        else if (vertex_recon >= -100.0 && vertex_recon < -50.0)
-        {
-          vtx_gate = "_Z[-100_to_-50]";
-        }
-        else if (vertex_recon >= -50.0 && vertex_recon < 0.0)
-        {
-          vtx_gate = "_Z[-50_to_0]";
-        }
-        else if (vertex_recon >= 0.0 && vertex_recon < 50.0)
-        {
-          vtx_gate = "_Z[0_to_50]";
-        }
-        else if (vertex_recon >= 50.0 && vertex_recon < 100.0)
-        {
-          vtx_gate = "_Z[50_to_100]";
-        }
-        else if (vertex_recon >= 100.0 && vertex_recon < 176.0)
-        {
-          vtx_gate = "_Z[100_to_176]";
-        }
-
-        // 4. Energy Loss Correction in Silicon
-        double path_length = (sx3event.pos - TVector3(0, 0, vertex_recon)).Mag() * 0.1;
-        double sx3Efix = cm_to_MeVp->Eval(MeV_to_cm_p->Eval(sx3event.Energy1) - path_length);
-        double sx3Efixalpha = cm_to_MeV->Eval(MeV_to_cm->Eval(sx3event.Energy1) - path_length);
-
-        double theta_recon = (sx3event.pos - TVector3(0, 0, vertex_recon)).Theta();
-        double sinTheta = TMath::Sin(theta_recon);
-
-        // Now these functions will use the correct, event-specific beam energy!
-        double Ex_from_proton = apkin_p.getExc(sx3Efix, theta_recon * 180. / M_PI);
-        double Ex_from_alpha = apkin_a.getExc(sx3Efixalpha, theta_recon * 180. / M_PI);
-
-        // 5. Fill Diagnostics
-        plotter->Fill2D("1A0C_dE_Ecorr_Anode_SX3", 400, 0, 30, 800, 0, 40000, sx3Efix, aEnergy * sinTheta, "1A0C");
-        plotter->Fill1D("1A0C_Ex_from_protons_SX3", 200, -10, 10, Ex_from_proton, "1A0C");
-        plotter->Fill1D("1A0C_Ex_from_alphas_SX3", 200, -10, 10, Ex_from_alpha, "1A0C");
-
-        plotter->Fill2D("1A0C_sx3_E_vs_theta_raw_SX3", 180, 0, 180, 400, 0, 30, theta_recon * 180. / M_PI, sx3event.Energy1, "1A0C");
-        plotter->Fill2D("1A0C_sx3_E_vs_theta_corr_SX3", 180, 0, 180, 400, 0, 30, theta_recon * 180. / M_PI, sx3Efix, "1A0C");
-
-        if (vtx_gate != "")
-        {
-          plotter->Fill1D("1A0C_twisted_vertex_recon_SX3" + vtx_gate, 600, -300, 300, vertex_recon, "1A0C");
-          plotter->Fill1D("1A0C_twisted_pcz_recon_SX3" + vtx_gate, 600, -300, 300, pcz_intersect.Z(), "1A0C");
-
-          plotter->Fill2D("1A0C_dE_Ecorr_Anode_SX3" + vtx_gate, 400, 0, 30, 800, 0, 40000, sx3Efix, aEnergy * sinTheta, "1A0C");
-
-          plotter->Fill1D("1A0C_Ex_from_protons_SX3" + vtx_gate, 200, -10, 10, Ex_from_proton, "1A0C");
-          plotter->Fill1D("1A0C_Ex_from_alphas_SX3" + vtx_gate, 200, -10, 10, Ex_from_alpha, "1A0C");
-
-          // Track where on the wire the hit occurred (0 to 1 is inside the physical PC)
-          // plotter->Fill1D("1A0C_wire_t_parameter" + vtx_gate, 200, -0.5, 1.5, t_intersect, "1A0C");
+          bestDphi = dphi;
+          bestCluster = &acluster;
         }
       }
+
+      // Extract the virtual wire specifically for the best cluster
+      auto [apwire, apSumE, apMaxE, apTSMaxE] = pwinstance.GetPseudoWire(*bestCluster, "ANODE");
+      std::string nA_label = std::to_string(bestCluster->size()) + "A";
+
+      TVector3 pcz_intersect = pwinstance.getClosestWirePosAtWirePhi(apwire, sx3event.pos.Phi());
+
+      double deltaRho = sx3event.pos.Perp() - pcz_intersect.Perp();
+      double deltaZ = sx3event.pos.Z() - pcz_intersect.Z();
+      double vertex_recon = sx3event.pos.Z() - sx3event.pos.Perp() * (deltaZ / deltaRho);
+
+      std::string vtx_gate = "";
+
+#ifdef VTX_GATE
+      if (vertex_recon >= -176.0 && vertex_recon < -100.0)
+        vtx_gate = "_Z[-176_to_-100]";
+      else if (vertex_recon >= -100.0 && vertex_recon < -50.0)
+        vtx_gate = "_Z[-100_to_-50]";
+      else if (vertex_recon >= -50.0 && vertex_recon < 0.0)
+        vtx_gate = "_Z[-50_to_0]";
+      else if (vertex_recon >= 0.0 && vertex_recon < 50.0)
+        vtx_gate = "_Z[0_to_50]";
+      else if (vertex_recon >= 50.0 && vertex_recon < 100.0)
+        vtx_gate = "_Z[50_to_100]";
+      else if (vertex_recon >= 100.0 && vertex_recon < 176.0)
+        vtx_gate = "_Z[100_to_176]";
+#endif
+
+      // *0.1 converts mm to cm for the Eloss
+      double beam_path_length = TMath::Abs(vertex_recon - z_entrance) * 0.1;
+
+#ifdef AL_BEAM
+      double beam_energy_at_vertex = cm_to_MeV_27Al->Eval(MeV_to_cm_27Al->Eval(72.0) - beam_path_length);
+      Kinematics apkin_p(mass_27Al, mass_4He, mass_1H, mass_30Si, beam_energy_at_vertex / mass_27Al);
+      Kinematics apkin_a(mass_27Al, mass_4He, mass_4He, mass_30Si, beam_energy_at_vertex / mass_27Al);
+#endif
+
+#ifdef F_BEAM
+      double beam_energy_at_vertex = cm_to_MeV_17F->Eval(MeV_to_cm_17F->Eval(65.0) - beam_path_length);
+      Kinematics apkin_p(mass_17F, mass_4He, mass_1H, mass_20Ne, beam_energy_at_vertex / mass_17F);
+      Kinematics apkin_a(mass_17F, mass_4He, mass_4He, mass_20Ne, beam_energy_at_vertex / mass_17F);
+#endif
+
+      double path_length = (sx3event.pos - TVector3(0, 0, vertex_recon)).Mag() * 0.1;
+      double sx3Efix = cm_to_MeVp->Eval(MeV_to_cm_p->Eval(sx3event.Energy1) - path_length);
+      double sx3Efixalpha = cm_to_MeV->Eval(MeV_to_cm->Eval(sx3event.Energy1) - path_length);
+
+      double theta_recon = (sx3event.pos - TVector3(0, 0, vertex_recon)).Theta();
+      double sinTheta = TMath::Sin(theta_recon);
+
+      double Ex_from_proton = apkin_p.getExc(sx3Efix, theta_recon * 180. / M_PI);
+      double Ex_from_alpha = apkin_a.getExc(sx3Efixalpha, theta_recon * 180. / M_PI);
+
+      // Fill standard un-gated plots
+      plotter->Fill2D(nA_label + "_dE_Ecorr_Anode_SX3", 800, 0, 30, 800, 0, 30000, sx3Efix, apSumE * sinTheta, nA_label);
+      plotter->Fill2D(nA_label + "_dE_Ecorr_Anode_SX3_alpha", 800, 0, 30, 800, 0, 30000, sx3Efixalpha, apSumE * sinTheta, nA_label);
+      plotter->Fill2D(nA_label + "_sx3_E_vs_theta_raw_SX3", 180, 0, 180, 400, 0, 30, theta_recon * 180. / M_PI, sx3event.Energy1, nA_label);
+      plotter->Fill2D(nA_label + "_sx3_E_vs_theta_corr_SX3", 180, 0, 180, 400, 0, 30, theta_recon * 180. / M_PI, sx3Efix, nA_label);
+      plotter->Fill1D(nA_label + "_Ex_from_protons_SX3", 1200, -30, 30, Ex_from_proton, nA_label);
+      plotter->Fill1D(nA_label + "_Ex_from_alphas_SX3", 1200, -30, 30, Ex_from_alpha, nA_label);
+
+      // Fill Gated Plots
+      // if (vtx_gate != "")
+      // {
+      //   plotter->Fill2D("dE_Ecorr_Anode_SX3" + vtx_gate, 400, 0, 30, 800, 0, 40000, sx3Efix, apSumE * sinTheta, nA_label);
+      //   plotter->Fill2D("dE_Ecorr_Anode_SX3_alpha" + vtx_gate, 400, 0, 30, 800, 0, 40000, sx3Efixalpha, apSumE * sinTheta, nA_label);
+      //   plotter->Fill1D("twisted_pcz_recon_SX3" + vtx_gate, 600, -300, 300, pcz_intersect.Z(), nA_label);
+      //   plotter->Fill1D("twisted_vertex_recon_SX3" + vtx_gate, 600, -300, 300, vertex_recon, nA_label);
+      //   plotter->Fill1D("Ex_from_protons_SX3" + vtx_gate, 1200, -30, 30, Ex_from_proton, nA_label);
+      //   plotter->Fill1D("Ex_from_alphas_SX3" + vtx_gate, 1200, -30, 30, Ex_from_alpha, nA_label);
+      // }
     }
 
-    // Loop over QQQ_Events directly
-
+    // ---------------------------------------------------------
+    // PROTON LOOP (QQQ ENDCAP)
+    // ---------------------------------------------------------
     for (auto qqqevent : QQQ_Events)
     {
-      if (qqqevent.Time1 - aTime < -150) // Time cut for protons
+      const std::vector<std::tuple<int, double, double>> *bestCluster = nullptr;
+      double bestDphi = 9999.0;
+
+      for (const auto &acluster : aClusters)
       {
-        // 1. Define the plane of the track (Z-axis to SX3 hit)
-        TVector3 planeNormal(-TMath::Sin(qqqevent.pos.Phi()), TMath::Cos(qqqevent.pos.Phi()), 0.0);
-
-        // 2. Find intersection of the twisted wire with this track plane
-        double dot_wireVec = wireVec.Dot(planeNormal);
-
-        // Prevent divide-by-zero if wire is perfectly parallel to the track plane
-        if (TMath::Abs(dot_wireVec) < 1e-6)
-          continue;
-
-        double t_intersect_QQQ = -(a1.Dot(planeNormal)) / dot_wireVec;
-
-        // Calculate the exact 3D coordinate on the wire that matches the SX3 phi
-        TVector3 pcz_intersect = a1 + t_intersect_QQQ * wireVec;
-
-        // 3. Reconstruct Vertex Z
-        double deltaRho = qqqevent.pos.Perp() - pcz_intersect.Perp();
-        double deltaZ = qqqevent.pos.Z() - pcz_intersect.Z();
-
-        double vertex_recon = qqqevent.pos.Z() - qqqevent.pos.Perp() * (deltaZ / deltaRho);
-
-        double z_entrance = -274.3;
-        double beam_path_length = TMath::Abs(vertex_recon - z_entrance) * 0.1;
-        double initial_beam_energy = 72.0;
-        double beam_energy_at_vertex = cm_to_MeV_beam->Eval(
-            MeV_to_cm_beam->Eval(initial_beam_energy) - beam_path_length);
-
-        Kinematics apkin_p(26.981538, 4.002603, 1.007825, 29.973770, beam_energy_at_vertex);
-        Kinematics apkin_a(26.981538, 4.002603, 4.002603, 26.981538, beam_energy_at_vertex);
-        // ==========================================================
-
-        std::string vtx_gate = "";
-
-        if (vertex_recon >= -176.0 && vertex_recon < -100.0)
+        auto [apw, sumE, maxE, tsMax] = pwinstance.GetPseudoWire(acluster, "ANODE");
+        TVector3 pcPos = pwinstance.getClosestWirePosAtWirePhi(apw, qqqevent.pos.Phi());
+        double dphi = TMath::Abs(TVector2::Phi_mpi_pi(qqqevent.pos.Phi() - pcPos.Phi()));
+        if (dphi < bestDphi)
         {
-          vtx_gate = "_Z[-176_to_-100]";
-        }
-        else if (vertex_recon >= -100.0 && vertex_recon < -50.0)
-        {
-          vtx_gate = "_Z[-100_to_-50]";
-        }
-        else if (vertex_recon >= -50.0 && vertex_recon < 0.0)
-        {
-          vtx_gate = "_Z[-50_to_0]";
-        }
-        else if (vertex_recon >= 0.0 && vertex_recon < 50.0)
-        {
-          vtx_gate = "_Z[0_to_50]";
-        }
-        else if (vertex_recon >= 50.0 && vertex_recon < 100.0)
-        {
-          vtx_gate = "_Z[50_to_100]";
-        }
-        else if (vertex_recon >= 100.0 && vertex_recon < 176.0)
-        {
-          vtx_gate = "_Z[100_to_176]";
-        }
-
-        // 4. Energy Loss Correction in Silicon
-        double path_length = (qqqevent.pos - TVector3(0, 0, vertex_recon)).Mag() * 0.1;
-
-        double qqqEfix = cm_to_MeVp->Eval(MeV_to_cm_p->Eval(qqqevent.Energy1) - path_length);
-        double qqqEfixalpha = cm_to_MeV->Eval(MeV_to_cm->Eval(qqqevent.Energy2) - path_length);
-
-        double theta_recon = (qqqevent.pos - TVector3(0, 0, vertex_recon)).Theta();
-        double sinTheta = TMath::Sin(theta_recon);
-
-        double Ex_from_proton = apkin_p.getExc(qqqEfix, theta_recon * 180. / M_PI);
-        double Ex_from_alpha = apkin_a.getExc(qqqEfixalpha, theta_recon * 180. / M_PI);
-
-        // 5. Fill Diagnostics
-        // plotter->Fill2D("1A0C_dE_Ecorr_Anode_QQQ", 400, 0, 30, 800, 0, 40000, qqqEfix, aEnergy * sinTheta, "1A0C");
-        // plotter->Fill1D("1A0C_Ex_from_alphas_QQQ" + vtx_gate, 200, -10, 10, Ex_from_alpha, "1A0C");
-        // plotter->Fill1D("1A0C_Ex_from_protons_QQQ" + vtx_gate, 200, -10, 10, Ex_from_proton, "1A0C");
-        // plotter->Fill2D("1A0C_qqq_E_vs_theta_raw_QQQ", 180, 0, 180, 400, 0, 30, theta_recon * 180. / M_PI, qqqevent.Energy1, "1A0C");
-        // plotter->Fill2D("1A0C_qqq_E_vs_theta_corr_QQQ", 180, 0, 180, 400, 0, 30, theta_recon * 180. / M_PI, qqqEfix, "1A0C");
-
-        if (vtx_gate != "")
-        {
-          plotter->Fill1D("1A0C_twisted_pcz_recon_QQQ" + vtx_gate, 600, -300, 300, pcz_intersect.Z(), "1A0C");
-          plotter->Fill1D("1A0C_twisted_vertex_recon_QQQ" + vtx_gate, 600, -300, 300, vertex_recon, "1A0C");
-
-          plotter->Fill2D("1A0C_dE_Ecorr_Anode_QQQ" + vtx_gate, 400, 0, 30, 800, 0, 40000, qqqEfix, aEnergy * sinTheta, "1A0C");
-          plotter->Fill2D("1A0C_dE_Ecorr_Anode_QQQ_alpha" + vtx_gate, 400, 0, 30, 800, 0, 40000, qqqEfixalpha, aEnergy * sinTheta, "1A0C");
-          plotter->Fill1D("1A0C_Ex_from_alphas_QQQ" + vtx_gate, 200, -10, 10, Ex_from_alpha, "1A0C");
-          plotter->Fill1D("1A0C_Ex_from_protons_QQQ" + vtx_gate, 200, -10, 10, Ex_from_proton, "1A0C");
-
-          // Track where on the wire the hit occurred (0 to 1 is inside the physical PC)
-          plotter->Fill1D("1A0C_wire_t_parameter_QQQ" + vtx_gate, 200, -0.5, 1.5, t_intersect_QQQ, "1A0C");
+          bestDphi = dphi;
+          bestCluster = &acluster;
         }
       }
+      if (!bestCluster)
+        continue;
 
-      ///////////////////nA0C analysis using pseudo-wire (GetPseudoWire + getClosestWirePosAtWirePhi)///////////////////
-      if (cClusters.size() == 0 && aClusters.size() > 0)
-      {
-        std::string nA0C_label = std::to_string(aClusters.size()) + "A0C";
-        // Flatten all anode clusters into a combined hit list for the pseudo-wire
-        std::vector<std::tuple<int, double, double>> allAnodeHits;
-        for (const auto &acluster : aClusters)
-          for (const auto &hit : acluster)
-            allAnodeHits.push_back(hit);
-        auto [apwire, apSumE, apMaxE, apTSMaxE] = pwinstance.GetPseudoWire(allAnodeHits, "ANODE");
-        for (auto qqqevent : QQQ_Events)
-        {
-          if (qqqevent.Time1 - apTSMaxE < -150)
-          {
-            // Use pseudo-wire to find the PC hit position at the QQQ phi
-            TVector3 pcz_intersect = pwinstance.getClosestWirePosAtWirePhi(apwire, qqqevent.pos.Phi());
-            // Reconstruct vertex Z
-            double deltaRho = qqqevent.pos.Perp() - pcz_intersect.Perp();
-            double deltaZ = qqqevent.pos.Z() - pcz_intersect.Z();
-            double vertex_recon = qqqevent.pos.Z() - qqqevent.pos.Perp() * (deltaZ / deltaRho);
-            double z_entrance = -274.3;
-            double beam_path_length = TMath::Abs(vertex_recon - z_entrance) * 0.1;
-            double initial_beam_energy = 72.0;
-            double beam_energy_at_vertex = cm_to_MeV_beam->Eval(
-                MeV_to_cm_beam->Eval(initial_beam_energy) - beam_path_length);
-            Kinematics apkin_p(26.981538, 4.002603, 1.007825, 29.973770, beam_energy_at_vertex);
-            Kinematics apkin_a(26.981538, 4.002603, 4.002603, 26.981538, beam_energy_at_vertex);
-            std::string vtx_gate = "";
-            if (vertex_recon >= -176.0 && vertex_recon < -100.0)
-              vtx_gate = "_Z[-176_to_-100]";
-            else if (vertex_recon >= -100.0 && vertex_recon < -50.0)
-              vtx_gate = "_Z[-100_to_-50]";
-            else if (vertex_recon >= -50.0 && vertex_recon < 0.0)
-              vtx_gate = "_Z[-50_to_0]";
-            else if (vertex_recon >= 0.0 && vertex_recon < 50.0)
-              vtx_gate = "_Z[0_to_50]";
-            else if (vertex_recon >= 50.0 && vertex_recon < 100.0)
-              vtx_gate = "_Z[50_to_100]";
-            else if (vertex_recon >= 100.0 && vertex_recon < 176.0)
-              vtx_gate = "_Z[100_to_176]";
-            double path_length = (qqqevent.pos - TVector3(0, 0, vertex_recon)).Mag() * 0.1;
-            double qqqEfix = cm_to_MeVp->Eval(MeV_to_cm_p->Eval(qqqevent.Energy1) - path_length);
-            double qqqEfixalpha = cm_to_MeV->Eval(MeV_to_cm->Eval(qqqevent.Energy2) - path_length);
-            double theta_recon = (qqqevent.pos - TVector3(0, 0, vertex_recon)).Theta();
-            double sinTheta = TMath::Sin(theta_recon);
-            double Ex_from_proton = apkin_p.getExc(qqqEfix, theta_recon * 180. / M_PI);
-            double Ex_from_alpha = apkin_a.getExc(qqqEfixalpha, theta_recon * 180. / M_PI);
-            plotter->Fill2D(nA0C_label + "_dE_Ecorr_Anode_QQQ", 400, 0, 30, 800, 0, 40000, qqqEfix, apSumE * sinTheta, nA0C_label);
-            plotter->Fill1D(nA0C_label + "_Ex_from_alphas_QQQ" + vtx_gate, 200, -10, 10, Ex_from_alpha, nA0C_label);
-            plotter->Fill1D(nA0C_label + "_Ex_from_protons_QQQ" + vtx_gate, 200, -10, 10, Ex_from_proton, nA0C_label);
-            plotter->Fill2D(nA0C_label + "_qqq_E_vs_theta_raw_QQQ", 180, 0, 180, 400, 0, 30, theta_recon * 180. / M_PI, qqqevent.Energy1, nA0C_label);
-            plotter->Fill2D(nA0C_label + "_qqq_E_vs_theta_corr_QQQ", 180, 0, 180, 400, 0, 30, theta_recon * 180. / M_PI, qqqEfix, nA0C_label);
-            if (vtx_gate != "")
-            {
-              plotter->Fill1D(nA0C_label + "_twisted_pcz_recon_QQQ" + vtx_gate, 600, -300, 300, pcz_intersect.Z(), nA0C_label);
-              plotter->Fill1D(nA0C_label + "_twisted_vertex_recon_QQQ" + vtx_gate, 600, -300, 300, vertex_recon, nA0C_label);
-              plotter->Fill2D(nA0C_label + "_dE_Ecorr_Anode_QQQ" + vtx_gate, 400, 0, 30, 800, 0, 40000, qqqEfix, apSumE * sinTheta, nA0C_label);
-              plotter->Fill2D(nA0C_label + "_dE_Ecorr_Anode_QQQ_alpha" + vtx_gate, 400, 0, 30, 800, 0, 40000, qqqEfixalpha, apSumE * sinTheta, nA0C_label);
-              plotter->Fill1D(nA0C_label + "_Ex_from_alphas_QQQ" + vtx_gate, 200, -10, 10, Ex_from_alpha, nA0C_label);
-              plotter->Fill1D(nA0C_label + "_Ex_from_protons_QQQ" + vtx_gate, 200, -10, 10, Ex_from_proton, nA0C_label);
-            }
-          }
-        }
-      }
+      // Extract the virtual wire specifically for the best cluster
+      auto [apwire, apSumE, apMaxE, apTSMaxE] = pwinstance.GetPseudoWire(*bestCluster, "ANODE");
+      std::string nA_label = std::to_string(bestCluster->size()) + "A";
+
+      TVector3 pcz_intersect = pwinstance.getClosestWirePosAtWirePhi(apwire, qqqevent.pos.Phi());
+
+      double deltaRho = qqqevent.pos.Perp() - pcz_intersect.Perp();
+      double deltaZ = qqqevent.pos.Z() - pcz_intersect.Z();
+      double vertex_recon = qqqevent.pos.Z() - qqqevent.pos.Perp() * (deltaZ / deltaRho);
+
+      std::string vtx_gate = "";
+
+#ifdef VTX_GATE
+      if (vertex_recon >= -176.0 && vertex_recon < -100.0)
+        vtx_gate = "_Z[-176_to_-100]";
+      else if (vertex_recon >= -100.0 && vertex_recon < -50.0)
+        vtx_gate = "_Z[-100_to_-50]";
+      else if (vertex_recon >= -50.0 && vertex_recon < 0.0)
+        vtx_gate = "_Z[-50_to_0]";
+      else if (vertex_recon >= 0.0 && vertex_recon < 50.0)
+        vtx_gate = "_Z[0_to_50]";
+      else if (vertex_recon >= 50.0 && vertex_recon < 100.0)
+        vtx_gate = "_Z[50_to_100]";
+      else if (vertex_recon >= 100.0 && vertex_recon < 176.0)
+        vtx_gate = "_Z[100_to_176]";
+#endif
+
+      double beam_path_length = TMath::Abs(vertex_recon - z_entrance) * 0.1;
+
+#ifdef AL_BEAM
+      double beam_energy_at_vertex = cm_to_MeV_27Al->Eval(MeV_to_cm_27Al->Eval(72.0) - beam_path_length);
+      Kinematics apkin_p(mass_27Al, mass_4He, mass_1H, mass_30Si, beam_energy_at_vertex / mass_27Al);
+      Kinematics apkin_a(mass_27Al, mass_4He, mass_4He, mass_30Si, beam_energy_at_vertex / mass_27Al);
+#endif
+
+#ifdef F_BEAM
+      double beam_energy_at_vertex = cm_to_MeV_17F->Eval(MeV_to_cm_17F->Eval(65.0) - beam_path_length);
+      Kinematics apkin_p(mass_17F, mass_4He, mass_1H, mass_20Ne, beam_energy_at_vertex / mass_17F);
+      Kinematics apkin_a(mass_17F, mass_4He, mass_4He, mass_20Ne, beam_energy_at_vertex / mass_17F);
+#endif
+
+      // Energy Loss Correction
+      double path_length = (qqqevent.pos - TVector3(0, 0, vertex_recon)).Mag() * 0.1;
+      double qqqEfix = cm_to_MeVp->Eval(MeV_to_cm_p->Eval(qqqevent.Energy1) - path_length);
+      double qqqEfixalpha = cm_to_MeV->Eval(MeV_to_cm->Eval(qqqevent.Energy2) - path_length);
+
+      double theta_recon = (qqqevent.pos - TVector3(0, 0, vertex_recon)).Theta();
+      double sinTheta = TMath::Sin(theta_recon);
+
+      double Ex_from_proton = apkin_p.getExc(qqqEfix, theta_recon * 180. / M_PI);
+      double Ex_from_alpha = apkin_a.getExc(qqqEfixalpha, theta_recon * 180. / M_PI);
+
+      // Fill standard un-gated plots
+      plotter->Fill2D(nA_label + "_dE_Ecorr_Anode_QQQ", 800, 0, 30, 800, 0, 30000, qqqEfix, apSumE * sinTheta, nA_label);
+      plotter->Fill2D(nA_label + "_dE_Ecorr_Anode_QQQ_alpha", 800, 0, 30, 800, 0, 30000, qqqEfixalpha, apSumE * sinTheta, nA_label);
+      plotter->Fill2D(nA_label + "_qqq_E_vs_theta_raw_QQQ", 180, 0, 180, 400, 0, 30, theta_recon * 180. / M_PI, qqqevent.Energy1, nA_label);
+      plotter->Fill2D(nA_label + "_qqq_E_vs_theta_corr_QQQ", 180, 0, 180, 400, 0, 30, theta_recon * 180. / M_PI, qqqEfix, nA_label);
+      plotter->Fill1D(nA_label + "_Ex_from_alphas_QQQ", 1200, -30, 30, Ex_from_alpha, nA_label);
+      plotter->Fill1D(nA_label + "_Ex_from_protons_QQQ", 1200, -30, 30, Ex_from_proton, nA_label);
+
+      // Fill Gated Plots
+      // if (vtx_gate != "")
+      // {
+      //   plotter->Fill1D(nA_label + "_twisted_pcz_recon_QQQ" + vtx_gate, 600, -300, 300, pcz_intersect.Z(), nA_label);
+      //   plotter->Fill1D(nA_label + "_twisted_vertex_recon_QQQ" + vtx_gate, 600, -300, 300, vertex_recon, nA_label);
+      //   plotter->Fill2D(nA_label + "_dE_Ecorr_Anode_QQQ" + vtx_gate, 400, 0, 30, 800, 0, 40000, qqqEfix, apSumE * sinTheta, nA_label);
+      //   plotter->Fill2D(nA_label + "_dE_Ecorr_Anode_QQQ_alpha" + vtx_gate, 400, 0, 30, 800, 0, 40000, qqqEfixalpha, apSumE * sinTheta, nA_label);
+      //   plotter->Fill1D(nA_label + "_Ex_from_alphas_QQQ" + vtx_gate, 1200, -30, 30, Ex_from_alpha, nA_label);
+      //   plotter->Fill1D(nA_label + "_Ex_from_protons_QQQ" + vtx_gate, 1200, -30, 30, Ex_from_proton, nA_label);
+      // }
     }
   }
 
@@ -1290,6 +1228,7 @@ Bool_t TrackRecon::Process(Long64_t entry)
   // ---------------------------------------------------------
   if (anodeHits.size() > 0 && cathodeHits.size() > 0)
   {
+#ifdef RAW_HISTOS
     plotter->Fill2D("AHits_vs_CHits_NA" + std::to_string(hasNeighbourAnodes), 12, 0, 11, 6, 0, 5, anodeHits.size(), cathodeHits.size(), "hRawPC");
     plotter->Fill2D("AHits_vs_CHits_NC" + std::to_string(hasNeighbourCathodes), 12, 0, 11, 6, 0, 5, anodeHits.size(), cathodeHits.size(), "hRawPC");
 
@@ -1299,6 +1238,7 @@ Bool_t TrackRecon::Process(Long64_t entry)
     {
       plotter->Fill2D("AHits_vs_CHits_NN", 12, 0, 11, 6, 0, 5, anodeHits.size(), cathodeHits.size(), "hRawPC");
     }
+#endif
   }
 
   if (HitNonZero && anodeIntersection.Z() != 0)
@@ -1912,4 +1852,35 @@ void PCQQQClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, s
   } // end PC QQQ coincidence
   // HALFTIME! Can stop here in future versions
   // return kTRUE;
+}
+
+// We pass plotter as a pointer, strings as const references (for speed),
+// and the Kinematics object as a reference.
+void FillExcitationHistograms(HistPlotter *plotter,
+                              const std::string &targetName,
+                              const std::string &anodeLabel,
+                              Kinematics &kin,
+                              double energyMeV,
+                              double thetaRad)
+{
+  // 1. Convert angle to degrees for your kinematics class
+  double thetaDeg = thetaRad * 180.0 / M_PI;
+
+  // 2. Calculate the Excitation Energy (Ex)
+  double Ex = kin.getExc(energyMeV, thetaDeg);
+
+  // 3. Dynamically build the histogram names
+  // Example: "27Al_Ex_a1" or "17F_Kinematics_aN"
+  std::string hNameEx = targetName + "_Ex_" + anodeLabel;
+  std::string hNameKin = targetName + "_Kinematics_" + anodeLabel;
+
+  // 4. Group them in a specific folder in the ROOT file
+  std::string folderName = "Excitation_" + targetName;
+
+  // 5. Fill the Histograms
+  // Fill 1D Excitation Energy plot
+  plotter->Fill1D(hNameEx, 400, -10, 20, Ex, folderName);
+
+  // Fill 2D Kinematics plot (Angle vs Energy)
+  plotter->Fill2D(hNameKin, 180, 0, 180, 500, 0, 25, thetaDeg, energyMeV, folderName);
 }
