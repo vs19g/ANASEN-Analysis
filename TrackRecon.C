@@ -4,6 +4,7 @@
 // #define VTX_GATES
 #define AL_BEAM
 // #define F_BEAM
+#define nA_analysis
 
 Int_t colors[40] = {
     kBlack, kRed, kGreen, kBlue, kYellow, kMagenta, kCyan, kOrange,
@@ -39,6 +40,7 @@ bool process_alpha_proton_scattering = true;
 bool doPCSX3ClusterAnalysis = true;
 bool doPCQQQClusterAnalysis = true;
 bool do27AlapAnalysis = true;
+bool doOldAnalysis = false;
 double source_vertex = 53; // 53
 const double qqq_z = 100.0;
 double z_entrance = -174.3 - 9.7 - 100.0;
@@ -131,6 +133,7 @@ bool qqqEcut;
 void protonAlphaHistograms(HistPlotter *plotter, std::vector<Event> QQQ_Events, std::vector<Event> SX3_Events, std::vector<Event> PC_Events);
 void PCSX3ClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, std::vector<Event> SX3_Events, std::vector<Event> PC_Events);
 void PCQQQClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, std::vector<Event> SX3_Events, std::vector<Event> PC_Events);
+void OldAnalysis();
 
 void TrackRecon::Begin(TTree * /*tree*/)
 {
@@ -877,34 +880,35 @@ Bool_t TrackRecon::Process(Long64_t entry)
   }
 
   ///////////////////nA analysis using pseudo-wire (GetPseudoWire + getClosestWirePosAtWirePhi)///////////////////
+
+#ifdef nA_analysis
   if (aClusters.size() > 0)
   {
-    // ---------------------------------------------------------
-    // PROTON LOOP (SX3 BARREL)
-    // ---------------------------------------------------------
-    for (auto sx3event : SX3_Events)
-    {
-      // Pick the anode cluster closest in phi to this SX3 hit
-      const std::vector<std::tuple<int, double, double>> *bestCluster = &aClusters[0];
-      double bestDphi = 9999.0;
+    std::vector<decltype(pwinstance.GetPseudoWire(aClusters[0], "ANODE"))> precomputedPW;
+    precomputedPW.reserve(aClusters.size());
+    for (const auto &acluster : aClusters)
+      precomputedPW.push_back(pwinstance.GetPseudoWire(acluster, "ANODE"));
 
-      for (const auto &acluster : aClusters)
+    for (const auto &sx3event : SX3_Events)
+    {
+      double bestDphi = 9999.0;
+      size_t bestIdx = 0;
+      auto bestPW = precomputedPW[0];
+      TVector3 pcz_intersect = pwinstance.getClosestWirePosAtWirePhi(std::get<0>(bestPW), sx3event.pos.Phi());
+
+      for (size_t j = 0; j < aClusters.size(); j++)
       {
-        auto [pw, sumE, maxE, tsMax] = pwinstance.GetPseudoWire(acluster, "ANODE");
-        TVector3 pos = pwinstance.getClosestWirePosAtWirePhi(pw, sx3event.pos.Phi());
+        TVector3 pos = pwinstance.getClosestWirePosAtWirePhi(std::get<0>(precomputedPW[j]), sx3event.pos.Phi());
         double dphi = TMath::Abs(TVector2::Phi_mpi_pi(sx3event.pos.Phi() - pos.Phi()));
         if (dphi < bestDphi)
         {
           bestDphi = dphi;
-          bestCluster = &acluster;
+          bestIdx = j;
+          pcz_intersect = pos;
         }
       }
-
-      // Extract the virtual wire specifically for the best cluster
-      auto [apwire, apSumE, apMaxE, apTSMaxE] = pwinstance.GetPseudoWire(*bestCluster, "ANODE");
-      std::string nA_label = std::to_string(bestCluster->size()) + "A";
-
-      TVector3 pcz_intersect = pwinstance.getClosestWirePosAtWirePhi(apwire, sx3event.pos.Phi());
+      auto [apwire, apSumE, apMaxE, apTSMaxE] = precomputedPW[bestIdx];
+      std::string nA_label = std::to_string(aClusters[bestIdx].size()) + "A";
 
       double deltaRho = sx3event.pos.Perp() - pcz_intersect.Perp();
       double deltaZ = sx3event.pos.Z() - pcz_intersect.Z();
@@ -972,33 +976,26 @@ Bool_t TrackRecon::Process(Long64_t entry)
       // }
     }
 
-    // ---------------------------------------------------------
-    // PROTON LOOP (QQQ ENDCAP)
-    // ---------------------------------------------------------
-    for (auto qqqevent : QQQ_Events)
+    for (const auto &qqqevent : QQQ_Events)
     {
-      const std::vector<std::tuple<int, double, double>> *bestCluster = nullptr;
       double bestDphi = 9999.0;
+      size_t bestIdx = 0;
+      auto bestPW = precomputedPW[0];
+      TVector3 pcz_intersect;
 
-      for (const auto &acluster : aClusters)
+      for (size_t j = 0; j < aClusters.size(); j++)
       {
-        auto [apw, sumE, maxE, tsMax] = pwinstance.GetPseudoWire(acluster, "ANODE");
-        TVector3 pcPos = pwinstance.getClosestWirePosAtWirePhi(apw, qqqevent.pos.Phi());
-        double dphi = TMath::Abs(TVector2::Phi_mpi_pi(qqqevent.pos.Phi() - pcPos.Phi()));
+        TVector3 pos = pwinstance.getClosestWirePosAtWirePhi(std::get<0>(precomputedPW[j]), qqqevent.pos.Phi());
+        double dphi = TMath::Abs(TVector2::Phi_mpi_pi(qqqevent.pos.Phi() - pos.Phi()));
         if (dphi < bestDphi)
         {
           bestDphi = dphi;
-          bestCluster = &acluster;
+          bestIdx = j;
+          pcz_intersect = pos;
         }
       }
-      if (!bestCluster)
-        continue;
-
-      // Extract the virtual wire specifically for the best cluster
-      auto [apwire, apSumE, apMaxE, apTSMaxE] = pwinstance.GetPseudoWire(*bestCluster, "ANODE");
-      std::string nA_label = std::to_string(bestCluster->size()) + "A";
-
-      TVector3 pcz_intersect = pwinstance.getClosestWirePosAtWirePhi(apwire, qqqevent.pos.Phi());
+      auto [apwire, apSumE, apMaxE, apTSMaxE] = precomputedPW[bestIdx];
+      std::string nA_label = std::to_string(aClusters[bestIdx].size()) + "A";
 
       double deltaRho = qqqevent.pos.Perp() - pcz_intersect.Perp();
       double deltaZ = qqqevent.pos.Z() - pcz_intersect.Z();
