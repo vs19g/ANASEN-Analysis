@@ -2,9 +2,9 @@
 
 // #define RAW_HISTOS
 // #define VTX_GATES
-#define AL_BEAM
-// #define F_BEAM
-#define nA_analysis
+// #define AL_BEAM
+#define F_BEAM
+// #define nA_Analysis
 
 Int_t colors[40] = {
     kBlack, kRed, kGreen, kBlue, kYellow, kMagenta, kCyan, kOrange,
@@ -27,6 +27,8 @@ Int_t colors[40] = {
 #include <TMath.h>
 #include <TBranch.h>
 #include <TVector3.h>
+#include <TRandom3.h>
+
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -36,17 +38,17 @@ Int_t colors[40] = {
 #include <utility>
 #include <algorithm>
 
-bool process_alpha_proton_scattering = true;
-bool doPCSX3ClusterAnalysis = true;
-bool doPCQQQClusterAnalysis = true;
-bool do27AlapAnalysis = true;
+bool process_alpha_proton_scattering = false;
+bool doPCSX3ClusterAnalysis = false;
+bool doPCQQQClusterAnalysis = false;
 bool doOldAnalysis = false;
+bool do27AlapAnalysis = false;
 double source_vertex = 53; // 53
 const double qqq_z = 100.0;
 double z_entrance = -174.3 - 9.7 - 100.0;
 const double anode_gain = 1.5146e-5; // channels --> MeV
 std::string dataset;
-bool productionrun = false;
+bool reactiondata = false;
 
 TF1 pcfix_func("func", model_invert, -200, 200);
 TGraph *MeV_to_cm = NULL, *cm_to_MeV = NULL;
@@ -130,19 +132,51 @@ bool HitNonZero;
 bool sx3ecut;
 bool qqqEcut;
 
+bool PCQQQTimeCut = false;
+bool PCSX3TimeCut = false, PCASX3TimeCut = false, PCCSX3TimeCut = false;
+double anodeT = -99999, cathodeT = 99999;
+int anodeIndex = -1, cathodeIndex = -1;
+
 void protonAlphaHistograms(HistPlotter *plotter, std::vector<Event> QQQ_Events, std::vector<Event> SX3_Events, std::vector<Event> PC_Events);
 void PCSX3ClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, std::vector<Event> SX3_Events, std::vector<Event> PC_Events);
 void PCQQQClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, std::vector<Event> SX3_Events, std::vector<Event> PC_Events);
-void OldAnalysis();
 
 void TrackRecon::Begin(TTree * /*tree*/)
 {
   pcfix_func.SetNpx(100000);
+
+  ///// ---------Set Environment Variables--------- /////
   TString option = GetOption();
   if (option != "")
     plotter = new HistPlotter(option.Data(), "TFILE");
   else
     plotter = new HistPlotter("Analyzer_SX3.root", "TFILE");
+
+  if (getenv("reactiondata"))
+  {
+    reactiondata = std::atoi(getenv("reactiondata"));
+    std::cout << "Analyzing dataset as reactiondata" << std::endl;
+  }
+
+  if (getenv("DATASET"))
+    dataset = std::string(getenv("DATASET"));
+  if (getenv("source_vertex"))
+    source_vertex = (double)std::atof(std::string(getenv("source_vertex")).c_str());
+
+  std::cout << "Dataset set to  " << dataset << std::endl;
+  std::cout << "source_vertex set to  " << source_vertex << std::endl;
+
+  if (dataset == "17F" && reactiondata)
+  {
+    std::cout << "Setting up misc branch addresses for 17F reaction data analysis" << std::endl;
+    fChain->SetBranchAddress("miscMulti", &misc.multi, &b_miscMulti);
+    fChain->SetBranchAddress("miscID", &misc.id, &b_miscID);
+    fChain->SetBranchAddress("miscCh", &misc.ch, &b_miscCh);
+    fChain->SetBranchAddress("miscE", &misc.e, &b_miscE);
+    fChain->SetBranchAddress("miscT", &misc.t, &b_miscT);
+    fChain->SetBranchAddress("miscF", &misc.tf, &b_miscTf);
+    std::cout << "Misc branches set" << std::endl;
+  }
 
   pwinstance.ConstructGeo();
 
@@ -152,16 +186,7 @@ void TrackRecon::Begin(TTree * /*tree*/)
     pcIntercept[i] = 0.0;
   }
 
-  if (getenv("DATASET"))
-    dataset = std::string(getenv("DATASET"));
-  if (getenv("source_vertex"))
-    source_vertex = (double)std::atof(std::string(getenv("source_vertex")).c_str());
-  if (dataset == "17F" && getenv("PRODUCTION"))
-    productionrun = true;
-  std::cout << "Dataset set to  " << dataset << std::endl;
-  std::cout << "source_vertex set to  " << source_vertex << std::endl;
-
-  //  Load PC Calibrations
+  //  ------------Load PC Calibrations-------------- ///
   std::ifstream inputFile("slope_intercept_results_" + dataset + ".dat");
   if (inputFile.is_open())
   {
@@ -185,7 +210,7 @@ void TrackRecon::Begin(TTree * /*tree*/)
     std::cerr << "Error opening slope_intercept.dat" << std::endl;
   }
 
-  // ... (Load QQQ Gains and Calibs - same as before) ...
+  // ------------Load QQQ Calibrations-------------- ///
   {
     std::string filename = "qqq_GainMatch.dat";
     std::ifstream infile(filename);
@@ -220,6 +245,7 @@ void TrackRecon::Begin(TTree * /*tree*/)
     }
   }
 
+  //  ------------Load SX3 Calibrations--------------- ///
   {
     std::ifstream infile("sx3cal/" + dataset + "/backgains.dat");
     std::string temp;
@@ -269,6 +295,14 @@ Bool_t TrackRecon::Process(Long64_t entry)
   qqqenergy = -1;
   qqqtimestamp = -1;
   HitNonZero = false;
+  PCQQQTimeCut = false;
+  PCSX3TimeCut = false;
+  PCASX3TimeCut = false;
+  PCCSX3TimeCut = false;
+  anodeT = -99999;
+  cathodeT = 99999;
+  anodeIndex = -1;
+  cathodeIndex = -1;
   bool qqq1000cut = false;
   b_sx3Multi->GetEntry(entry);
   b_sx3ID->GetEntry(entry);
@@ -285,7 +319,7 @@ Bool_t TrackRecon::Process(Long64_t entry)
   b_pcCh->GetEntry(entry);
   b_pcE->GetEntry(entry);
   b_pcT->GetEntry(entry);
-  if (productionrun)
+  if (dataset == "17F" && reactiondata)
   {
     b_miscMulti->GetEntry(entry);
     b_miscID->GetEntry(entry);
@@ -466,11 +500,6 @@ Bool_t TrackRecon::Process(Long64_t entry)
 
   // -------Check End ------
 
-  bool PCSX3TimeCut = false;
-  bool PCASX3TimeCut = false;
-  bool PCCSX3TimeCut = false;
-
-  bool PCQQQTimeCut = false;
   bool PCAQQQTimeCut = false;
   bool PCCQQQTimeCut = false;
   for (int i = 0; i < qqq.multi; i++)
@@ -620,18 +649,11 @@ Bool_t TrackRecon::Process(Long64_t entry)
 #ifdef RAW_HISTOS
   plotter->Fill1D("QQQ_Multiplicity", 10, 0, 10, qqqCount, "hRawQQQ");
 #endif
-  typedef std::unordered_map<int, std::tuple<int, double, double>> WireEvent; // this stores nearest neighbour wire events, or a 'cluster'
-  WireEvent aWireEvents, cWireEvents;                                         // naming for book keeping
-
   aWireEvents.clear();
   aWireEvents.reserve(24);
   cWireEvents.clear();
   cWireEvents.reserve(24);
   // PC Gain Matching and Filling
-  double anodeT = -99999;
-  double cathodeT = 99999;
-  int anodeIndex = -1;
-  int cathodeIndex = -1;
   for (int i = 0; i < pc.multi; i++)
   {
     // std::cout << pc.index[i] << " " << pc.e[i] << " " << std::endl;
@@ -703,17 +725,6 @@ Bool_t TrackRecon::Process(Long64_t entry)
   cathodeHits.clear();
   corrcatMax.clear();
 
-  int aID = 0;
-  int cID = 0;
-  double aE = 0;
-  double cE = 0;
-  double aESum = 0;
-  double cESum = 0;
-  double aEMax = 0;
-  double cEMax = 0;
-  int aIDMax = 0;
-  int cIDMax = 0;
-
   for (int i = 0; i < pc.multi; i++)
   {
     // if (pc.e[i] > 100)
@@ -767,6 +778,89 @@ Bool_t TrackRecon::Process(Long64_t entry)
       {
         ; // std::cout << "AAAA " << std::endl;
       }
+    }
+  }
+
+  //////Timing stuff for F data
+
+  TRandom3 rnd;
+  rnd.SetSeed(); // random seed set
+  if (dataset == "17F" && reactiondata)
+  {
+    int ctr = 0;
+    for (auto qqqevent : QQQ_Events)
+    {
+      double ts_rf = -987654321;
+      double ts_needle = -987654321;
+      double ts_mcp = -987654321;
+      double ts_qqq = static_cast<double>(qqqevent.Time1) + (rnd.Uniform(16.0) - 8.0);
+      bool found_rf = false;
+      bool found_mcp = false;
+      bool found_needle = false;
+      for (int j = 0; j < misc.multi; j++)
+      {
+        plotter->Fill1D("channels_misc_qqq", 20, 0, 20, misc.ch[j], "misc");
+        if (misc.ch[j] == 2)
+        { // Needle
+          plotter->Fill2D("needle_vs_qqqE", 800, 0, 16384, 800, 0, 10, misc.e[j], qqqevent.Energy1, "misc");
+          ts_needle = static_cast<double>(misc.t[j]) + static_cast<double>(misc.tf[j]);
+          found_needle = 1;
+          plotter->Fill1D("dt_qqq_needle", 800, -2000, 2000, ts_qqq - ts_needle, "misc");
+        }
+        if (misc.ch[j] == 3)
+        { // RF
+          ts_rf = static_cast<double>(misc.t[j]) + static_cast<double>(misc.tf[j]);
+          found_rf = 1;
+          plotter->Fill1D("dt_qqq_rf", 800, -2000, 2000, ts_qqq - ts_rf, "misc");
+        }
+        if (misc.ch[j] == 4)
+        { // mcp
+          ts_mcp = static_cast<double>(misc.t[j]) + static_cast<double>(misc.tf[j]);
+          found_mcp = 1;
+          plotter->Fill1D("dt_qqq_mcp", 800, -2000, 2000, ts_qqq - ts_mcp, "misc");
+        }
+      }
+      if (found_rf && found_mcp)
+      {
+        if (ctr == 0)
+          plotter->Fill1D("dt_rf_mcp_qqq", 500, -1000, 1000, ts_rf - ts_mcp, "misc");
+        double dt_rf_mcp = ts_rf - ts_mcp;
+        double dt_qqq_rf = ts_qqq - ts_rf;
+        double dt_qqq_mcp = ts_qqq - ts_mcp;
+        plotter->Fill2D("dt(qqq,rf)_vs_(rf,mcp)", 640, -2000, 2000, 640, -2000, 2000, dt_qqq_rf, dt_rf_mcp, "misc");
+        plotter->Fill2D("dt_(qqq,mcp)_vs_(qqq,rf)", 640, -1400, 2000, 640, -2000, 2000, dt_qqq_mcp, dt_qqq_rf, "misc");
+        plotter->Fill2D("dt_(qqq,mcp)_vs_(rf,mcp)", 640, -1400, -600, 640, -2000, 2000, dt_qqq_mcp, dt_rf_mcp, "misc");
+      }
+      ctr += 1;
+    }
+
+    double ts_rf = -987654321;
+    double ts_needle = -987654321;
+    double ts_mcp = -987654321;
+    bool found_rf = false;
+    bool found_mcp = false;
+    bool found_needle = false;
+
+    for (int j = 0; j < misc.multi; j++)
+    {
+      plotter->Fill1D("channels_misc", 20, 0, 20, misc.ch[j], "misc");
+      if (misc.ch[j] == 2)
+      { // Needle
+        ts_needle = static_cast<double>(misc.t[j]) + static_cast<double>(misc.tf[j]);
+        found_needle = 1;
+      }
+      if (misc.ch[j] == 3)
+      { // RF
+        ts_rf = static_cast<double>(misc.t[j]) + static_cast<double>(misc.tf[j]);
+        found_rf = 1;
+      }
+      if (misc.ch[j] == 4)
+      { // mcp
+        ts_mcp = static_cast<double>(misc.t[j]) + static_cast<double>(misc.tf[j]);
+        found_mcp = 1;
+      }
+
+      plotter->Fill1D("dt_rf_mcp_qqq", 500, -1000, 1000, ts_rf - ts_mcp, "misc");
     }
   }
 
@@ -879,36 +973,36 @@ Bool_t TrackRecon::Process(Long64_t entry)
     PCQQQClusterAnalysis(plotter, QQQ_Events, SX3_Events, PC_Events);
   }
 
-  ///////////////////nA analysis using pseudo-wire (GetPseudoWire + getClosestWirePosAtWirePhi)///////////////////
-
-#ifdef nA_analysis
+///////////////////nA analysis using pseudo-wire (GetPseudoWire + getClosestWirePosAtWirePhi)///////////////////
+#ifdef nA_Analysis
   if (aClusters.size() > 0)
   {
-    std::vector<decltype(pwinstance.GetPseudoWire(aClusters[0], "ANODE"))> precomputedPW;
-    precomputedPW.reserve(aClusters.size());
-    for (const auto &acluster : aClusters)
-      precomputedPW.push_back(pwinstance.GetPseudoWire(acluster, "ANODE"));
-
-    for (const auto &sx3event : SX3_Events)
+    // ---------------------------------------------------------
+    // PROTON LOOP (SX3 BARREL)
+    // ---------------------------------------------------------
+    for (auto sx3event : SX3_Events)
     {
+      // Pick the anode cluster closest in phi to this SX3 hit
+      const std::vector<std::tuple<int, double, double>> *bestCluster = &aClusters[0];
       double bestDphi = 9999.0;
-      size_t bestIdx = 0;
-      auto bestPW = precomputedPW[0];
-      TVector3 pcz_intersect = pwinstance.getClosestWirePosAtWirePhi(std::get<0>(bestPW), sx3event.pos.Phi());
 
-      for (size_t j = 0; j < aClusters.size(); j++)
+      for (const auto &acluster : aClusters)
       {
-        TVector3 pos = pwinstance.getClosestWirePosAtWirePhi(std::get<0>(precomputedPW[j]), sx3event.pos.Phi());
+        auto [pw, sumE, maxE, tsMax] = pwinstance.GetPseudoWire(acluster, "ANODE");
+        TVector3 pos = pwinstance.getClosestWirePosAtWirePhi(pw, sx3event.pos.Phi());
         double dphi = TMath::Abs(TVector2::Phi_mpi_pi(sx3event.pos.Phi() - pos.Phi()));
         if (dphi < bestDphi)
         {
           bestDphi = dphi;
-          bestIdx = j;
-          pcz_intersect = pos;
+          bestCluster = &acluster;
         }
       }
-      auto [apwire, apSumE, apMaxE, apTSMaxE] = precomputedPW[bestIdx];
-      std::string nA_label = std::to_string(aClusters[bestIdx].size()) + "A";
+
+      // Extract the virtual wire specifically for the best cluster
+      auto [apwire, apSumE, apMaxE, apTSMaxE] = pwinstance.GetPseudoWire(*bestCluster, "ANODE");
+      std::string nA_label = std::to_string(bestCluster->size()) + "A";
+
+      TVector3 pcz_intersect = pwinstance.getClosestWirePosAtWirePhi(apwire, sx3event.pos.Phi());
 
       double deltaRho = sx3event.pos.Perp() - pcz_intersect.Perp();
       double deltaZ = sx3event.pos.Z() - pcz_intersect.Z();
@@ -976,26 +1070,33 @@ Bool_t TrackRecon::Process(Long64_t entry)
       // }
     }
 
-    for (const auto &qqqevent : QQQ_Events)
+    // ---------------------------------------------------------
+    // PROTON LOOP (QQQ ENDCAP)
+    // ---------------------------------------------------------
+    for (auto qqqevent : QQQ_Events)
     {
+      const std::vector<std::tuple<int, double, double>> *bestCluster = nullptr;
       double bestDphi = 9999.0;
-      size_t bestIdx = 0;
-      auto bestPW = precomputedPW[0];
-      TVector3 pcz_intersect;
 
-      for (size_t j = 0; j < aClusters.size(); j++)
+      for (const auto &acluster : aClusters)
       {
-        TVector3 pos = pwinstance.getClosestWirePosAtWirePhi(std::get<0>(precomputedPW[j]), qqqevent.pos.Phi());
-        double dphi = TMath::Abs(TVector2::Phi_mpi_pi(qqqevent.pos.Phi() - pos.Phi()));
+        auto [apw, sumE, maxE, tsMax] = pwinstance.GetPseudoWire(acluster, "ANODE");
+        TVector3 pcPos = pwinstance.getClosestWirePosAtWirePhi(apw, qqqevent.pos.Phi());
+        double dphi = TMath::Abs(TVector2::Phi_mpi_pi(qqqevent.pos.Phi() - pcPos.Phi()));
         if (dphi < bestDphi)
         {
           bestDphi = dphi;
-          bestIdx = j;
-          pcz_intersect = pos;
+          bestCluster = &acluster;
         }
       }
-      auto [apwire, apSumE, apMaxE, apTSMaxE] = precomputedPW[bestIdx];
-      std::string nA_label = std::to_string(aClusters[bestIdx].size()) + "A";
+      if (!bestCluster)
+        continue;
+
+      // Extract the virtual wire specifically for the best cluster
+      auto [apwire, apSumE, apMaxE, apTSMaxE] = pwinstance.GetPseudoWire(*bestCluster, "ANODE");
+      std::string nA_label = std::to_string(bestCluster->size()) + "A";
+
+      TVector3 pcz_intersect = pwinstance.getClosestWirePosAtWirePhi(apwire, qqqevent.pos.Phi());
 
       double deltaRho = qqqevent.pos.Perp() - pcz_intersect.Perp();
       double deltaZ = qqqevent.pos.Z() - pcz_intersect.Z();
@@ -1063,385 +1164,9 @@ Bool_t TrackRecon::Process(Long64_t entry)
       // }
     }
   }
-
-  if (anodeHits.size() >= 1 && cathodeHits.size() >= 1)
-  {
-    // 2. CRITICAL FIX: Define reference vector 'a'
-    // In Analyzer.cxx, 'a' was left over from the loop. We use the first anode wire as reference here.
-    // (Assuming pwinstance.An is populated and wires are generally parallel).
-    TVector3 refAnode = pwinstance.An[0].first - pwinstance.An[0].second;
-
-    {
-      for (const auto &anode : anodeHits)
-      {
-        aID = anode.first;
-        aE = anode.second;
-        aESum += aE;
-        if (aE > aEMax)
-        {
-          aEMax = aE;
-          aIDMax = aID;
-        }
-      }
-
-      for (const auto &cathode : cathodeHits)
-      {
-        cID = cathode.first;
-        cE = cathode.second;
-        plotter->Fill2D("AnodeMax_Vs_Cathode_Coincidence_Matrix", 24, 0, 24, 24, 0, 24, aIDMax, cID, "hRawPC");
-        plotter->Fill2D("Anode_Vs_Cathode_Coincidence_Matrix", 24, 0, 24, 24, 0, 24, aID, cID, "hRawPC");
-        plotter->Fill2D("Anode_Vs_Cathode_Coincidence_Matrix_qqq" + std::to_string(HitNonZero), 24, 0, 24, 24, 0, 24, aID, cID, "hRawPC");
-        plotter->Fill2D("Anode_vs_CathodeE", 2000, 0, 30000, 2000, 0, 30000, aE, cE, "hGMPC");
-        plotter->Fill2D("CathodeMult_V_CathodeE", 6, 0, 6, 2000, 0, 30000, cathodeHits.size(), cE, "hGMPC");
-        /*for (int j = -4; j < 3; j++)
-        {
-          if ((aIDMax + 24 + j) % 24 == 23 - cID)
-          {
-            corrcatMax.push_back(std::pair<int, double>(cID, cE));
-            cESum += cE;
-          }
-        }*/
-        if ((aIDMax + cID) % 24 == 22 || (aIDMax + cID) % 24 == 23 || (aIDMax + cID) % 24 >= 0 || (aIDMax + cID) % 24 <= 3)
-        {
-          corrcatMax.push_back(std::pair<int, double>(cID, cE));
-          cESum += cE;
-          if (cE > cEMax)
-          {
-            cEMax = cE;
-            cIDMax = cID;
-          }
-        }
-      }
-    }
-  }
-
-  TVector3 anodeIntersection, vector_closest_to_z;
-  anodeIntersection.Clear();
-  vector_closest_to_z.Clear();
-  if (corrcatMax.size() > 0)
-  {
-    double x = 0, y = 0, z = 0;
-    for (const auto &corr : corrcatMax)
-    {
-      if (pwinstance.Crossover[aIDMax][corr.first][0].z > 9000000)
-        continue;
-      if (cESum > 0)
-      {
-        x += (corr.second) / cESum * pwinstance.Crossover[aIDMax][corr.first][0].x;
-        y += (corr.second) / cESum * pwinstance.Crossover[aIDMax][corr.first][0].y;
-        z += (corr.second) / cESum * pwinstance.Crossover[aIDMax][corr.first][0].z;
-      }
-    }
-    if (x == 0 && y == 0 && z == 0)
-      ;
-    // to ignore events with no valid crossover points
-    else
-    {
-      anodeIntersection = TVector3(x, y, z);
-      // std::cout << "Anode Intersection: " << anodeIntersection.X() << ", " << anodeIntersection.Y() << ", " << anodeIntersection.Z() << " " << aIDMax <<  std::endl;
-    }
-  }
-  bool PCQQQPhiCut = false;
-  // flip the algorithm for cathode 1 multi anode events
-  if ((hitPos.Phi() > (anodeIntersection.Phi() - TMath::PiOver4())) && (hitPos.Phi() < (anodeIntersection.Phi() + TMath::PiOver4())))
-  {
-    PCQQQPhiCut = true;
-  }
-
-  if (anodeIntersection.Z() != 0 && anodeIntersection.Perp() > 0 && HitNonZero)
-  {
-    plotter->Fill1D("PC_Z_Projection", 600, -300, 300, anodeIntersection.Z(), "hPCzQQQ");
-    plotter->Fill2D("Z_Proj_VsDelTime", 600, -300, 300, 200, -2000, 2000, anodeIntersection.Z(), anodeT - cathodeT, "hPCzQQQ");
-    plotter->Fill2D("IntPhi_vs_QQQphi", 100, -200, 200, 80, -200, 200, anodeIntersection.Phi() * 180. / TMath::Pi(), hitPos.Phi() * 180. / TMath::Pi(), "hPCQQQ");
-    // plotter->Fill2D("Inttheta_vs_QQQtheta", 90, 0, 180, 20, 0, 45, anodeIntersection.Theta() * 180. / TMath::Pi(), hitPos.Theta() * 180. / TMath::Pi(), "hPCQQQ");
-    // plotter->Fill2D("Inttheta_vs_QQQtheta_TC" + std::to_string(PCQQQTimeCut)+ "_PC"+std::to_string(PCQQQPhiCut), 90, 0, 180, 20, 0, 45, anodeIntersection.Theta() * 180. / TMath::Pi(), hitPos.Theta() * 180. / TMath::Pi(), "hPCQQQ");
-    plotter->Fill2D("IntPhi_vs_QQQphi_TC" + std::to_string(PCQQQTimeCut) + "PhiC" + std::to_string(PCQQQPhiCut), 100, -200, 200, 80, -200, 200, anodeIntersection.Phi() * 180. / TMath::Pi(), hitPos.Phi() * 180. / TMath::Pi(), "hPCQQQ");
-  }
-
-  if (anodeIntersection.Z() != 0 && anodeIntersection.Perp() > 0 && PCSX3TimeCut)
-  {
-    plotter->Fill1D("PC_Z_Projection_sx3", 600, -200, 200, anodeIntersection.Z(), "hPCZSX3");
-  }
-  if (anodeIntersection.Z() != 0 && cathodeHits.size() >= 2)
-    plotter->Fill1D("PC_Z_Projection_TC" + std::to_string(PCQQQTimeCut) + "PhiC" + std::to_string(PCQQQPhiCut), 600, -300, 300, anodeIntersection.Z(), "hPCzQQQ");
-
-  if (anodeIntersection.Z() != 0 && cathodeHits.size() == 1)
-  {
-    plotter->Fill1D("PC_Z_proj_1C", 600, -300, 300, anodeIntersection.Z(), "hPCzQQQ");
-    plotter->Fill2D("IntersectionPhi_vs_AnodeZ_1C", 400, -200, 200, 600, -300, 300, anodeIntersection.Phi() * 180. / TMath::Pi(), anodeIntersection.Z(), "hPCzQQQ");
-  }
-
-  if (anodeIntersection.Z() != 0 && cathodeHits.size() == 2)
-  {
-    plotter->Fill1D("PC_Z_proj_2C", 600, -300, 300, anodeIntersection.Z(), "hPCzQQQ");
-    plotter->Fill2D("IntersectionPhi_vs_AnodeZ_2C", 400, -200, 200, 600, -300, 300, anodeIntersection.Phi() * 180. / TMath::Pi(), anodeIntersection.Z(), "hGMPC");
-  }
-  if (anodeIntersection.Z() != 0 && cathodeHits.size() > 2)
-  {
-    plotter->Fill1D("PC_Z_proj_nC", 600, -300, 300, anodeIntersection.Z(), "hPCzQQQ");
-    plotter->Fill2D("IntersectionPhi_vs_AnodeZ_nC", 400, -200, 200, 600, -300, 300, anodeIntersection.Phi() * 180. / TMath::Pi(), anodeIntersection.Z(), "hGMPC");
-  }
-  if (anodeHits.size() > 0 && cathodeHits.size() > 0)
-    plotter->Fill2D("AHits_vs_CHits", 12, 0, 11, 6, 0, 5, anodeHits.size(), cathodeHits.size(), "hRawPC");
-
-  // make another plot with nearest neighbour constraint
-  bool hasNeighbourAnodes = false;
-  bool hasNeighbourCathodes = false;
-
-  // 1. Check Anodes for neighbours (including wrap-around 0-23)
-  for (size_t i = 0; i < anodeHits.size(); i++)
-  {
-    for (size_t j = i + 1; j < anodeHits.size(); j++)
-    {
-      int diff = std::abs(anodeHits[i].first - anodeHits[j].first);
-      if (diff == 1 || diff == 23)
-      { // 23 handles the cylindrical wrap
-        hasNeighbourAnodes = true;
-        break;
-      }
-    }
-    if (hasNeighbourAnodes)
-      break;
-  }
-
-  // 2. Check Cathodes for neighbours (including wrap-around 0-23)
-  for (size_t i = 0; i < cathodeHits.size(); i++)
-  {
-    for (size_t j = i + 1; j < cathodeHits.size(); j++)
-    {
-      int diff = std::abs(cathodeHits[i].first - cathodeHits[j].first);
-      if (diff == 1 || diff == 23)
-      {
-        hasNeighbourCathodes = true;
-        break;
-      }
-    }
-    if (hasNeighbourCathodes)
-      break;
-  }
-
-  // ---------------------------------------------------------
-  // FILL PLOTS
-  // ---------------------------------------------------------
-  if (anodeHits.size() > 0 && cathodeHits.size() > 0)
-  {
-#ifdef RAW_HISTOS
-    plotter->Fill2D("AHits_vs_CHits_NA" + std::to_string(hasNeighbourAnodes), 12, 0, 11, 6, 0, 5, anodeHits.size(), cathodeHits.size(), "hRawPC");
-    plotter->Fill2D("AHits_vs_CHits_NC" + std::to_string(hasNeighbourCathodes), 12, 0, 11, 6, 0, 5, anodeHits.size(), cathodeHits.size(), "hRawPC");
-
-    // Constraint Plot: Only fill if BOTH planes have adjacent hits
-    // This effectively removes events with only isolated single-wire hits (noise)
-    if (hasNeighbourAnodes && hasNeighbourCathodes)
-    {
-      plotter->Fill2D("AHits_vs_CHits_NN", 12, 0, 11, 6, 0, 5, anodeHits.size(), cathodeHits.size(), "hRawPC");
-    }
 #endif
-  }
-
-  if (HitNonZero && anodeIntersection.Z() != 0)
-  {
-    pwinstance.CalTrack2(hitPos, anodeIntersection);
-    plotter->Fill1D("VertexRecon", 600, -1300, 1300, pwinstance.GetZ0());
-    plotter->Fill1D("VertexRecon_TC" + std::to_string(PCQQQTimeCut) + "_PhiC" + std::to_string(PCQQQPhiCut), 600, -1300, 1300, pwinstance.GetZ0());
-
-    if (cathodeHits.size() == 2)
-      plotter->Fill1D("VertexRecon_2c_TC" + std::to_string(PCQQQTimeCut) + "_PhiC" + std::to_string(PCQQQPhiCut), 600, -1300, 1300, pwinstance.GetZ0());
-
-    TVector3 x2(anodeIntersection), x1(hitPos);
-
-    TVector3 v = x2 - x1;
-    double t_minimum = -1.0 * (x1.X() * v.X() + x1.Y() * v.Y()) / (v.X() * v.X() + v.Y() * v.Y());
-    vector_closest_to_z = x1 + t_minimum * v;
-
-    plotter->Fill1D("VertexRecon_Z_TC" + std::to_string(PCQQQTimeCut) + "_PhiC" + std::to_string(PCQQQPhiCut), 600, -1300, 1300, vector_closest_to_z.Z(), "customVertex");
-
-    if (qqqenergy < 4.0)
-      plotter->Fill1D("VertexRecon_Z(qqqE<4.0MeV)_TC" + std::to_string(PCQQQTimeCut) + "_PhiC" + std::to_string(PCQQQPhiCut), 600, -1300, 1300, vector_closest_to_z.Z(), "customVertex");
-
-    if (vector_closest_to_z.Perp() < 20)
-    {
-      plotter->Fill1D("VertexRecon_RadialCut_Z_TC" + std::to_string(PCQQQTimeCut) + "_PhiC" + std::to_string(PCQQQPhiCut), 600, -1300, 1300, vector_closest_to_z.Z(), "customVertex");
-    }
-
-    plotter->Fill2D("VertexRecon_XY_TC" + std::to_string(PCQQQTimeCut) + "_PhiC" + std::to_string(PCQQQPhiCut), 100, -100, 100, 100, -100, 100, vector_closest_to_z.X(), vector_closest_to_z.Y(), "customVertex");
-    if (cathodeHits.size() == 2)
-    {
-      plotter->Fill1D("VertexRecon2C_Z_TC" + std::to_string(PCQQQTimeCut) + "_PhiC" + std::to_string(PCQQQPhiCut), 600, -1300, 1300, vector_closest_to_z.Z(), "customVertex");
-      if (vector_closest_to_z.Perp() < 20)
-      {
-        plotter->Fill1D("VertexRecon2C_RadialCut_Z_TC" + std::to_string(PCQQQTimeCut) + "_PhiC" + std::to_string(PCQQQPhiCut), 600, -1300, 1300, vector_closest_to_z.Z(), "customVertex");
-      }
-      plotter->Fill2D("VertexRecon2C_XY_TC" + std::to_string(PCQQQTimeCut) + "_PhiC" + std::to_string(PCQQQPhiCut), 100, -100, 100, 100, -100, 100, vector_closest_to_z.X(), vector_closest_to_z.Y(), "customVertex");
-      plotter->Fill2D("VertexRecon2C_RhoZ_TC" + std::to_string(PCQQQTimeCut) + "_PhiC" + std::to_string(PCQQQPhiCut), 100, -100, 100, 600, -1300, 1300, vector_closest_to_z.Perp(), vector_closest_to_z.Z(), "customVertex");
-      plotter->Fill2D("VertexRecon2C_Z_vs_QQQE_TC" + std::to_string(PCQQQTimeCut) + "_PhiC" + std::to_string(PCQQQPhiCut), 600, -1300, 1300, 800, 0, 20, vector_closest_to_z.Z(), qqqenergy, "customVertex");
-    }
-  }
-
-  for (int i = 0; i < qqq.multi; i++)
-  {
-    if (anodeIntersection.Perp() > 0)
-    { // suppress x,y=0,0 events
-      if (PCQQQTimeCut)
-      {
-        plotter->Fill2D("PC_XY_Projection_QQQ_TimeCut" + std::to_string(qqq.id[i]), 400, -100, 100, 400, -100, 100, anodeIntersection.X(), anodeIntersection.Y(), "hPCQQQ");
-        plotter->Fill2D("PC_XY_Projection_QQQ_TimeCut" + std::to_string(qqq.id[i]), 400, -100, 100, 400, -100, 100, hitPos.X(), hitPos.Y(), "hPCQQQ");
-      }
-      plotter->Fill2D("PC_XY_Projection_QQQ" + std::to_string(qqq.id[i]), 400, -100, 100, 400, -100, 100, anodeIntersection.X(), anodeIntersection.Y(), "hPCQQQ");
-    }
-    for (int j = i + 1; j < qqq.multi; j++)
-    {
-      if (qqq.id[i] == qqq.id[j])
-      {
-        int chWedge = -1;
-        int chRing = -1;
-        double eWedge = 0.0;
-        double eWedgeMeV = 0.0;
-        double eRing = 0.0;
-        double eRingMeV = 0.0;
-        double tRing = 0.0;
-        int qqqID = -1;
-        if (qqq.ch[i] < 16 && qqq.ch[j] >= 16 && qqqGainValid[qqq.id[i]][qqq.ch[i]][qqq.ch[j] - 16])
-        {
-          chWedge = qqq.ch[i];
-          eWedge = qqq.e[i] * qqqGain[qqq.id[i]][qqq.ch[i]][qqq.ch[j] - 16];
-          chRing = qqq.ch[j] - 16;
-          eRing = qqq.e[j];
-          tRing = static_cast<double>(qqq.t[j]);
-          qqqID = qqq.id[i];
-        }
-        else if (qqq.ch[j] < 16 && qqq.ch[i] >= 16 && qqqGainValid[qqq.id[j]][qqq.ch[j]][qqq.ch[i] - 16])
-        {
-          chWedge = qqq.ch[j];
-          eWedge = qqq.e[j] * qqqGain[qqq.id[j]][qqq.ch[j]][qqq.ch[i] - 16];
-          chRing = qqq.ch[i] - 16;
-          tRing = static_cast<double>(qqq.t[i]);
-          eRing = qqq.e[i];
-          qqqID = qqq.id[i];
-        }
-        else
-          continue;
-
-        if (qqqCalibValid[qqq.id[i]][chRing][chWedge])
-        {
-          eWedgeMeV = eWedge * qqqCalib[qqq.id[i]][chRing][chWedge] / 1000;
-          eRingMeV = eRing * qqqCalib[qqq.id[i]][chRing][chWedge] / 1000;
-        }
-        else
-          continue;
-
-        // if (anodeIntersection.Z() != 0)
-        {
-          plotter->Fill2D("PC_Z_vs_QQQRing", 600, -300, 300, 16, 0, 16, anodeIntersection.Z(), chRing, "hPCzQQQ");
-          plotter->Fill2D("PC_Z_vs_QQQRho", 600, -300, 300, 40, 40, 110, anodeIntersection.Z(), hitPos.Perp(), "hPCzQQQ");
-        }
-
-        if (anodeIntersection.Z() != 0 && cathodeHits.size() == 2)
-        {
-          plotter->Fill2D("PC_Z_vs_QQQRing_2C", 600, -300, 300, 16, 0, 16, anodeIntersection.Z(), chRing, "hPCzQQQ");
-          plotter->Fill2D("PC_Z_vs_QQQRing_2C" + std::to_string(qqq.id[i]), 600, -300, 300, 16, 0, 16, anodeIntersection.Z(), chRing, "hPCzQQQ");
-          plotter->Fill2D("PC_Z_vs_QQQWedge_2C", 600, -300, 300, 16, 0, 16, anodeIntersection.Z(), chWedge, "hPCzQQQ");
-        }
-        plotter->Fill2D("VertexRecon_QQQRingTC" + std::to_string(PCQQQTimeCut) + "PhiC" + std::to_string(PCQQQPhiCut), 600, -1300, 1300, 16, 0, 16, vector_closest_to_z.Z(), chRing, "hPCQQQ");
-        double phi = TMath::ATan2(anodeIntersection.Y(), anodeIntersection.X()) * 180. / TMath::Pi();
-        plotter->Fill2D("PolarAngle_Vs_QQQWedge" + std::to_string(qqqID), 360, -360, 360, 16, 0, 16, phi, chWedge, "hPCQQQ");
-        // plotter->Fill2D("EdE_PC_vs_QQQ_timegate_ls1000"+std::to_string())
-
-        plotter->Fill2D("PC_Z_vs_QQQRing_Det" + std::to_string(qqqID), 600, -300, 300, 16, 0, 16, anodeIntersection.Z(), chRing, "hPCQQQ");
-        // double theta = -TMath::Pi() / 2 + 2 * TMath::Pi() / 16 / 4. * (qqq.id[i] * 16 + chWedge + 0.5);
-        // double rho = 50. + 40. / 16. * (chRing + 0.5);
-
-        for (int k = 0; k < pc.multi; k++)
-        {
-          if (pc.index[k] >= 24)
-            continue;
-
-          //          double sinTheta = TMath::Sin((hitPos-vector_closest_to_z).Theta());
-          double sinTheta = TMath::Sin((anodeIntersection - TVector3(0, 0, 90.0)).Theta());
-          //           double sinTheta = TMath::Sin((anodeIntersection-vector_closest_to_z).Theta());
-          //          double sinTheta = TMath::Sin((hitPos-TVector3(0,0,30.0)).Theta());
-          //          double sinTheta = TMath::Sin(hitPos.Theta());
-
-          if (cathodeHits.size() == 2 && PCQQQPhiCut)
-          {
-            plotter->Fill2D("CalibratedQQQE_RvsCPCE_TC" + std::to_string(PCQQQTimeCut), 400, 0, 10, 400, 0, 30000, eRingMeV, pc.e[k] * sinTheta, "hPCQQQ");
-            plotter->Fill2D("CalibratedQQQE_WvsCPCE_TC" + std::to_string(PCQQQTimeCut), 400, 0, 10, 400, 0, 30000, eWedgeMeV, pc.e[k] * sinTheta, "hPCQQQ");
-            plotter->Fill2D("CalibratedQQQE_RvsPCE_TC" + std::to_string(PCQQQTimeCut), 400, 0, 10, 400, 0, 30000, eRingMeV, pc.e[k], "hPCQQQ");
-            plotter->Fill2D("CalibratedQQQE_WvsPCE_TC" + std::to_string(PCQQQTimeCut), 400, 0, 10, 400, 0, 30000, eWedgeMeV, pc.e[k], "hPCQQQ");
-            plotter->Fill2D("PCQQQ_dTimevsdPhi", 200, -2000, 2000, 80, -200, 200, tRing - static_cast<double>(pc.t[k]), (hitPos.Phi() - anodeIntersection.Phi()) * 180. / TMath::Pi(), "hTiming");
-          }
-        }
-      } /// qqq i==j case end
-    } // j loop end
-  } // qqq i loop end
-
-  TVector3 guessVertex(0, 0, source_vertex); // for run12, subtract anodeIntersection.Z() by ~74.0 seems to work
-  // rho=40.0 mm is halfway between the cathodes(rho=42) and anodes(rho=37)
-  // double pcz_guess = 37.0/TMath::Tan((hitPos-guessVertex).Theta())  + guessVertex.Z(); //this is ideally kept to be all QQQ+userinput for calibration of pcz
-  double pcz_guess = z_to_crossover_rho(anodeIntersection.Z()) / TMath::Tan((hitPos - guessVertex).Theta()) + guessVertex.Z(); // this is ideally kept to be all QQQ+userinput for calibration of pcz
-  if (PCQQQTimeCut && PCQQQPhiCut && hitPos.Perp() > 0 && anodeIntersection.Perp() > 0 && cathodeHits.size() >= 2)
-  {
-    plotter->Fill2D("pczguess_vs_qqqE", 100, 0, 200, 800, 0, 20, pcz_guess, qqqenergy, "pczguess");
-    double pczoffset = 0.0;
-    // plotter->Fill2D("pczguess_vs_pcz_rad="+std::to_string(hitPos.Perp()),100,0,200,150,0,200,pcz_guess,anodeIntersection.Z(),"pczguess"); //entirely qqq-derived position vs entirely PC derived position
-    plotter->Fill2D("pczguess_vs_pcz_phi=" + std::to_string(hitPos.Phi() * 180. / M_PI), 200, 0, 200, 200, 0, 200, pcz_guess, anodeIntersection.Z() + pczoffset, "pczguess"); // entirely qqq-derived position vs entirely PC derived position
-    plotter->Fill2D("pczguess_vs_pcz", 200, 0, 200, 200, 0, 200, pcz_guess, anodeIntersection.Z() + pczoffset);
-    plotter->Fill2D("pcz_vs_pcPhi_rad=" + std::to_string(hitPos.Perp()), 360, 0, 360, 150, 0, 200, anodeIntersection.Phi() * 180. / M_PI, anodeIntersection.Z() + pczoffset, "pczguess");
-  }
-  for (int i = 0; i < sx3.multi; i++)
-  {
-    // plotting sx3 strip hits vs anode phi
-    if (sx3.ch[i] < 8 && anodeIntersection.Perp() > 0)
-      plotter->Fill2D("PCPhi_vs_SX3Strip", 100, -200, 200, 8 * 24, 0, 8 * 24, anodeIntersection.Phi() * 180. / TMath::Pi(), sx3.id[i] * 8 + sx3.ch[i]);
-  }
-
-  if (anodeIntersection.Z() != 0 && cathodeHits.size() == 3)
-  {
-    plotter->Fill1D("PC_Z_proj_3C", 600, -300, 300, anodeIntersection.Z(), "hPCzQQQ");
-  }
-
-  if (anodeIntersection.Perp() != 0)
-  {
-    plotter->Fill2D("AnodeMaxE_Vs_Cathode_Sum_Energy", 2000, 0, 20000, 2000, 0, 10000, aEMax, cESum, "hGMPC");
-    plotter->Fill2D("AnodeSumE_Vs_Cathode_Max_Energy", 800, 0, 20000, 800, 0, 10000, aESum, cEMax, "hGMPC");
-    plotter->Fill2D("AnodeMaxE_Vs_Cathode_Max_Energy", 800, 0, 20000, 800, 0, 10000, aEMax, cEMax, "hGMPC");
-    // double sinTheta = TMath::Sin((anodeIntersection - TVector3(0,0,source_vertex)).Theta());///TMath::Sin((TVector3(51.5,0,128.) - TVector3(0,0,85)).Theta());
-    // plotter->Fill2D("AnodeMaxE_Vs_Cathode_Max_Energy_path_corrected", 800, 0, 20000, 800, 0, 10000, aEMax*sinTheta, cEMax*sinTheta, "hGMPC");
-    plotter->Fill2D("AnodeSumE_Vs_Cathode_Sum_Energy", 800, 0, 20000, 800, 0, 10000, aESum, cESum, "hGMPC");
-    plotter->Fill2D("AnodeSumE_Vs_Cathode_Max_Energy_TC" + std::to_string(PCQQQTimeCut) + "_PC" + std::to_string(PCQQQPhiCut), 800, 0, 20000, 800, 0, 10000, aESum, cEMax, "hGMPC");
-    // plotter->Fill2D("AnodeSumE_Vs_Cathode_Max_Energy_path_corrected"+std::to_string(PCQQQTimeCut)+"_PC"+std::to_string(PCQQQPhiCut), 800, 0, 20000, 800, 0, 10000, aESum*sinTheta, cEMax*sinTheta, "hGMPC");
-    // plotter->Fill2D("AnodeSumE_Vs_Cathode_Max_Energy_path_corrected", 800, 0, 20000, 800, 0, 10000, aESum*sinTheta, cEMax*sinTheta, "hGMPC");
-
-    if (PCQQQTimeCut && PCQQQPhiCut)
-    {
-      plotter->Fill2D("AnodeSumE_Vs_Cathode_Max_Energy_TC" + std::to_string(PCQQQTimeCut) + "_PC" + std::to_string(PCQQQPhiCut) + "_cMax" + std::to_string(cIDMax), 800, 0, 20000, 800, 0, 10000, aESum, cEMax, "hGMPC");
-    }
-    // plotter->Fill2D("AnodeSumE_Vs_CathodeSum_Energy_path_corrected", 800, 0, 20000, 800, 0, 10000, aESum*sinTheta, cESum*sinTheta, "hGMPC");
-    // plotter->Fill2D("AnodeSumE_Vs_CathodeSum_Energy_path_corrected_TC"+std::to_string(PCQQQTimeCut)+"_PC"+std::to_string(PCQQQPhiCut), 800, 0, 20000, 800, 0, 10000, aESum*sinTheta, cESum*sinTheta, "hGMPC");        */
-  }
-  plotter->Fill1D("Correlated_Cathode_MaxAnode", 6, 0, 5, corrcatMax.size(), "hGMPC");
-  plotter->Fill2D("Correlated_Cathode_VS_MaxAnodeEnergy", 6, 0, 5, 2000, 0, 30000, corrcatMax.size(), aEMax, "hGMPC");
-  plotter->Fill1D("AnodeHits", 12, 0, 11, anodeHits.size(), "hGMPC");
-  plotter->Fill2D("AnodeMaxE_vs_AnodeHits", 12, 0, 11, 2000, 0, 30000, anodeHits.size(), aEMax, "hGMPC");
-
-  if (anodeHits.size() < 1)
-  {
-    plotter->Fill1D("NoAnodeHits_CathodeHits", 6, 0, 5, cathodeHits.size(), "hGMPC");
-  }
-
-  for (auto cwevent : cWireEvents)
-  {
-    // plotter->Fill1D("cwdtqqq_vs_cw"+std::to_string(PCQQQTimeCut),800,-2000,2000,24,0,24,std::get<2>(cwevent)-qqqtimestamp,std::get<0>(cwevent));
-    for (auto awevent : aWireEvents)
-    {
-      plotter->Fill2D("aw_vs_cw", 24, 0, 24, 24, 0, 24, std::get<0>(awevent), std::get<0>(cwevent));
-      plotter->Fill2D("aw_vs_cw_dtq" + std::to_string(PCQQQTimeCut), 24, 0, 24, 24, 0, 24, std::get<0>(awevent), std::get<0>(cwevent));
-    }
-  }
-  for (auto awevent : aWireEvents)
-  {
-    // plotter->Fill1D("awdtqqq_vs_aw"+std::to_string(PCQQQTimeCut),800,-2000,2000,24,0,24,std::get<2>(awevent)-qqqtimestamp,std::get<0>(awevent));
-  }
-
+  if (doOldAnalysis)
+    OldAnalysis();
   return kTRUE;
 }
 
@@ -1880,4 +1605,391 @@ void FillExcitationHistograms(HistPlotter *plotter,
 
   // Fill 2D Kinematics plot (Angle vs Energy)
   plotter->Fill2D(hNameKin, 180, 0, 180, 500, 0, 25, thetaDeg, energyMeV, folderName);
+}
+
+void TrackRecon::OldAnalysis()
+{
+  int aID = 0, cID = 0;
+  double aE = 0, cE = 0;
+  double aESum = 0, cESum = 0;
+  double aEMax = 0, cEMax = 0;
+  int aIDMax = 0, cIDMax = 0;
+
+  if (anodeHits.size() >= 1 && cathodeHits.size() >= 1)
+  {
+    // 2. CRITICAL FIX: Define reference vector 'a'
+    // In Analyzer.cxx, 'a' was left over from the loop. We use the first anode wire as reference here.
+    // (Assuming pwinstance.An is populated and wires are generally parallel).
+    TVector3 refAnode = pwinstance.An[0].first - pwinstance.An[0].second;
+
+    {
+      for (const auto &anode : anodeHits)
+      {
+        aID = anode.first;
+        aE = anode.second;
+        aESum += aE;
+        if (aE > aEMax)
+        {
+          aEMax = aE;
+          aIDMax = aID;
+        }
+      }
+
+      for (const auto &cathode : cathodeHits)
+      {
+        cID = cathode.first;
+        cE = cathode.second;
+        plotter->Fill2D("AnodeMax_Vs_Cathode_Coincidence_Matrix", 24, 0, 24, 24, 0, 24, aIDMax, cID, "hRawPC");
+        plotter->Fill2D("Anode_Vs_Cathode_Coincidence_Matrix", 24, 0, 24, 24, 0, 24, aID, cID, "hRawPC");
+        plotter->Fill2D("Anode_Vs_Cathode_Coincidence_Matrix_qqq" + std::to_string(HitNonZero), 24, 0, 24, 24, 0, 24, aID, cID, "hRawPC");
+        plotter->Fill2D("Anode_vs_CathodeE", 2000, 0, 30000, 2000, 0, 30000, aE, cE, "hGMPC");
+        plotter->Fill2D("CathodeMult_V_CathodeE", 6, 0, 6, 2000, 0, 30000, cathodeHits.size(), cE, "hGMPC");
+        /*for (int j = -4; j < 3; j++)
+        {
+          if ((aIDMax + 24 + j) % 24 == 23 - cID)
+          {
+            corrcatMax.push_back(std::pair<int, double>(cID, cE));
+            cESum += cE;
+          }
+        }*/
+        if ((aIDMax + cID) % 24 == 22 || (aIDMax + cID) % 24 == 23 || (aIDMax + cID) % 24 >= 0 || (aIDMax + cID) % 24 <= 3)
+        {
+          corrcatMax.push_back(std::pair<int, double>(cID, cE));
+          cESum += cE;
+          if (cE > cEMax)
+          {
+            cEMax = cE;
+            cIDMax = cID;
+          }
+        }
+      }
+    }
+  }
+
+  TVector3 anodeIntersection, vector_closest_to_z;
+  anodeIntersection.Clear();
+  vector_closest_to_z.Clear();
+  if (corrcatMax.size() > 0)
+  {
+    double x = 0, y = 0, z = 0;
+    for (const auto &corr : corrcatMax)
+    {
+      if (pwinstance.Crossover[aIDMax][corr.first][0].z > 9000000)
+        continue;
+      if (cESum > 0)
+      {
+        x += (corr.second) / cESum * pwinstance.Crossover[aIDMax][corr.first][0].x;
+        y += (corr.second) / cESum * pwinstance.Crossover[aIDMax][corr.first][0].y;
+        z += (corr.second) / cESum * pwinstance.Crossover[aIDMax][corr.first][0].z;
+      }
+    }
+    if (x == 0 && y == 0 && z == 0)
+      ;
+    // to ignore events with no valid crossover points
+    else
+    {
+      anodeIntersection = TVector3(x, y, z);
+      // std::cout << "Anode Intersection: " << anodeIntersection.X() << ", " << anodeIntersection.Y() << ", " << anodeIntersection.Z() << " " << aIDMax <<  std::endl;
+    }
+  }
+  bool PCQQQPhiCut = false;
+  // flip the algorithm for cathode 1 multi anode events
+  if ((hitPos.Phi() > (anodeIntersection.Phi() - TMath::PiOver4())) && (hitPos.Phi() < (anodeIntersection.Phi() + TMath::PiOver4())))
+  {
+    PCQQQPhiCut = true;
+  }
+
+  if (anodeIntersection.Z() != 0 && anodeIntersection.Perp() > 0 && HitNonZero)
+  {
+    plotter->Fill1D("PC_Z_Projection", 600, -300, 300, anodeIntersection.Z(), "hPCzQQQ");
+    plotter->Fill2D("Z_Proj_VsDelTime", 600, -300, 300, 200, -2000, 2000, anodeIntersection.Z(), anodeT - cathodeT, "hPCzQQQ");
+    plotter->Fill2D("IntPhi_vs_QQQphi", 100, -200, 200, 80, -200, 200, anodeIntersection.Phi() * 180. / TMath::Pi(), hitPos.Phi() * 180. / TMath::Pi(), "hPCQQQ");
+    // plotter->Fill2D("Inttheta_vs_QQQtheta", 90, 0, 180, 20, 0, 45, anodeIntersection.Theta() * 180. / TMath::Pi(), hitPos.Theta() * 180. / TMath::Pi(), "hPCQQQ");
+    // plotter->Fill2D("Inttheta_vs_QQQtheta_TC" + std::to_string(PCQQQTimeCut)+ "_PC"+std::to_string(PCQQQPhiCut), 90, 0, 180, 20, 0, 45, anodeIntersection.Theta() * 180. / TMath::Pi(), hitPos.Theta() * 180. / TMath::Pi(), "hPCQQQ");
+    plotter->Fill2D("IntPhi_vs_QQQphi_TC" + std::to_string(PCQQQTimeCut) + "PhiC" + std::to_string(PCQQQPhiCut), 100, -200, 200, 80, -200, 200, anodeIntersection.Phi() * 180. / TMath::Pi(), hitPos.Phi() * 180. / TMath::Pi(), "hPCQQQ");
+  }
+
+  if (anodeIntersection.Z() != 0 && anodeIntersection.Perp() > 0 && PCSX3TimeCut)
+  {
+    plotter->Fill1D("PC_Z_Projection_sx3", 600, -200, 200, anodeIntersection.Z(), "hPCZSX3");
+  }
+  if (anodeIntersection.Z() != 0 && cathodeHits.size() >= 2)
+    plotter->Fill1D("PC_Z_Projection_TC" + std::to_string(PCQQQTimeCut) + "PhiC" + std::to_string(PCQQQPhiCut), 600, -300, 300, anodeIntersection.Z(), "hPCzQQQ");
+
+  if (anodeIntersection.Z() != 0 && cathodeHits.size() == 1)
+  {
+    plotter->Fill1D("PC_Z_proj_1C", 600, -300, 300, anodeIntersection.Z(), "hPCzQQQ");
+    plotter->Fill2D("IntersectionPhi_vs_AnodeZ_1C", 400, -200, 200, 600, -300, 300, anodeIntersection.Phi() * 180. / TMath::Pi(), anodeIntersection.Z(), "hPCzQQQ");
+  }
+
+  if (anodeIntersection.Z() != 0 && cathodeHits.size() == 2)
+  {
+    plotter->Fill1D("PC_Z_proj_2C", 600, -300, 300, anodeIntersection.Z(), "hPCzQQQ");
+    plotter->Fill2D("IntersectionPhi_vs_AnodeZ_2C", 400, -200, 200, 600, -300, 300, anodeIntersection.Phi() * 180. / TMath::Pi(), anodeIntersection.Z(), "hGMPC");
+  }
+  if (anodeIntersection.Z() != 0 && cathodeHits.size() > 2)
+  {
+    plotter->Fill1D("PC_Z_proj_nC", 600, -300, 300, anodeIntersection.Z(), "hPCzQQQ");
+    plotter->Fill2D("IntersectionPhi_vs_AnodeZ_nC", 400, -200, 200, 600, -300, 300, anodeIntersection.Phi() * 180. / TMath::Pi(), anodeIntersection.Z(), "hGMPC");
+  }
+  if (anodeHits.size() > 0 && cathodeHits.size() > 0)
+    plotter->Fill2D("AHits_vs_CHits", 12, 0, 11, 6, 0, 5, anodeHits.size(), cathodeHits.size(), "hRawPC");
+
+  // make another plot with nearest neighbour constraint
+  bool hasNeighbourAnodes = false;
+  bool hasNeighbourCathodes = false;
+
+  // 1. Check Anodes for neighbours (including wrap-around 0-23)
+  for (size_t i = 0; i < anodeHits.size(); i++)
+  {
+    for (size_t j = i + 1; j < anodeHits.size(); j++)
+    {
+      int diff = std::abs(anodeHits[i].first - anodeHits[j].first);
+      if (diff == 1 || diff == 23)
+      { // 23 handles the cylindrical wrap
+        hasNeighbourAnodes = true;
+        break;
+      }
+    }
+    if (hasNeighbourAnodes)
+      break;
+  }
+
+  // 2. Check Cathodes for neighbours (including wrap-around 0-23)
+  for (size_t i = 0; i < cathodeHits.size(); i++)
+  {
+    for (size_t j = i + 1; j < cathodeHits.size(); j++)
+    {
+      int diff = std::abs(cathodeHits[i].first - cathodeHits[j].first);
+      if (diff == 1 || diff == 23)
+      {
+        hasNeighbourCathodes = true;
+        break;
+      }
+    }
+    if (hasNeighbourCathodes)
+      break;
+  }
+
+  // ---------------------------------------------------------
+  // FILL PLOTS
+  // ---------------------------------------------------------
+  if (anodeHits.size() > 0 && cathodeHits.size() > 0)
+  {
+#ifdef RAW_HISTOS
+    plotter->Fill2D("AHits_vs_CHits_NA" + std::to_string(hasNeighbourAnodes), 12, 0, 11, 6, 0, 5, anodeHits.size(), cathodeHits.size(), "hRawPC");
+    plotter->Fill2D("AHits_vs_CHits_NC" + std::to_string(hasNeighbourCathodes), 12, 0, 11, 6, 0, 5, anodeHits.size(), cathodeHits.size(), "hRawPC");
+
+    // Constraint Plot: Only fill if BOTH planes have adjacent hits
+    // This effectively removes events with only isolated single-wire hits (noise)
+    if (hasNeighbourAnodes && hasNeighbourCathodes)
+    {
+      plotter->Fill2D("AHits_vs_CHits_NN", 12, 0, 11, 6, 0, 5, anodeHits.size(), cathodeHits.size(), "hRawPC");
+    }
+#endif
+  }
+
+  if (HitNonZero && anodeIntersection.Z() != 0)
+  {
+    pwinstance.CalTrack2(hitPos, anodeIntersection);
+    plotter->Fill1D("VertexRecon", 600, -1300, 1300, pwinstance.GetZ0());
+    plotter->Fill1D("VertexRecon_TC" + std::to_string(PCQQQTimeCut) + "_PhiC" + std::to_string(PCQQQPhiCut), 600, -1300, 1300, pwinstance.GetZ0());
+
+    if (cathodeHits.size() == 2)
+      plotter->Fill1D("VertexRecon_2c_TC" + std::to_string(PCQQQTimeCut) + "_PhiC" + std::to_string(PCQQQPhiCut), 600, -1300, 1300, pwinstance.GetZ0());
+
+    TVector3 x2(anodeIntersection), x1(hitPos);
+
+    TVector3 v = x2 - x1;
+    double t_minimum = -1.0 * (x1.X() * v.X() + x1.Y() * v.Y()) / (v.X() * v.X() + v.Y() * v.Y());
+    vector_closest_to_z = x1 + t_minimum * v;
+
+    plotter->Fill1D("VertexRecon_Z_TC" + std::to_string(PCQQQTimeCut) + "_PhiC" + std::to_string(PCQQQPhiCut), 600, -1300, 1300, vector_closest_to_z.Z(), "customVertex");
+
+    if (qqqenergy < 4.0)
+      plotter->Fill1D("VertexRecon_Z(qqqE<4.0MeV)_TC" + std::to_string(PCQQQTimeCut) + "_PhiC" + std::to_string(PCQQQPhiCut), 600, -1300, 1300, vector_closest_to_z.Z(), "customVertex");
+
+    if (vector_closest_to_z.Perp() < 20)
+    {
+      plotter->Fill1D("VertexRecon_RadialCut_Z_TC" + std::to_string(PCQQQTimeCut) + "_PhiC" + std::to_string(PCQQQPhiCut), 600, -1300, 1300, vector_closest_to_z.Z(), "customVertex");
+    }
+
+    plotter->Fill2D("VertexRecon_XY_TC" + std::to_string(PCQQQTimeCut) + "_PhiC" + std::to_string(PCQQQPhiCut), 100, -100, 100, 100, -100, 100, vector_closest_to_z.X(), vector_closest_to_z.Y(), "customVertex");
+    if (cathodeHits.size() == 2)
+    {
+      plotter->Fill1D("VertexRecon2C_Z_TC" + std::to_string(PCQQQTimeCut) + "_PhiC" + std::to_string(PCQQQPhiCut), 600, -1300, 1300, vector_closest_to_z.Z(), "customVertex");
+      if (vector_closest_to_z.Perp() < 20)
+      {
+        plotter->Fill1D("VertexRecon2C_RadialCut_Z_TC" + std::to_string(PCQQQTimeCut) + "_PhiC" + std::to_string(PCQQQPhiCut), 600, -1300, 1300, vector_closest_to_z.Z(), "customVertex");
+      }
+      plotter->Fill2D("VertexRecon2C_XY_TC" + std::to_string(PCQQQTimeCut) + "_PhiC" + std::to_string(PCQQQPhiCut), 100, -100, 100, 100, -100, 100, vector_closest_to_z.X(), vector_closest_to_z.Y(), "customVertex");
+      plotter->Fill2D("VertexRecon2C_RhoZ_TC" + std::to_string(PCQQQTimeCut) + "_PhiC" + std::to_string(PCQQQPhiCut), 100, -100, 100, 600, -1300, 1300, vector_closest_to_z.Perp(), vector_closest_to_z.Z(), "customVertex");
+      plotter->Fill2D("VertexRecon2C_Z_vs_QQQE_TC" + std::to_string(PCQQQTimeCut) + "_PhiC" + std::to_string(PCQQQPhiCut), 600, -1300, 1300, 800, 0, 20, vector_closest_to_z.Z(), qqqenergy, "customVertex");
+    }
+  }
+
+  for (int i = 0; i < qqq.multi; i++)
+  {
+    if (anodeIntersection.Perp() > 0)
+    { // suppress x,y=0,0 events
+      if (PCQQQTimeCut)
+      {
+        plotter->Fill2D("PC_XY_Projection_QQQ_TimeCut" + std::to_string(qqq.id[i]), 400, -100, 100, 400, -100, 100, anodeIntersection.X(), anodeIntersection.Y(), "hPCQQQ");
+        plotter->Fill2D("PC_XY_Projection_QQQ_TimeCut" + std::to_string(qqq.id[i]), 400, -100, 100, 400, -100, 100, hitPos.X(), hitPos.Y(), "hPCQQQ");
+      }
+      plotter->Fill2D("PC_XY_Projection_QQQ" + std::to_string(qqq.id[i]), 400, -100, 100, 400, -100, 100, anodeIntersection.X(), anodeIntersection.Y(), "hPCQQQ");
+    }
+    for (int j = i + 1; j < qqq.multi; j++)
+    {
+      if (qqq.id[i] == qqq.id[j])
+      {
+        int chWedge = -1;
+        int chRing = -1;
+        double eWedge = 0.0;
+        double eWedgeMeV = 0.0;
+        double eRing = 0.0;
+        double eRingMeV = 0.0;
+        double tRing = 0.0;
+        int qqqID = -1;
+        if (qqq.ch[i] < 16 && qqq.ch[j] >= 16 && qqqGainValid[qqq.id[i]][qqq.ch[i]][qqq.ch[j] - 16])
+        {
+          chWedge = qqq.ch[i];
+          eWedge = qqq.e[i] * qqqGain[qqq.id[i]][qqq.ch[i]][qqq.ch[j] - 16];
+          chRing = qqq.ch[j] - 16;
+          eRing = qqq.e[j];
+          tRing = static_cast<double>(qqq.t[j]);
+          qqqID = qqq.id[i];
+        }
+        else if (qqq.ch[j] < 16 && qqq.ch[i] >= 16 && qqqGainValid[qqq.id[j]][qqq.ch[j]][qqq.ch[i] - 16])
+        {
+          chWedge = qqq.ch[j];
+          eWedge = qqq.e[j] * qqqGain[qqq.id[j]][qqq.ch[j]][qqq.ch[i] - 16];
+          chRing = qqq.ch[i] - 16;
+          tRing = static_cast<double>(qqq.t[i]);
+          eRing = qqq.e[i];
+          qqqID = qqq.id[i];
+        }
+        else
+          continue;
+
+        if (qqqCalibValid[qqq.id[i]][chRing][chWedge])
+        {
+          eWedgeMeV = eWedge * qqqCalib[qqq.id[i]][chRing][chWedge] / 1000;
+          eRingMeV = eRing * qqqCalib[qqq.id[i]][chRing][chWedge] / 1000;
+        }
+        else
+          continue;
+
+        // if (anodeIntersection.Z() != 0)
+        {
+          plotter->Fill2D("PC_Z_vs_QQQRing", 600, -300, 300, 16, 0, 16, anodeIntersection.Z(), chRing, "hPCzQQQ");
+          plotter->Fill2D("PC_Z_vs_QQQRho", 600, -300, 300, 40, 40, 110, anodeIntersection.Z(), hitPos.Perp(), "hPCzQQQ");
+        }
+
+        if (anodeIntersection.Z() != 0 && cathodeHits.size() == 2)
+        {
+          plotter->Fill2D("PC_Z_vs_QQQRing_2C", 600, -300, 300, 16, 0, 16, anodeIntersection.Z(), chRing, "hPCzQQQ");
+          plotter->Fill2D("PC_Z_vs_QQQRing_2C" + std::to_string(qqq.id[i]), 600, -300, 300, 16, 0, 16, anodeIntersection.Z(), chRing, "hPCzQQQ");
+          plotter->Fill2D("PC_Z_vs_QQQWedge_2C", 600, -300, 300, 16, 0, 16, anodeIntersection.Z(), chWedge, "hPCzQQQ");
+        }
+        plotter->Fill2D("VertexRecon_QQQRingTC" + std::to_string(PCQQQTimeCut) + "PhiC" + std::to_string(PCQQQPhiCut), 600, -1300, 1300, 16, 0, 16, vector_closest_to_z.Z(), chRing, "hPCQQQ");
+        double phi = TMath::ATan2(anodeIntersection.Y(), anodeIntersection.X()) * 180. / TMath::Pi();
+        plotter->Fill2D("PolarAngle_Vs_QQQWedge" + std::to_string(qqqID), 360, -360, 360, 16, 0, 16, phi, chWedge, "hPCQQQ");
+        // plotter->Fill2D("EdE_PC_vs_QQQ_timegate_ls1000"+std::to_string())
+
+        plotter->Fill2D("PC_Z_vs_QQQRing_Det" + std::to_string(qqqID), 600, -300, 300, 16, 0, 16, anodeIntersection.Z(), chRing, "hPCQQQ");
+        // double theta = -TMath::Pi() / 2 + 2 * TMath::Pi() / 16 / 4. * (qqq.id[i] * 16 + chWedge + 0.5);
+        // double rho = 50. + 40. / 16. * (chRing + 0.5);
+
+        for (int k = 0; k < pc.multi; k++)
+        {
+          if (pc.index[k] >= 24)
+            continue;
+
+          //          double sinTheta = TMath::Sin((hitPos-vector_closest_to_z).Theta());
+          double sinTheta = TMath::Sin((anodeIntersection - TVector3(0, 0, 90.0)).Theta());
+          //           double sinTheta = TMath::Sin((anodeIntersection-vector_closest_to_z).Theta());
+          //          double sinTheta = TMath::Sin((hitPos-TVector3(0,0,30.0)).Theta());
+          //          double sinTheta = TMath::Sin(hitPos.Theta());
+
+          if (cathodeHits.size() == 2 && PCQQQPhiCut)
+          {
+            plotter->Fill2D("CalibratedQQQE_RvsCPCE_TC" + std::to_string(PCQQQTimeCut), 400, 0, 10, 400, 0, 30000, eRingMeV, pc.e[k] * sinTheta, "hPCQQQ");
+            plotter->Fill2D("CalibratedQQQE_WvsCPCE_TC" + std::to_string(PCQQQTimeCut), 400, 0, 10, 400, 0, 30000, eWedgeMeV, pc.e[k] * sinTheta, "hPCQQQ");
+            plotter->Fill2D("CalibratedQQQE_RvsPCE_TC" + std::to_string(PCQQQTimeCut), 400, 0, 10, 400, 0, 30000, eRingMeV, pc.e[k], "hPCQQQ");
+            plotter->Fill2D("CalibratedQQQE_WvsPCE_TC" + std::to_string(PCQQQTimeCut), 400, 0, 10, 400, 0, 30000, eWedgeMeV, pc.e[k], "hPCQQQ");
+            plotter->Fill2D("PCQQQ_dTimevsdPhi", 200, -2000, 2000, 80, -200, 200, tRing - static_cast<double>(pc.t[k]), (hitPos.Phi() - anodeIntersection.Phi()) * 180. / TMath::Pi(), "hTiming");
+          }
+        }
+      } /// qqq i==j case end
+    } // j loop end
+  } // qqq i loop end
+
+  TVector3 guessVertex(0, 0, source_vertex); // for run12, subtract anodeIntersection.Z() by ~74.0 seems to work
+  // rho=40.0 mm is halfway between the cathodes(rho=42) and anodes(rho=37)
+  // double pcz_guess = 37.0/TMath::Tan((hitPos-guessVertex).Theta())  + guessVertex.Z(); //this is ideally kept to be all QQQ+userinput for calibration of pcz
+  double pcz_guess = z_to_crossover_rho(anodeIntersection.Z()) / TMath::Tan((hitPos - guessVertex).Theta()) + guessVertex.Z(); // this is ideally kept to be all QQQ+userinput for calibration of pcz
+  if (PCQQQTimeCut && PCQQQPhiCut && hitPos.Perp() > 0 && anodeIntersection.Perp() > 0 && cathodeHits.size() >= 2)
+  {
+    plotter->Fill2D("pczguess_vs_qqqE", 100, 0, 200, 800, 0, 20, pcz_guess, qqqenergy, "pczguess");
+    double pczoffset = 0.0;
+    // plotter->Fill2D("pczguess_vs_pcz_rad="+std::to_string(hitPos.Perp()),100,0,200,150,0,200,pcz_guess,anodeIntersection.Z(),"pczguess"); //entirely qqq-derived position vs entirely PC derived position
+    plotter->Fill2D("pczguess_vs_pcz_phi=" + std::to_string(hitPos.Phi() * 180. / M_PI), 200, 0, 200, 200, 0, 200, pcz_guess, anodeIntersection.Z() + pczoffset, "pczguess"); // entirely qqq-derived position vs entirely PC derived position
+    plotter->Fill2D("pczguess_vs_pcz", 200, 0, 200, 200, 0, 200, pcz_guess, anodeIntersection.Z() + pczoffset);
+    plotter->Fill2D("pcz_vs_pcPhi_rad=" + std::to_string(hitPos.Perp()), 360, 0, 360, 150, 0, 200, anodeIntersection.Phi() * 180. / M_PI, anodeIntersection.Z() + pczoffset, "pczguess");
+  }
+  for (int i = 0; i < sx3.multi; i++)
+  {
+    // plotting sx3 strip hits vs anode phi
+    if (sx3.ch[i] < 8 && anodeIntersection.Perp() > 0)
+      plotter->Fill2D("PCPhi_vs_SX3Strip", 100, -200, 200, 8 * 24, 0, 8 * 24, anodeIntersection.Phi() * 180. / TMath::Pi(), sx3.id[i] * 8 + sx3.ch[i]);
+  }
+
+  if (anodeIntersection.Z() != 0 && cathodeHits.size() == 3)
+  {
+    plotter->Fill1D("PC_Z_proj_3C", 600, -300, 300, anodeIntersection.Z(), "hPCzQQQ");
+  }
+
+  if (anodeIntersection.Perp() != 0)
+  {
+    plotter->Fill2D("AnodeMaxE_Vs_Cathode_Sum_Energy", 2000, 0, 20000, 2000, 0, 10000, aEMax, cESum, "hGMPC");
+    plotter->Fill2D("AnodeSumE_Vs_Cathode_Max_Energy", 800, 0, 20000, 800, 0, 10000, aESum, cEMax, "hGMPC");
+    plotter->Fill2D("AnodeMaxE_Vs_Cathode_Max_Energy", 800, 0, 20000, 800, 0, 10000, aEMax, cEMax, "hGMPC");
+    // double sinTheta = TMath::Sin((anodeIntersection - TVector3(0,0,source_vertex)).Theta());///TMath::Sin((TVector3(51.5,0,128.) - TVector3(0,0,85)).Theta());
+    // plotter->Fill2D("AnodeMaxE_Vs_Cathode_Max_Energy_path_corrected", 800, 0, 20000, 800, 0, 10000, aEMax*sinTheta, cEMax*sinTheta, "hGMPC");
+    plotter->Fill2D("AnodeSumE_Vs_Cathode_Sum_Energy", 800, 0, 20000, 800, 0, 10000, aESum, cESum, "hGMPC");
+    plotter->Fill2D("AnodeSumE_Vs_Cathode_Max_Energy_TC" + std::to_string(PCQQQTimeCut) + "_PC" + std::to_string(PCQQQPhiCut), 800, 0, 20000, 800, 0, 10000, aESum, cEMax, "hGMPC");
+    // plotter->Fill2D("AnodeSumE_Vs_Cathode_Max_Energy_path_corrected"+std::to_string(PCQQQTimeCut)+"_PC"+std::to_string(PCQQQPhiCut), 800, 0, 20000, 800, 0, 10000, aESum*sinTheta, cEMax*sinTheta, "hGMPC");
+    // plotter->Fill2D("AnodeSumE_Vs_Cathode_Max_Energy_path_corrected", 800, 0, 20000, 800, 0, 10000, aESum*sinTheta, cEMax*sinTheta, "hGMPC");
+
+    if (PCQQQTimeCut && PCQQQPhiCut)
+    {
+      plotter->Fill2D("AnodeSumE_Vs_Cathode_Max_Energy_TC" + std::to_string(PCQQQTimeCut) + "_PC" + std::to_string(PCQQQPhiCut) + "_cMax" + std::to_string(cIDMax), 800, 0, 20000, 800, 0, 10000, aESum, cEMax, "hGMPC");
+    }
+    // plotter->Fill2D("AnodeSumE_Vs_CathodeSum_Energy_path_corrected", 800, 0, 20000, 800, 0, 10000, aESum*sinTheta, cESum*sinTheta, "hGMPC");
+    // plotter->Fill2D("AnodeSumE_Vs_CathodeSum_Energy_path_corrected_TC"+std::to_string(PCQQQTimeCut)+"_PC"+std::to_string(PCQQQPhiCut), 800, 0, 20000, 800, 0, 10000, aESum*sinTheta, cESum*sinTheta, "hGMPC");        */
+  }
+  plotter->Fill1D("Correlated_Cathode_MaxAnode", 6, 0, 5, corrcatMax.size(), "hGMPC");
+  plotter->Fill2D("Correlated_Cathode_VS_MaxAnodeEnergy", 6, 0, 5, 2000, 0, 30000, corrcatMax.size(), aEMax, "hGMPC");
+  plotter->Fill1D("AnodeHits", 12, 0, 11, anodeHits.size(), "hGMPC");
+  plotter->Fill2D("AnodeMaxE_vs_AnodeHits", 12, 0, 11, 2000, 0, 30000, anodeHits.size(), aEMax, "hGMPC");
+
+  if (anodeHits.size() < 1)
+  {
+    plotter->Fill1D("NoAnodeHits_CathodeHits", 6, 0, 5, cathodeHits.size(), "hGMPC");
+  }
+
+  for (auto cwevent : cWireEvents)
+  {
+    // plotter->Fill1D("cwdtqqq_vs_cw"+std::to_string(PCQQQTimeCut),800,-2000,2000,24,0,24,std::get<2>(cwevent)-qqqtimestamp,std::get<0>(cwevent));
+    for (auto awevent : aWireEvents)
+    {
+      plotter->Fill2D("aw_vs_cw", 24, 0, 24, 24, 0, 24, std::get<0>(awevent), std::get<0>(cwevent));
+      plotter->Fill2D("aw_vs_cw_dtq" + std::to_string(PCQQQTimeCut), 24, 0, 24, 24, 0, 24, std::get<0>(awevent), std::get<0>(cwevent));
+    }
+  }
+  for (auto awevent : aWireEvents)
+  {
+    // plotter->Fill1D("awdtqqq_vs_aw"+std::to_string(PCQQQTimeCut),800,-2000,2000,24,0,24,std::get<2>(awevent)-qqqtimestamp,std::get<0>(awevent));
+  }
 }
