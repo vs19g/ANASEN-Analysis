@@ -15,6 +15,7 @@
 #include <utility>
 #include <fstream>
 #include <sstream>
+#include <map>
 #include <unordered_map>
 #include <set>
 #include <TGraphErrors.h>
@@ -23,7 +24,7 @@ class HistPlotter {
 private:
     long long barrier_count, barrier_limit; //meant to keep track of how often to call FillN() on histograms
     enum {TFILE, TMEMFILE} filetype;
-    std::unordered_map<std::string,TObject*> oMap; //!< Maps std::string to all TH1, TH2 objects in the class
+    std::map<std::string,TObject*> oMap; //!< Maps std::string to all TH1, TH2 objects in the class
     std::unordered_map<std::string,TObject*> cutsMap; //!< Maps std::string to TCutG objects held by the class
     std::set<std::string> folderList; //!< List of all folder names used to nest objects
     std::unordered_map<TObject*,std::string> foldersForObjects; //!< Map that returns the folder corresponding to the object whose pointer is specified
@@ -31,8 +32,8 @@ private:
     TMemFile *omfile=nullptr; //!< TFile pointer for the output memfile
 
     //Caches to permit FillN() calls
-    std::unordered_map<std::string, std::vector<double>> onedimcache;
-    std::unordered_map<std::string, std::pair<std::vector<double>, std::vector<double>>> twodimcache;
+    std::map<std::string, std::vector<double>> onedimcache;
+    std::map<std::string, std::pair<std::vector<double>, std::vector<double>>> twodimcache;
     inline void FillN_All_Histograms();
 public:
     HistPlotter(std::string outfile, std::string type);

@@ -117,6 +117,12 @@ void TrackRecon::Init(TTree *tree)
    fChain->SetBranchAddress("pcCh", &pc.ch, &b_pcCh);
    fChain->SetBranchAddress("pcE", &pc.e, &b_pcE);
    fChain->SetBranchAddress("pcT", &pc.t, &b_pcT);
+   fChain->SetBranchAddress("miscMulti", &misc.multi, &b_miscMulti);
+   fChain->SetBranchAddress("miscID", &misc.id, &b_miscID);
+   fChain->SetBranchAddress("miscCh", &misc.ch, &b_miscCh);
+   fChain->SetBranchAddress("miscE", &misc.e, &b_miscE);
+   fChain->SetBranchAddress("miscT", &misc.t, &b_miscT);
+   fChain->SetBranchAddress("miscF", &misc.tf, &b_miscTf);
 }
 
 Bool_t TrackRecon::Notify()

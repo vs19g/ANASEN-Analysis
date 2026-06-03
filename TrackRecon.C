@@ -166,18 +166,6 @@ void TrackRecon::Begin(TTree * /*tree*/)
   std::cout << "Dataset set to  " << dataset << std::endl;
   std::cout << "source_vertex set to  " << source_vertex << std::endl;
 
-  if (dataset == "17F" && reactiondata)
-  {
-    std::cout << "Setting up misc branch addresses for 17F reaction data analysis" << std::endl;
-    fChain->SetBranchAddress("miscMulti", &misc.multi, &b_miscMulti);
-    fChain->SetBranchAddress("miscID", &misc.id, &b_miscID);
-    fChain->SetBranchAddress("miscCh", &misc.ch, &b_miscCh);
-    fChain->SetBranchAddress("miscE", &misc.e, &b_miscE);
-    fChain->SetBranchAddress("miscT", &misc.t, &b_miscT);
-    fChain->SetBranchAddress("miscF", &misc.tf, &b_miscTf);
-    std::cout << "Misc branches set" << std::endl;
-  }
-
   pwinstance.ConstructGeo();
 
   for (int i = 0; i < 48; i++)

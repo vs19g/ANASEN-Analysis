@@ -17,14 +17,13 @@ function run_once() {
     file_exists=$(test -f ../ANASEN_analysis/data/17F_Data/Run_"$wrun"_mapped.root)
     if [[ $file_exists -ne 0 ]]; then continue; fi
     root -q -l -b -x ../ANASEN_analysis/data/17F_Data/Run_"$wrun"_mapped.root -e 'tree->Process("TrackRecon.C+O","Analyzer_17F.root")'; mv Analyzer_17F.root 17F_output/results_run$wrun.root;
-    mv analyzed_run$wrun.root results_run$wrun.root;
 }
 
 export -f run_once
 run_once 351
 # parallel -j 6 --ctag run_once {1} ::: {350..400}
 rm output_17F.root
-hadd -j 4 -k output_17F.root results_run3*.root
+hadd -j 4 -k output_17F.root 17F_output/results_run3*.root
 
 unset souce_vertex
 unset DATASET
