@@ -18,7 +18,7 @@ while val<174.3+0.1:
     os.system("cp Field_output.png png/Field_ouput_z_%02d_%1.4f.png"%(count,val))
     val=val+17.43
     count = count + 1
-    # break
+    break
 
 # os.system("tar -cvzf wiress2d/mesh.tar.gz wires2d/mesh_files")
 # os.system("rm -rf wires2d/mesh_files/*")
