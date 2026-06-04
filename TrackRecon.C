@@ -1,6 +1,6 @@
 #define TrackRecon_cxx
 
-// #define RAW_HISTOS
+#define RAW_HISTOS
 // #define VTX_GATES
 // #define AL_BEAM
 #define F_BEAM
@@ -39,9 +39,10 @@ Int_t colors[40] = {
 #include <algorithm>
 
 bool process_alpha_proton_scattering = false;
+bool doMiscHistograms = true;
 bool doPCSX3ClusterAnalysis = false;
 bool doPCQQQClusterAnalysis = false;
-bool doOldAnalysis = false;
+bool doOldAnalysis = true;
 bool do27AlapAnalysis = false;
 double source_vertex = 53; // 53
 const double qqq_z = 100.0;
@@ -138,6 +139,7 @@ double anodeT = -99999, cathodeT = 99999;
 int anodeIndex = -1, cathodeIndex = -1;
 
 void protonAlphaHistograms(HistPlotter *plotter, std::vector<Event> QQQ_Events, std::vector<Event> SX3_Events, std::vector<Event> PC_Events);
+void miscHistograms_oneWire(HistPlotter *plotter, std::vector<Event> QQQ_Events, std::vector<std::vector<std::tuple<int, double, double>>> aClusters);
 void PCSX3ClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, std::vector<Event> SX3_Events, std::vector<Event> PC_Events);
 void PCQQQClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, std::vector<Event> SX3_Events, std::vector<Event> PC_Events);
 
@@ -493,7 +495,7 @@ Bool_t TrackRecon::Process(Long64_t entry)
   for (int i = 0; i < qqq.multi; i++)
   {
 #ifdef RAW_HISTOS
-    plotter->Fill2D("QQQ_Index_Vs_Energy", 16 * 8, 0, 16 * 8, 2000, 0, 16000, qqq.index[i], qqq.e[i], "hRawQQQ");
+    plotter->Fill2D("QQQ_Index_Vs_Energy", 16 * 8, 0, 16 * 8, 2000, 0, 8000, qqq.index[i], qqq.e[i], "hRawQQQ");
 
     for (int j = 0; j < qqq.multi; j++)
     {
@@ -577,6 +579,14 @@ Bool_t TrackRecon::Process(Long64_t entry)
           QQQ_Events.push_back(qqqevent);
           QQQ_Events_Raw.push_back(qqqeventr);
           plotter->Fill2D("WedgeE_Vs_RingECal_selected", 1000, 0, 10, 1000, 0, 10, eWedgeMeV, eRingMeV, "hCalQQQ");
+
+          const int channelsPerDetector = MAX_RING + MAX_WEDGE;
+          int globalRingChannel = chRing + (qqq.id[i] * channelsPerDetector);
+          int globalWedgeChannel = chWedge + (qqq.id[i] * channelsPerDetector) + MAX_RING;
+
+          // Fill the histograms
+          plotter->Fill2D("QQQ_CalibratedE_vs_Ch", 128, 0, 128, 1000, 0, 20, globalRingChannel, eRingMeV, "hCalQQQ");
+          plotter->Fill2D("QQQ_CalibratedE_vs_Ch", 128, 0, 128, 1000, 0, 20, globalWedgeChannel, eWedgeMeV, "hCalQQQ");
 
           plotter->Fill2D("QQQCartesianPlot", 200, -100, 100, 200, -100, 100, rho * TMath::Cos(theta), rho * TMath::Sin(theta), "hCalQQQ");
           plotter->Fill2D("QQQCartesianPlot" + std::to_string(qqq.id[i]), 200, -100, 100, 200, -100, 100, rho * TMath::Cos(theta), rho * TMath::Sin(theta), "hCalQQQ");
@@ -822,7 +832,7 @@ Bool_t TrackRecon::Process(Long64_t entry)
       ctr += 1;
     }
 
-for (auto sx3event : SX3_Events)
+    for (auto sx3event : SX3_Events)
     {
       double ts_rf = -987654321;
       double ts_needle = -987654321;
@@ -874,6 +884,13 @@ for (auto sx3event : SX3_Events)
     protonAlphaHistograms(plotter, QQQ_Events, SX3_Events, PC_Events);
     // return kTRUE;
   } // end if(process_alpha_proton_scattering)
+
+  if (doMiscHistograms)
+  {
+    miscHistograms_oneWire(plotter, QQQ_Events, aClusters);
+    // return kTRUE;
+  }
+
 #ifdef RAW_HISTOS
   if (QQQ_Events.size() && PC_Events.size())
     plotter->Fill2D("PCEv_vs_QQQEv", 20, 0, 20, 20, 0, 20, QQQ_Events.size(), PC_Events.size());
@@ -1997,4 +2014,90 @@ void TrackRecon::OldAnalysis()
   {
     // plotter->Fill1D("awdtqqq_vs_aw"+std::to_string(PCQQQTimeCut),800,-2000,2000,24,0,24,std::get<2>(awevent)-qqqtimestamp,std::get<0>(awevent));
   }
+}
+
+void miscHistograms_oneWire(HistPlotter *plotter, std::vector<Event> QQQ_Events, std::vector<std::vector<std::tuple<int, double, double>>> aClusters)
+{
+  // consider the 'proton-like' QQQ branch seen in a,p data
+  TRandom3 rand;
+  rand.SetSeed();                                                              // random seed set
+  Kinematics apkin_a(1.008664916, 4.002603254, 4.002603254, 1.008664916, 7.1); // m3 is alpha, 6.79 MeV is 7.0 MeV proton energy after kapton+100mm 4He gas (molar mass 5.2, 250 torr)
+  for (auto qqqevent : QQQ_Events)
+  {
+    if (qqqevent.Energy1 < 0.6)
+      continue; // coarse gating
+    // if(qqqevent.Energy1 > 5.0) continue; //coarse gating
+    for (const auto acluster : aClusters)
+    {
+      auto [apwire, apSumE, apMaxE, apTSMaxE] = pwinstance.GetPseudoWire(acluster, "ANODE");
+      // if(apSumE<6000) continue;
+      int a_number = acluster.size();
+      TVector3 pc_closest = pwinstance.getClosestWirePosAtWirePhi(apwire, qqqevent.pos.Phi());
+      plotter->Fill1D("dt_anode_interp_qqq", 800, -2000, 2000, qqqevent.Time1 - apTSMaxE, "ainterp_noc");
+      if (qqqevent.Time1 - apTSMaxE < 150)
+      {
+        bool phicut = qqqevent.pos.Phi() <= pc_closest.Phi() + TMath::Pi() / 4. && qqqevent.pos.Phi() >= pc_closest.Phi() - TMath::Pi() / 4.;
+
+        TVector3 x2(pc_closest), x1(qqqevent.pos);
+        TVector3 v = x2 - x1;
+        double t_minimum = -1.0 * (x1.X() * v.X() + x1.Y() * v.Y()) / (v.X() * v.X() + v.Y() * v.Y());
+        TVector3 r_rhoMin_fix = x1 + t_minimum * v;
+
+        double theta_q = (qqqevent.pos - r_rhoMin_fix).Theta();
+        double sinTheta2 = TMath::Sin(theta_q);
+
+        if (r_rhoMin_fix.Perp() > 6.0)
+          continue;
+        if (r_rhoMin_fix.Z() < -173.6 || r_rhoMin_fix.Z() > 100)
+          continue;
+        if (!phicut)
+          continue;
+        plotter->Fill1D("dt_anode_ainterp_qqq_gated", 800, -2000, 2000, qqqevent.Time1 - apTSMaxE, "ainterp_noc");
+        plotter->Fill2D("dt_anode_ainterp_qqq_gated_vs_qqqE", 800, -2000, 2000, 800, 0, 10, qqqevent.Time1 - apTSMaxE, qqqevent.Energy1, "ainterp_noc");
+        plotter->Fill2D("dEa_ainterp_Eqqq_TC1_ignC_a" + std::to_string(acluster.size()), 400, 0, 10, 800, 0, 40000, qqqevent.Energy1, apSumE, "ainterp_noc");
+        plotter->Fill2D("pcPhi_ainterp_qqqPhi_TC1_ignC_a" + std::to_string(acluster.size()), 120, -360, 360, 120, -360, 360, pc_closest.Phi() * 180. / M_PI, qqqevent.pos.Phi() * 180. / M_PI, "ainterp_noc");
+        plotter->Fill2D("pcZ_ainterp_qqqZ_TC1_ignC_a" + std::to_string(acluster.size()) + "_PC" + std::to_string(phicut), 300, -100, 200, 400, -200, 200, qqqevent.pos.Z(), pc_closest.Z(), "ainterp_noc");
+
+        // plotter->Fill2D("pcZ_ainterp_qqqpczguess_TC1_ignC_a"+std::to_string(acluster.size()),300,-100,200,400,-200,200,pczguess,pc_closest.Z(),"ainterp_noc");
+        plotter->Fill2D("dEa3_ainterp_Eqqq_TC1_ignC_a" + std::to_string(acluster.size()) + "_PC" + std::to_string(phicut), 1200, 0, 30, 800, 0, 30000, qqqevent.Energy1, apSumE * sinTheta2 * 3., "ainterp_noc");
+
+        plotter->Fill2D("vertexZ_ainterp_qqqZ_TC1_ignC_a" + std::to_string(acluster.size()), 300, -100, 200, 800, -400, 400, qqqevent.pos.Z(), r_rhoMin_fix.Z(), "ainterp_noc");
+        plotter->Fill1D("vertexZ1d_ainterp_qqqZ_TC1_ignC_a" + std::to_string(acluster.size()), 800, -400, 400, r_rhoMin_fix.Z(), "ainterp_noc");
+        plotter->Fill2D("vertexXY_ainterp_TC1_ignC_a" + std::to_string(acluster.size()), 200, -100, 100, 200, -100, 100, r_rhoMin_fix.X(), r_rhoMin_fix.Y(), "ainterp_noc");
+
+        double path_length_q = (qqqevent.pos - r_rhoMin_fix).Mag() * 0.1;
+        double qqqEfix;
+        qqqEfix = cm_to_MeV->Eval(MeV_to_cm->Eval(qqqevent.Energy1) - path_length_q);
+        plotter->Fill1D("pmisc_ow_Ex_from_alpha", 200, -10, 10, apkin_a.getExc(qqqEfix, theta_q * 180 / M_PI), "ainterp_noc");
+        plotter->Fill2D("pmisc_ow_Ef_vs_theta_qqq", 100, 0, 180, 800, 0, 20, theta_q * 180 / M_PI, qqqEfix, "ainterp_noc");
+        plotter->Fill2D("pmisc_ow_VertexReconZ_vs_Ef", 800, -400, 400, 800, 0, 20, r_rhoMin_fix.Z(), qqqEfix, "ainterp_noc");
+      }
+    }
+    /*
+      for(int i=0; i<24; i++) {
+        if(aWireEvents.find(i) != aWireEvents.end()) {
+          auto awire = aWireEvents[i];
+          if(qqqevent.Time1 -(double)std::get<2>(awire)< 150) {
+            //plotter->Fill2D("qqq_z_phi2_awire"+std::to_string(std::get<0>(awire)), 400,-100,100, 100, -200,200,qqqevent.pos.Z(), qqqevent.pos.Phi()*180/M_PI );
+            //plotter->Fill2D("qqq_z_strip#_awire"+std::to_string(std::get<0>(awire)), 400,-100,100, 100, -50,50,qqqevent.pos.Z(), qqqevent.ch2);
+            plotter->Fill2D("anodeNum_vs_stripNum",64,0,64,24,0,24,qqqevent.ch2,i,"onewire");
+            bool qqqdiagonalphi = (!plotter->FindCut("anode_qqq_diag1")->IsInside(qqqevent.ch2,i)) || (!plotter->FindCut("anode_qqq_diag2")->IsInside(qqqevent.ch2,i));
+            plotter->Fill2D("anodeNum_vs_stripNum_diag"+std::to_string(qqqdiagonalphi),64,0,64,24,0,24,qqqevent.ch2,i,"onewire");
+            plotter->Fill2D("onewire_dEa_Eqqq_TC1_fullev"+std::to_string(PC_Events.size()>0)+"_PC"+std::to_string(qqqdiagonalphi),400,0,10,800,0,40000,qqqevent.Energy1,std::get<1>(awire),"onewire");
+            //plotter->Fill2D("onewire_aNum_qqqPhi_TC1_fullev"+std::to_string(PC_Events.size()>0),24,0,24,120,-360,360,i,qqqevent.pos.Phi()*180./M_PI,"onewire");
+            //plotter->Fill2D("qqq_z_phi_ow_awire"+std::to_string(anodeIndex)+"_qqqstrip"+std::to_string(qqqevent.ch2), 400,-100,100, 200, -200,200,qqqevent.pos.Z(), qqqevent.pos.Phi()*180/M_PI );
+          }
+        }
+
+        if(cWireEvents.find(i) != cWireEvents.end()) {
+          auto cwire = cWireEvents[i];
+          if(qqqevent.Time1 -(double)std::get<2>(cwire) < 150) {
+            //plotter->Fill2D("qqq_z_phi2_cwire"+std::to_string(std::get<0>(cwire)),400,-100,100, 100, -200,200,qqqevent.pos.Z(), qqqevent.pos.Phi()*180/M_PI );
+            //plotter->Fill2D("qqq_z_strip#_cwire"+std::to_string(std::get<0>(cwire)),400,-100,100, 100, -50,50,qqqevent.pos.Z(), qqqevent.ch2 );
+            plotter->Fill2D("onewire_dEc_Eqqq_fullev"+std::to_string(PC_Events.size()>0),400,0,10,800,0,40000,qqqevent.Energy1,std::get<1>(cwire),"onewire");
+            plotter->Fill2D("onewire_cNum_qqqPhi_TC1_fullev"+std::to_string(PC_Events.size()>0),24,0,24,120,-360,360,i,qqqevent.pos.Phi()*180./M_PI,"onewire");
+          }
+        }
+    }//for 'i' loop*/
+  } // end QQQEvents loop
 }
