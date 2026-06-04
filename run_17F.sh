@@ -20,7 +20,7 @@ function run_once() {
 }
 
 export -f run_once
-run_once 351
+run_once 52
 # parallel -j 6 --ctag run_once {1} ::: {350..400}
 rm output_17F.root
 hadd -j 4 -k output_17F.root 17F_output/results_run3*.root

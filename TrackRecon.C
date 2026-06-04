@@ -822,33 +822,50 @@ Bool_t TrackRecon::Process(Long64_t entry)
       ctr += 1;
     }
 
-    double ts_rf = -987654321;
-    double ts_needle = -987654321;
-    double ts_mcp = -987654321;
-    bool found_rf = false;
-    bool found_mcp = false;
-    bool found_needle = false;
-
-    for (int j = 0; j < misc.multi; j++)
+for (auto sx3event : SX3_Events)
     {
-      plotter->Fill1D("channels_misc", 20, 0, 20, misc.ch[j], "misc");
-      if (misc.ch[j] == 2)
-      { // Needle
-        ts_needle = static_cast<double>(misc.t[j]) + static_cast<double>(misc.tf[j]);
-        found_needle = 1;
+      double ts_rf = -987654321;
+      double ts_needle = -987654321;
+      double ts_mcp = -987654321;
+      double ts_sx3 = static_cast<double>(sx3event.Time1) + (rnd.Uniform(16.0) - 8.0);
+      bool found_rf = false;
+      bool found_mcp = false;
+      bool found_needle = false;
+      for (int j = 0; j < misc.multi; j++)
+      {
+        plotter->Fill1D("channels_misc_sx3", 20, 0, 20, misc.ch[j], "misc");
+        if (misc.ch[j] == 2)
+        { // Needle
+          plotter->Fill2D("needle_vs_sx3E", 800, 0, 16384, 800, 0, 10, misc.e[j], sx3event.Energy1, "misc");
+          ts_needle = static_cast<double>(misc.t[j]) + static_cast<double>(misc.tf[j]);
+          found_needle = 1;
+          plotter->Fill1D("dt_sx3_needle", 800, -2000, 2000, ts_sx3 - ts_needle, "misc");
+        }
+        if (misc.ch[j] == 3)
+        { // RF
+          ts_rf = static_cast<double>(misc.t[j]) + static_cast<double>(misc.tf[j]);
+          found_rf = 1;
+          plotter->Fill1D("dt_sx3_rf", 800, -2000, 2000, ts_sx3 - ts_rf, "misc");
+        }
+        if (misc.ch[j] == 4)
+        { // mcp
+          ts_mcp = static_cast<double>(misc.t[j]) + static_cast<double>(misc.tf[j]);
+          found_mcp = 1;
+          plotter->Fill1D("dt_sx3_mcp", 800, -2000, 2000, ts_sx3 - ts_mcp, "misc");
+        }
       }
-      if (misc.ch[j] == 3)
-      { // RF
-        ts_rf = static_cast<double>(misc.t[j]) + static_cast<double>(misc.tf[j]);
-        found_rf = 1;
+      if (found_rf && found_mcp)
+      {
+        if (ctr == 0)
+          plotter->Fill1D("dt_rf_mcp_sx3", 500, -1000, 1000, ts_rf - ts_mcp, "misc");
+        double dt_rf_mcp = ts_rf - ts_mcp;
+        double dt_sx3_rf = ts_sx3 - ts_rf;
+        double dt_sx3_mcp = ts_sx3 - ts_mcp;
+        plotter->Fill2D("dt(sx3,rf)_vs_(rf,mcp)", 640, -2000, 2000, 640, -2000, 2000, dt_sx3_rf, dt_rf_mcp, "misc");
+        plotter->Fill2D("dt_(sx3,mcp)_vs_(sx3,rf)", 640, -1400, 2000, 640, -2000, 2000, dt_sx3_mcp, dt_sx3_rf, "misc");
+        plotter->Fill2D("dt_(sx3,mcp)_vs_(rf,mcp)", 640, -1400, -600, 640, -2000, 2000, dt_sx3_mcp, dt_rf_mcp, "misc");
       }
-      if (misc.ch[j] == 4)
-      { // mcp
-        ts_mcp = static_cast<double>(misc.t[j]) + static_cast<double>(misc.tf[j]);
-        found_mcp = 1;
-      }
-
-      plotter->Fill1D("dt_rf_mcp_qqq", 500, -1000, 1000, ts_rf - ts_mcp, "misc");
+      ctr += 1;
     }
   }
 

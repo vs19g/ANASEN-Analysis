@@ -62,10 +62,7 @@ void SetStyle() {
     gStyle->SetNumberContours(255);
 }
 
-// ---------------------------------------------------------------------------
-// make_pretty()
-// ---------------------------------------------------------------------------
-void make_pretty(const char* rootFile,
+void make_prettyplots(const char* rootFile,
                  const char* histName,
                  const char* xlabel = "",
                  const char* ylabel = "") {
@@ -86,11 +83,6 @@ void make_pretty(const char* rootFile,
         return;
     }
 
-    // --- Clone and detach BEFORE closing the file ---------------------------
-    // ROOT ties every histogram to the TDirectory of the file it came from.
-    // When f->Close() is called, ROOT deletes all objects in that directory —
-    // including the clone — unless SetDirectory(0) is called first to detach
-    // it. Drawing a deleted object causes the segfault you are seeing.
     TObject* clone = obj->Clone(Form("%s_clone", histName));
     if (!clone) {
         std::cerr << "ERROR: Clone failed for '" << histName << "'\n";
@@ -113,41 +105,29 @@ void make_pretty(const char* rootFile,
 
     // Widen right margin for the colz palette bar
     if (is2D) gPad->SetRightMargin(0.13);
-
-    // --- Draw ---------------------------------------------------------------
+    
     if (is2D) {
         TH2* h = (TH2*)clone;
         h->SetStats(0);
-        h->GetXaxis()->SetTitle("");
-        h->GetYaxis()->SetTitle("");
+        h->GetXaxis()->SetTitle(xlabel);
+        h->GetYaxis()->SetTitle(ylabel);
+        h->GetXaxis()->SetTitleOffset(0.9);
+        h->GetYaxis()->SetTitleOffset(1.4);
+        h->GetXaxis()->CenterTitle(true);
+        h->GetYaxis()->CenterTitle(true);
         h->Draw("colz");
     } else {
         TH1* h = (TH1*)clone;
         h->SetStats(0);
-        h->SetLineColor(kBlue+1);
-        h->SetFillColorAlpha(kBlue+1, 0.25);
-        h->SetFillStyle(1001);
-        h->GetXaxis()->SetTitle("");
-        h->GetYaxis()->SetTitle("");
+        h->SetLineColor(kAzure-5);
+        h->SetLineWidth(3);
+        h->GetXaxis()->SetTitle(xlabel);
+        h->GetYaxis()->SetTitle(ylabel);
+        h->GetXaxis()->SetTitleOffset(0.9);
+        h->GetYaxis()->SetTitleOffset(1.4);
+        h->GetXaxis()->CenterTitle(true);
+        h->GetYaxis()->CenterTitle(true);
         h->Draw("hist");
-    }
-
-    // --- Axis labels via TLatex (full typographic control) ------------------
-    TLatex tex;
-    tex.SetNDC();
-    tex.SetTextFont(42);
-    tex.SetTextSize(0.050);
-
-    // X: y=0.06 sits just below the tick numbers inside the bottom margin (0.13).
-    // Y: x=0.08 sits just left of the tick numbers inside the left margin (0.14).
-    // Increase either value to push the label further from the axis.
-    if (strlen(xlabel) > 0)
-        tex.DrawLatex(0.46, 0.05, xlabel);
-
-    if (strlen(ylabel) > 0) {
-        tex.SetTextAngle(90);
-        tex.DrawLatex(0.08, 0.40, ylabel);
-        tex.SetTextAngle(0);
     }
 
     // --- Save ---------------------------------------------------------------
