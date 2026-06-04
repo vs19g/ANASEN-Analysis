@@ -11,7 +11,8 @@ MEV2U = 1.0 / 931.494
 p_pa = P_TORR * 133.322
 molar_density = p_pa / (R * TEMP_K)
 m_he, m_c, m_o= 4.0026, 12.0000, 15.9949
-m_mix_avg = (0.96 * m_he) + (0.04 * (m_c + 2*m_o))
+# m_mix_avg = (0.96 * m_he) + (0.04 * (m_c + 2*m_o))
+m_mix_avg = (0.97 * m_he) + (0.03 * (m_c + 2*m_o))
 rho_g_cm3 = (molar_density * m_mix_avg) / 1e6
 print(f"Gas density at {P_TORR} Torr: {rho_g_cm3:.6e} g/cm^3")
 

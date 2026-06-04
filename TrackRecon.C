@@ -140,6 +140,8 @@ int anodeIndex = -1, cathodeIndex = -1;
 
 void protonAlphaHistograms(HistPlotter *plotter, std::vector<Event> QQQ_Events, std::vector<Event> SX3_Events, std::vector<Event> PC_Events);
 void miscHistograms_oneWire(HistPlotter *plotter, std::vector<Event> QQQ_Events, std::vector<std::vector<std::tuple<int, double, double>>> aClusters);
+void protonMiscHistograms(HistPlotter* plotter, std::vector<Event> QQQ_Events, std::vector<Event> SX3_Events, std::vector<Event> PC_Events);
+void protonMiscHistograms_sx3(HistPlotter* plotter, std::vector<Event> QQQ_Events, std::vector<Event> SX3_Events, std::vector<Event> PC_Events);
 void PCSX3ClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, std::vector<Event> SX3_Events, std::vector<Event> PC_Events);
 void PCQQQClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, std::vector<Event> SX3_Events, std::vector<Event> PC_Events);
 
@@ -263,17 +265,21 @@ void TrackRecon::Begin(TTree * /*tree*/)
   // ------------- ELOSS Correction read in from tables -------------
 
   //    MeV_to_cm = new TGraph("eloss_calculations/alphas_in_250torr_mix_filtered_6MeV.txt","%lf %*lf %lf");
-  MeV_to_cm = new TGraph("eloss_calculations/alpha_lookup_20MeV.dat", "%lf %*lf %lf");
+  MeV_to_cm = new TGraph("eloss_calculations/alpha_lookup_20MeV_3pc.dat", "%lf %*lf %lf");
+  // MeV_to_cm = new TGraph("eloss_calculations/alpha_lookup_20MeV_4pc.dat", "%lf %*lf %lf");
   cm_to_MeV = new TGraph(MeV_to_cm->GetN(), MeV_to_cm->GetY(), MeV_to_cm->GetX());
 
-  MeV_to_cm_p = new TGraph("eloss_calculations/proton_lookup_20MeV.dat", "%lf %*lf %lf");
+  MeV_to_cm_p = new TGraph("eloss_calculations/proton_lookup_20MeV_3pc.dat", "%lf %*lf %lf");
+  // MeV_to_cm_p = new TGraph("eloss_calculations/proton_lookup_20MeV_4pc.dat", "%lf %*lf %lf");
   cm_to_MeVp = new TGraph(MeV_to_cm_p->GetN(), MeV_to_cm_p->GetY(), MeV_to_cm_p->GetX());
 
   // Add these alongside your existing proton and alpha tables
-  MeV_to_cm_27Al = new TGraph("eloss_calculations/aluminum_lookup_80MeV.dat", "%lf %*lf %lf");
+  MeV_to_cm_27Al = new TGraph("eloss_calculations/aluminum_lookup_80MeV_3pc.dat", "%lf %*lf %lf");
+  // MeV_to_cm_27Al = new TGraph("eloss_calculations/aluminum_lookup_80MeV_4pc.dat", "%lf %*lf %lf");
   cm_to_MeV_27Al = new TGraph(MeV_to_cm_27Al->GetN(), MeV_to_cm_27Al->GetY(), MeV_to_cm_27Al->GetX());
 
-  MeV_to_cm_17F = new TGraph("eloss_calculations/fluorine_lookup_70MeV.dat", "%lf %*lf %lf");
+  MeV_to_cm_17F = new TGraph("eloss_calculations/fluorine_lookup_70MeV_3pc.dat", "%lf %*lf %lf");
+  // MeV_to_cm_17F = new TGraph("eloss_calculations/fluorine_lookup_70MeV_4pc.dat", "%lf %*lf %lf");
   cm_to_MeV_17F = new TGraph(MeV_to_cm_17F->GetN(), MeV_to_cm_17F->GetY(), MeV_to_cm_17F->GetX());
 
   // cm_to_MeV.Eval(MeV_to_cm.Eval(detectedE)-PathLength) gives energy of particle before it traversed 'path length'
@@ -888,6 +894,8 @@ Bool_t TrackRecon::Process(Long64_t entry)
   if (doMiscHistograms)
   {
     miscHistograms_oneWire(plotter, QQQ_Events, aClusters);
+    protonMiscHistograms_sx3(plotter, QQQ_Events, SX3_Events, PC_Events);
+    protonMiscHistograms(plotter, QQQ_Events,  SX3_Events, PC_Events);
     // return kTRUE;
   }
 
@@ -1947,19 +1955,6 @@ void TrackRecon::OldAnalysis()
     } // j loop end
   } // qqq i loop end
 
-  TVector3 guessVertex(0, 0, source_vertex); // for run12, subtract anodeIntersection.Z() by ~74.0 seems to work
-  // rho=40.0 mm is halfway between the cathodes(rho=42) and anodes(rho=37)
-  // double pcz_guess = 37.0/TMath::Tan((hitPos-guessVertex).Theta())  + guessVertex.Z(); //this is ideally kept to be all QQQ+userinput for calibration of pcz
-  double pcz_guess = z_to_crossover_rho(anodeIntersection.Z()) / TMath::Tan((hitPos - guessVertex).Theta()) + guessVertex.Z(); // this is ideally kept to be all QQQ+userinput for calibration of pcz
-  if (PCQQQTimeCut && PCQQQPhiCut && hitPos.Perp() > 0 && anodeIntersection.Perp() > 0 && cathodeHits.size() >= 2)
-  {
-    plotter->Fill2D("pczguess_vs_qqqE", 100, 0, 200, 800, 0, 20, pcz_guess, qqqenergy, "pczguess");
-    double pczoffset = 0.0;
-    // plotter->Fill2D("pczguess_vs_pcz_rad="+std::to_string(hitPos.Perp()),100,0,200,150,0,200,pcz_guess,anodeIntersection.Z(),"pczguess"); //entirely qqq-derived position vs entirely PC derived position
-    plotter->Fill2D("pczguess_vs_pcz_phi=" + std::to_string(hitPos.Phi() * 180. / M_PI), 200, 0, 200, 200, 0, 200, pcz_guess, anodeIntersection.Z() + pczoffset, "pczguess"); // entirely qqq-derived position vs entirely PC derived position
-    plotter->Fill2D("pczguess_vs_pcz", 200, 0, 200, 200, 0, 200, pcz_guess, anodeIntersection.Z() + pczoffset);
-    plotter->Fill2D("pcz_vs_pcPhi_rad=" + std::to_string(hitPos.Perp()), 360, 0, 360, 150, 0, 200, anodeIntersection.Phi() * 180. / M_PI, anodeIntersection.Z() + pczoffset, "pczguess");
-  }
   for (int i = 0; i < sx3.multi; i++)
   {
     // plotting sx3 strip hits vs anode phi
@@ -2100,4 +2095,176 @@ void miscHistograms_oneWire(HistPlotter *plotter, std::vector<Event> QQQ_Events,
         }
     }//for 'i' loop*/
   } // end QQQEvents loop
+}
+
+
+void protonMiscHistograms(HistPlotter* plotter, std::vector<Event> QQQ_Events, std::vector<Event> SX3_Events, std::vector<Event> PC_Events) {
+		//consider the 'proton-like' QQQ branch seen in a,p data
+		TRandom3 rand;
+		rand.SetSeed();//random seed set
+		Kinematics apkin_a(1.008664916,4.002603254,4.002603254,1.008664916,7.1); //m3 is alpha, 6.79 MeV is 7.0 MeV proton energy after kapton+100mm 4He gas (molar mass 5.2, 250 torr)
+		for(auto qqqevent: QQQ_Events) {
+				if(qqqevent.Energy1 < 0.6) continue; //coarse gating
+				//if(qqqevent.Energy1 > 5.0) continue; //coarse gating
+				for(auto pcevent: PC_Events) {
+					if(!(pcevent.multi1==1 && pcevent.multi2<=2)) continue;
+					//if(pcevent.Energy1 > 11000) continue; //coarse gating
+					bool phicut = qqqevent.pos.Phi() <= pcevent.pos.Phi()+TMath::Pi()/4. && qqqevent.pos.Phi() >= pcevent.pos.Phi()-TMath::Pi()/4.;
+					if(!phicut) continue;
+            		//if(pcevent.Time1-qqqevent.Time1<-150 || pcevent.Time1-qqqevent.Time1 >850) continue;
+            		
+					double pcz_fix, pcz_dith=pcevent.pos.Z();
+					if(pcevent.multi2==2) 
+						pcz_fix = pcfix_func.Eval(pcevent.pos.Z());
+					else {
+						pcz_fix = rand.Gaus(pcevent.pos.Z(),8.0);//dither for a1c1 events
+						pcz_dith = pcz_fix;
+					}
+            		TVector3 x2f(pcevent.pos.X(),pcevent.pos.Y(),pcz_fix);
+            		TVector3 x1(qqqevent.pos);
+            		TVector3 v = x2f-x1;
+            		double t_minimum = -1.0*(x1.X()*v.X()+x1.Y()*v.Y())/(v.X()*v.X()+v.Y()*v.Y());
+            		TVector3 r_rhoMin_fix = x1 + t_minimum*v;
+            		double vertex_z = r_rhoMin_fix.Z();
+            		//double theta_q = (qqqevent.pos - TVector3(0,0,vertex_z)).Theta();
+            		double theta_q = (qqqevent.pos - r_rhoMin_fix).Theta();
+ 					double sinTheta_customV = TMath::Sin(theta_q);
+					//if(r_rhoMin_fix.Perp()>6) continue;
+					bool cathode_alpha_select = (pcevent.Energy2 > 1400);
+					if(vertex_z < -173.6 || vertex_z > 100) continue;
+
+
+            		//What's below: radial cut, time coincident, phi-correlated events with possible energy selection applied to both E_si and dE_Anodes
+					auto plot_with_tag = [&](std::string tag="") {
+						std::string pmlabel = "proton+misc"+tag;
+            			plotter->Fill2D("pmisc_dE_E_AnodeQQQ"+tag,400,0,10,800,0,40000,qqqevent.Energy1,pcevent.Energy1,pmlabel);
+            			plotter->Fill2D("pmisc_dE_E_CathodeQQQ"+tag,400,0,10,800,0,10000,qqqevent.Energy1,pcevent.Energy2,pmlabel);
+            			plotter->Fill2D("pmisc_dE3_E_AnodeQQQ"+tag,400,0,10,400,0,40000,qqqevent.Energy1,pcevent.Energy1*sinTheta_customV*3.,pmlabel);
+						plotter->Fill2D("pmisc_dE3_E_CathodeQQQ"+tag,400,0,10,400,0,10000,qqqevent.Energy1,pcevent.Energy2*sinTheta_customV,pmlabel);
+            			plotter->Fill2D("pmisc_dPhi_QQQ_PC"+tag,180,-360,360,180,-360,360,pcevent.pos.Phi()*180/M_PI,qqqevent.pos.Phi()*180/M_PI,pmlabel);
+            			plotter->Fill1D("pmisc_dt_Anode_QQQ_PC"+std::to_string(phicut)+tag,600,-2000,2000,pcevent.Time1-qqqevent.Time1,pmlabel);
+            			plotter->Fill1D("pmisc_dt_Cathode_QQQ"+tag,600,-2000,2000,pcevent.Time2-qqqevent.Time1,pmlabel);
+            			plotter->Fill2D("pmisc_dt_Anode_E_QQQ_PC"+std::to_string(phicut)+tag,600,-2000,2000,400,0,10,pcevent.Time1-qqqevent.Time1,qqqevent.Energy1,pmlabel);
+            			plotter->Fill2D("pmisc_dt_AnodeQQQ_vsPCPhi"+tag,600,-2000,2000,180,-360,360,pcevent.Time1-qqqevent.Time1,pcevent.pos.Phi()*180./M_PI,pmlabel);
+            			plotter->Fill2D("pmisc_dt_Cathode_E_QQQ"+tag,600,-2000,2000,400,0,10,pcevent.Time2-qqqevent.Time1,qqqevent.Energy1,pmlabel);
+            			plotter->Fill2D("pmisc_dt_CathodeQQQ_vsPCPhi"+tag,600,-2000,2000,180,-360,360,pcevent.Time2-qqqevent.Time1,pcevent.pos.Phi()*180./M_PI,pmlabel);
+            			plotter->Fill1D("pmisc_pczfix"+tag,600,-300,300,pcz_fix,pmlabel);
+            			if(pcevent.multi2==2) {
+            				plotter->Fill1D("pmisc_pcz"+tag,600,-300,300,pcevent.pos.Z(),pmlabel);
+            				plotter->Fill1D("pmisc_pcz2"+tag,600,-300,300,pcevent.pos.Z(),pmlabel);
+            			}
+						if(pcevent.multi2==1) {
+            				plotter->Fill1D("pmisc_pcz"+tag,600,-300,300,pcz_fix,pmlabel);
+            				plotter->Fill1D("pmisc_pcz1"+tag,600,-300,300,pcevent.pos.Z(),pmlabel);
+            				plotter->Fill1D("pmisc_pcz_dith"+tag,600,-300,300,pcz_dith,pmlabel);
+						}
+
+            			//double path_length_q = (qqqevent.pos-TVector3(0,0,vertex_z)).Mag()*0.1;
+            			//double path_length_s = (sx3event.pos-TVector3(0,0,vertex_z)).Mag()*0.1;
+            			double path_length_q = (qqqevent.pos-r_rhoMin_fix).Mag()*0.1;
+						double qqqEfix;
+						if(tag == "_cathode_alphas") {//satisfied when find succeeds 
+							qqqEfix = cm_to_MeV->Eval(MeV_to_cm->Eval(qqqevent.Energy1)-path_length_q);
+							plotter->Fill1D("pmisc_Ex_from_alpha",200,-10,10,apkin_a.getExc(qqqEfix,theta_q*180/M_PI),pmlabel);
+						}
+						else
+							qqqEfix = cm_to_MeVp->Eval(MeV_to_cm_p->Eval(qqqevent.Energy1)-path_length_q);
+						//plotter->Fill2D("qqqEf_sx3E_matrix_all"+tag,400,0,10,400,0,10,qqqEfix,sx3event.Energy1,pmlabel);
+						plotter->Fill2D("pmisc_dE3_Ef_AnodeQQQ"+tag,400,0,10,400,0,40000,qqqEfix,pcevent.Energy1*sinTheta_customV*3,pmlabel);
+						plotter->Fill2D("pmisc_dE3_Ef_CathodeQQQ"+tag,400,0,10,400,0,10000,qqqEfix,pcevent.Energy2*sinTheta_customV,pmlabel);
+            			
+						plotter->Fill1D("pmisc_VertexReconZ"+tag,800,-400,400,vertex_z,pmlabel);
+						plotter->Fill2D("pmisc_VertexReconXY"+tag,200,-100,100,200,-100,100,r_rhoMin_fix.X(),r_rhoMin_fix.Y(),pmlabel);						
+						plotter->Fill2D("pmisc_VertexReconZ_vs_Ef"+tag,800,-400,400,800,0,20,vertex_z,qqqEfix,pmlabel);
+						plotter->Fill2D("pmisc_VertexReconZ_vs_Ef"+tag+"_a"+std::to_string(pcevent.multi1),800,-400,400,800,0,20,vertex_z,qqqEfix,pmlabel);
+						
+						plotter->Fill2D("pmisc_Ef_vs_theta_qqq"+tag,100,0,180,800,0,20,theta_q*180/M_PI,qqqEfix,pmlabel);
+						if(pcevent.multi2==1) {
+							plotter->Fill2D("pmisc_Ef_vs_theta_qqq_a1c1"+tag,100,0,180,800,0,20,theta_q*180/M_PI,qqqEfix,pmlabel);						
+							plotter->Fill2D("pmisc_VertexReconZ_vs_Ef_a1c1"+tag,800,-400,400,800,0,20,vertex_z,qqqEfix,pmlabel);
+						}
+					};
+					
+					if(cathode_alpha_select) 
+						plot_with_tag("_cathode_alphas");
+            		//else 
+					//	plot_with_tag("_cathode_protons");
+            		//plot_with_tag();
+					
+            		//plotter->Fill1D("pmisc_Ex_from_protons",200,-10,10,apkin_p.getExc(qqqEfix,theta_s*180/M_PI),pmlabel);
+
+				}//end PCEvents loop
+		}//end QQQEvents loop
+}
+
+void protonMiscHistograms_sx3(HistPlotter* plotter, std::vector<Event> QQQ_Events, std::vector<Event> SX3_Events, std::vector<Event> PC_Events) {
+		//consider the 'proton-like' QQQ branch seen in a,p data
+		for(auto sx3event: SX3_Events) {
+				if(sx3event.Energy1 < 1.2) continue; //coarse gating
+				//if(sx3event.Energy1 > 5.0) continue; //coarse gating
+				for(auto pcevent: PC_Events) {
+					if(!(pcevent.multi1==1 && pcevent.multi2==2)) continue;
+					//if(pcevent.Energy1 > 11000) continue; //coarse gating
+					bool phicut = sx3event.pos.Phi() <= pcevent.pos.Phi()+TMath::Pi()/3. && sx3event.pos.Phi() >= pcevent.pos.Phi()-TMath::Pi()/3.;
+					if(!phicut) continue;
+            		//if(pcevent.Time1-sx3event.Time1<-150 || pcevent.Time1-sx3event.Time1 >850) continue;
+            		
+					double pcz_fix = pcfix_func.Eval(pcevent.pos.Z());
+            		TVector3 x2f(pcevent.pos.X(),pcevent.pos.Y(),pcz_fix);
+            		TVector3 x1(sx3event.pos);
+            		TVector3 v = x2f-x1;
+            		double t_minimum = -1.0*(x1.X()*v.X()+x1.Y()*v.Y())/(v.X()*v.X()+v.Y()*v.Y());
+            		TVector3 r_rhoMin_fix = x1 + t_minimum*v;
+            		double vertex_z = r_rhoMin_fix.Z();
+            		//double theta_q = (sx3event.pos - TVector3(0,0,vertex_z)).Theta();
+
+					if(r_rhoMin_fix.Perp()>10.0) continue;
+            		double theta_s = (sx3event.pos - r_rhoMin_fix).Theta();
+ 					double sinTheta_customV = TMath::Sin(theta_s);
+					bool cathode_alpha_select = (pcevent.Energy2 > 1400);
+
+		
+
+            		//What's below: radial cut, time coincident, phi-correlated events with possible energy selection applied to both E_si and dE_Anodes
+					auto plot_with_tag = [&](std::string tag="") {
+						std::string pmlabel = "proton+miscsx3"+tag;
+            			plotter->Fill2D("pmiscs_dE_E_Anodesx3"+tag,400,0,10,800,0,40000,sx3event.Energy1,pcevent.Energy1,pmlabel);
+            			plotter->Fill2D("pmiscs_dE_E_Cathodesx3"+tag,400,0,10,800,0,10000,sx3event.Energy1,pcevent.Energy2,pmlabel);
+            			plotter->Fill2D("pmiscs_dE3_E_Anodesx3"+tag,400,0,10,400,0,40000,sx3event.Energy1,pcevent.Energy1*sinTheta_customV*3.,pmlabel);
+						plotter->Fill2D("pmiscs_dE3_E_Cathodesx3"+tag,400,0,10,400,0,10000,sx3event.Energy1,pcevent.Energy2*sinTheta_customV,pmlabel);
+            			plotter->Fill2D("pmiscs_dPhi_sx3_PC"+tag,180,-360,360,180,-360,360,pcevent.pos.Phi()*180/M_PI,sx3event.pos.Phi()*180/M_PI,pmlabel);
+            			plotter->Fill1D("pmiscs_dt_Anode_sx3_PC"+std::to_string(phicut)+tag,600,-2000,2000,pcevent.Time1-sx3event.Time1,pmlabel);
+            			plotter->Fill1D("pmiscs_dt_Cathode_sx3"+tag,600,-2000,2000,pcevent.Time2-sx3event.Time1,pmlabel);
+            			plotter->Fill2D("pmiscs_dt_Anode_E_sx3_PC"+std::to_string(phicut)+tag,600,-2000,2000,400,0,10,pcevent.Time1-sx3event.Time1,sx3event.Energy1,pmlabel);
+            			plotter->Fill2D("pmiscs_dt_Cathode_E_sx3"+tag,600,-2000,2000,400,0,10,pcevent.Time2-sx3event.Time1,sx3event.Energy1,pmlabel);
+            			plotter->Fill2D("pmiscs_dt_Cathodesx3_vsPCPhi"+tag,600,-2000,2000,180,-360,360,pcevent.Time2-sx3event.Time1,pcevent.pos.Phi()*180./M_PI,pmlabel);
+            			plotter->Fill1D("pmiscs_pczfix"+tag,600,-300,300,pcz_fix,pmlabel);
+            			plotter->Fill1D("pmiscs_pcz"+tag,600,-300,300,pcevent.pos.Z(),pmlabel);
+	
+            			//double path_length_q = (sx3event.pos-TVector3(0,0,vertex_z)).Mag()*0.1;
+            			//double path_length_s = (sx3event.pos-TVector3(0,0,vertex_z)).Mag()*0.1;
+            			double path_length_s = (sx3event.pos-r_rhoMin_fix).Mag()*0.1;
+						double sx3Efix = cm_to_MeVp->Eval(MeV_to_cm_p->Eval(sx3event.Energy1)-path_length_s);
+	
+						//plotter->Fill2D("sx3Ef_sx3E_matrix_all"+tag,400,0,10,400,0,10,sx3Efix,sx3event.Energy1,pmlabel);
+						plotter->Fill2D("pmiscs_dE3_Ef_Anodesx3"+tag,400,0,10,400,0,40000,sx3Efix,pcevent.Energy1*sinTheta_customV*3,pmlabel);
+						plotter->Fill2D("pmiscs_dE3_Ef_Cathodesx3"+tag,400,0,10,400,0,10000,sx3Efix,pcevent.Energy2*sinTheta_customV,pmlabel);
+            			
+            			plotter->Fill2D("pmiscs_Ef_vs_theta_sx3"+tag,100,0,180,800,0,20,theta_s*180/M_PI,sx3Efix,pmlabel);
+						plotter->Fill1D("pmiscs_VertexReconZ"+tag,800,-400,400,vertex_z,pmlabel);
+						plotter->Fill2D("pmiscs_VertexReconXY"+tag,200,-100,100,200,-100,100,r_rhoMin_fix.X(),r_rhoMin_fix.Y(),pmlabel);						
+						plotter->Fill2D("pmiscs_VertexReconZ_vs_Ef"+tag,800,-400,400,800,0,20,vertex_z,sx3Efix,pmlabel);
+						plotter->Fill2D("pmiscs_VertexReconZ_vs_Ef"+tag+"_a"+std::to_string(pcevent.multi1),800,-400,400,800,0,20,vertex_z,sx3Efix,pmlabel);
+					};
+					
+					plot_with_tag();
+					if(cathode_alpha_select) 
+						plot_with_tag("_cathode_alphas");
+            		else 
+						plot_with_tag("_cathode_protons");
+            		
+            		//plotter->Fill1D("pmisc_Ex_from_protons",200,-10,10,apkin_p.getExc(sx3Efix,theta_s*180/M_PI),pmlabel);
+
+				}//end PCEvents loop
+		}//end sx3Events loop
 }

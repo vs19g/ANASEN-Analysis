@@ -27,7 +27,7 @@ export timecut_low=400.0;
 #export source_vertex=53.44; root -q -b -x ../ANASEN_analysis/data/27Al_Data/Run_010_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root results_run10.root;
 #export source_vertex=53.44; root -q -b -x ../ANASEN_analysis/data/27Al_Data/Run_011_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root results_run11.root;
 export source_vertex=53.44; root -q -b -x ../ANASEN_analysis/data/27Al_Data/Run_012_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root results_run12.root;
-exit
+# exit
 #export source_vertex=53.44; root -q -b -x ../ANASEN_analysis/data/27Al_Data/Run_013_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root results_run13.root;
 #exit
 fi
