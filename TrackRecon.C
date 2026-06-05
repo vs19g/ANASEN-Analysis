@@ -801,6 +801,7 @@ Bool_t TrackRecon::Process(Long64_t entry)
       bool found_rf = false;
       bool found_mcp = false;
       bool found_needle = false;
+      bool qqq_inner_ring = (qqqevent.ch1 % 16) < 6;
       for (int j = 0; j < misc.multi; j++)
       {
         plotter->Fill1D("channels_misc_qqq", 20, 0, 20, misc.ch[j], "misc");
@@ -815,25 +816,25 @@ Bool_t TrackRecon::Process(Long64_t entry)
         { // RF
           ts_rf = static_cast<double>(misc.t[j]) + static_cast<double>(misc.tf[j]);
           found_rf = 1;
-          plotter->Fill1D("dt_qqq_rf", 800, -2000, 2000, ts_qqq - ts_rf, "misc");
+          plotter->Fill1D("dt_qqq_rf_innerring"+std::to_string(qqq_inner_ring), 800, -2000, 2000, ts_qqq - ts_rf, "misc");
         }
         if (misc.ch[j] == 4)
         { // mcp
           ts_mcp = static_cast<double>(misc.t[j]) + static_cast<double>(misc.tf[j]);
           found_mcp = 1;
-          plotter->Fill1D("dt_qqq_mcp", 800, -2000, 2000, ts_qqq - ts_mcp, "misc");
+          plotter->Fill1D("dt_qqq_mcp_innerring"+std::to_string(qqq_inner_ring), 800, -2000, 2000, ts_qqq - ts_mcp, "misc");
         }
       }
       if (found_rf && found_mcp)
       {
         if (ctr == 0)
-          plotter->Fill1D("dt_rf_mcp_qqq", 500, -1000, 1000, ts_rf - ts_mcp, "misc");
+          plotter->Fill1D("dt_rf_mcp_qqq_innerring"+std::to_string(qqq_inner_ring), 500, -1000, 1000, ts_rf - ts_mcp, "misc");
         double dt_rf_mcp = ts_rf - ts_mcp;
         double dt_qqq_rf = ts_qqq - ts_rf;
         double dt_qqq_mcp = ts_qqq - ts_mcp;
-        plotter->Fill2D("dt(qqq,rf)_vs_(rf,mcp)", 640, -2000, 2000, 640, -2000, 2000, dt_qqq_rf, dt_rf_mcp, "misc");
-        plotter->Fill2D("dt_(qqq,mcp)_vs_(qqq,rf)", 640, -1400, 2000, 640, -2000, 2000, dt_qqq_mcp, dt_qqq_rf, "misc");
-        plotter->Fill2D("dt_(qqq,mcp)_vs_(rf,mcp)", 640, -1400, -600, 640, -2000, 2000, dt_qqq_mcp, dt_rf_mcp, "misc");
+        plotter->Fill2D("dt(qqq,rf)_vs_(rf,mcp)_innerring"+std::to_string(qqq_inner_ring), 640, -2000, 2000, 640, -2000, 2000, dt_qqq_rf, dt_rf_mcp, "misc");
+        plotter->Fill2D("dt_(qqq,mcp)_vs_(qqq,rf)_innerring"+std::to_string(qqq_inner_ring), 640, -1400, 2000, 640, -2000, 2000, dt_qqq_mcp, dt_qqq_rf, "misc");
+        plotter->Fill2D("dt_(qqq,mcp)_vs_(rf,mcp)_innerring"+std::to_string(qqq_inner_ring), 640, -1400, -600, 640, -2000, 2000, dt_qqq_mcp, dt_rf_mcp, "misc");
       }
       ctr += 1;
     }
