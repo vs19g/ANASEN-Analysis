@@ -27,7 +27,8 @@
 // ---------------------------------------------------------------------------
 // Style — called once before anything is drawn
 // ---------------------------------------------------------------------------
-void SetStyle() {
+void SetStyle()
+{
     gROOT->SetStyle("Plain");
     gStyle->SetOptStat(0);
     gStyle->SetOptTitle(0);
@@ -62,35 +63,40 @@ void SetStyle() {
     gStyle->SetNumberContours(255);
 }
 
-void make_prettyplots(const char* rootFile,
-                 const char* histName,
-                 const char* xlabel = "",
-                 const char* ylabel = "") {
+void make_prettyplots(const char *rootFile,
+                      const char *histName,
+                      const char *xlabel = "",
+                      const char *ylabel = "",
+                      double minZ = -9999.0)
+{
 
     SetStyle();
 
     // --- Open file ----------------------------------------------------------
-    TFile* f = TFile::Open(rootFile, "READ");
-    if (!f || f->IsZombie()) {
+    TFile *f = TFile::Open(rootFile, "READ");
+    if (!f || f->IsZombie())
+    {
         std::cerr << "ERROR: Cannot open " << rootFile << "\n";
         return;
     }
 
-    TObject* obj = f->Get(histName);
-    if (!obj) {
+    TObject *obj = f->Get(histName);
+    if (!obj)
+    {
         std::cerr << "ERROR: '" << histName << "' not found in " << rootFile << "\n";
         f->Close();
         return;
     }
 
-    TObject* clone = obj->Clone(Form("%s_clone", histName));
-    if (!clone) {
+    TObject *clone = obj->Clone(Form("%s_clone", histName));
+    if (!clone)
+    {
         std::cerr << "ERROR: Clone failed for '" << histName << "'\n";
         f->Close();
         return;
     }
     if (clone->InheritsFrom(TH1::Class()))
-        ((TH1*)clone)->SetDirectory(0);   // detach — survives file close
+        ((TH1 *)clone)->SetDirectory(0); // detach — survives file close
     f->Close();
 
     // --- Detect dimension ---------------------------------------------------
@@ -98,17 +104,26 @@ void make_prettyplots(const char* rootFile,
 
     // --- Canvas: 2100 px wide = 7 in at 300 DPI -----------------------------
     int canvasW = 2100;
-    int canvasH = is2D ? 1800 : 1575;   // square-ish for 2D, 4:3 for 1D
+    int canvasH = is2D ? 1800 : 1575; // square-ish for 2D, 4:3 for 1D
 
     TCanvas c("c", "", 0, 0, canvasW, canvasH);
     c.cd();
 
     // Widen right margin for the colz palette bar
-    if (is2D) gPad->SetRightMargin(0.13);
-    
-    if (is2D) {
-        TH2* h = (TH2*)clone;
+    if (is2D)
+        gPad->SetRightMargin(0.13);
+
+    if (is2D)
+    {
+        TH2 *h = (TH2 *)clone;
         h->SetStats(0);
+
+        // --- Apply Minimum Z if provided ---
+        if (minZ != -9999.0)
+        {
+            h->SetMinimum(minZ);
+        }
+
         h->GetXaxis()->SetTitle(xlabel);
         h->GetYaxis()->SetTitle(ylabel);
         h->GetXaxis()->SetTitleOffset(1);
@@ -116,10 +131,12 @@ void make_prettyplots(const char* rootFile,
         h->GetXaxis()->CenterTitle(true);
         h->GetYaxis()->CenterTitle(true);
         h->Draw("colz");
-    } else {
-        TH1* h = (TH1*)clone;
+    }
+    else
+    {
+        TH1 *h = (TH1 *)clone;
         h->SetStats(0);
-        h->SetLineColor(kAzure-5);
+        h->SetLineColor(kAzure - 5);
         h->SetLineWidth(3);
         h->GetXaxis()->SetTitle(xlabel);
         h->GetYaxis()->SetTitle(ylabel);
@@ -134,12 +151,14 @@ void make_prettyplots(const char* rootFile,
     // Build output path: same directory as input file, named after the histogram
     std::string inPath(rootFile);
     std::string dir = inPath.substr(0, inPath.find_last_of("/\\"));
-    if (dir == inPath) dir = ".";   // no directory component — use cwd
+    if (dir == inPath)
+        dir = "."; // no directory component — use cwd
 
     std::string outPath = dir + "/" + std::string(histName) + ".png";
     // Replace any "/" inside histName (e.g. "folder/hist") with "_"
-    for (char& ch : outPath)
-        if (ch == '/') ch = '_';
+    for (char &ch : outPath)
+        if (ch == '/')
+            ch = '_';
 
     c.Modified();
     c.Update();
