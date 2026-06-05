@@ -126,7 +126,7 @@ void make_prettyplots(const char *rootFile,
 
         h->GetXaxis()->SetTitle(xlabel);
         h->GetYaxis()->SetTitle(ylabel);
-        h->GetXaxis()->SetTitleOffset(1);
+        h->GetXaxis()->SetTitleOffset(1.1);
         h->GetYaxis()->SetTitleOffset(1.4);
         h->GetXaxis()->CenterTitle(true);
         h->GetYaxis()->CenterTitle(true);
@@ -140,7 +140,7 @@ void make_prettyplots(const char *rootFile,
         h->SetLineWidth(3);
         h->GetXaxis()->SetTitle(xlabel);
         h->GetYaxis()->SetTitle(ylabel);
-        h->GetXaxis()->SetTitleOffset(1);
+        h->GetXaxis()->SetTitleOffset(1.1);
         h->GetYaxis()->SetTitleOffset(1.4);
         h->GetXaxis()->CenterTitle(true);
         h->GetYaxis()->CenterTitle(true);
