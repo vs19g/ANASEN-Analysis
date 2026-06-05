@@ -1,3 +1,4 @@
+# This script generates a 2D Gmsh geometry for the ANASEN detector's wire planes, including an optional hot needle and IC wires. The geometry is designed for adaptive meshing, with finer mesh near the wires and coarser mesh in empty space. The script takes a z-locus as a command-line argument to determine the interpolation between the two wire planes.
 import numpy as np
 import gmsh, sys
 
