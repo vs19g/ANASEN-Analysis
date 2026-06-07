@@ -154,10 +154,10 @@ void GainMatchQQQ::Terminate()
     bool gainValid[MAX_DET][MAX_RING][MAX_WEDGE] = {{{false}}};
 
     // Output file for the Minimizer
-    std::ofstream outFile("qqq_GainMatch.txt");
+    std::ofstream outFile("qqq_GainMatch.dat");
     
     // Benchmark/Debug file
-    std::ofstream benchFile("benchmark_diff.txt"); 
+    std::ofstream benchFile("benchmark_diff.dat"); 
     benchFile << "ID Wedge Ring Chi2NDF Slope SlopeErr" << std::endl;
 
     if (!outFile.is_open()) { std::cerr << "Error opening output file!" << std::endl; return; }

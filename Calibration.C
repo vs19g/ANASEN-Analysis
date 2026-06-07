@@ -37,7 +37,7 @@ void Calibration::Begin(TTree * /*tree*/)
     plotter = new HistPlotter("Calib.root", "TFILE");
     // ----------------------- Load QQQ Gains
     {
-        std::string filename = "qqq_GainMatch.txt";
+        std::string filename = "qqq_GainMatch.dat";
         std::ifstream infile(filename);
         if (!infile.is_open())
         {
@@ -164,10 +164,10 @@ void Calibration::Terminate()
     double calibArray[MAX_QQQ][MAX_RING][MAX_WEDGE] = {{{0}}};
     bool calibValid[MAX_QQQ][MAX_RING][MAX_WEDGE] = {{{false}}};
 
-    std::ofstream outFile("qqq_Calib.txt");
+    std::ofstream outFile("qqq_Calib.dat");
     if (!outFile.is_open())
     {
-        std::cerr << "Error opening qqq_Calib.txt!" << std::endl;
+        std::cerr << "Error opening qqq_Calib.dat!" << std::endl;
         return;
     }
 
@@ -216,8 +216,8 @@ void Calibration::Terminate()
         if (adcPeak <= 0)
             continue;
 
-        // double slope_keV = AM241_PEAK / adcPeak; // keV per ADC
-        double slope_keV = P_PEAK / adcPeak; // keV per ADC
+        double slope_keV = AM241_PEAK / adcPeak; // keV per ADC
+        // double slope_keV = P_PEAK / adcPeak; // keV per ADC
 
         calibArray[det][ring][wedge] = slope_keV;
         calibValid[det][ring][wedge] = true;
@@ -229,7 +229,7 @@ void Calibration::Terminate()
     }
 
     outFile.close();
-    std::cout << "Wrote QQQ calibration file qqq_Calib.txt\n";
+    std::cout << "Wrote QQQ calibration file qqq_Calib.dat\n";
 
     //----------------------------------------------------------------------
     // 3. Build fully calibrated 2D combined histogram

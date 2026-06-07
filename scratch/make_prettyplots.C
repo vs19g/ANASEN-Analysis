@@ -3,12 +3,12 @@
 //
 // Feed it a ROOT file and a histogram name, get a publication-quality PNG.
 //
-// Usage:
+// Usage (Single File):
 //   root -l -b -q 'make_pretty.C("myfile.root", "histName")'
-//   root -l -b -q 'make_pretty.C("myfile.root", "histName", "x label", "y label")'
 //
-// Supports TH1F, TH1D, TH2F, TH2D — type is detected automatically.
-// Output PNG is written to the same directory as the input file.
+// Usage (Multi-File Overlay):
+//   root -l -b -q 'make_pretty.C("file1.root,file2.root", "Run 1,Run 2", "histName", "X-Axis", "Y-Axis")'
+//
 // =============================================================================
 
 #include "TFile.h"
@@ -18,11 +18,15 @@
 #include "TStyle.h"
 #include "TGaxis.h"
 #include "TLatex.h"
+#include "TLegend.h"
 #include "TSystem.h"
 #include "TROOT.h"
+#include "TObjArray.h"
+#include "TObjString.h"
 
 #include <iostream>
 #include <string>
+#include <vector>
 
 // ---------------------------------------------------------------------------
 // Style — called once before anything is drawn
@@ -63,11 +67,18 @@ void SetStyle()
     gStyle->SetNumberContours(255);
 }
 
+// ---------------------------------------------------------------------------
+// Single Plot Function
+// ---------------------------------------------------------------------------
 void make_prettyplots(const char *rootFile,
                       const char *histName,
                       const char *xlabel = "",
                       const char *ylabel = "",
-                      double minZ = -9999.0)
+                      double minZ = -9999.0,
+                      double minY = -9999.0,
+                      double minX = -9999.0,
+                      double maxX = -9999.0,
+                      double maxY = -9999.0)
 {
 
     SetStyle();
@@ -121,7 +132,19 @@ void make_prettyplots(const char *rootFile,
         // --- Apply Minimum Z if provided ---
         if (minZ != -9999.0)
         {
+            h->GetXaxis()->SetRangeUser(minX, h->GetXaxis()->GetXmax());
+            h->GetYaxis()->SetRangeUser(minY, h->GetYaxis()->GetXmax());
             h->SetMinimum(minZ);
+        }
+        if (minY != -9999.0)
+            h->GetYaxis()->SetRangeUser(minY, h->GetYaxis()->GetXmax());
+        if (minX != -9999.0)
+            h->GetXaxis()->SetRangeUser(minX, h->GetXaxis()->GetXmax());
+
+        if (maxX != -9999.0 && maxY != -9999.0)
+        {
+            h->GetXaxis()->SetRangeUser(minX, maxX);
+            h->GetYaxis()->SetRangeUser(minY, maxY);
         }
 
         h->GetXaxis()->SetTitle(xlabel);
@@ -135,6 +158,11 @@ void make_prettyplots(const char *rootFile,
     else
     {
         TH1 *h = (TH1 *)clone;
+        if (minX != -9999.0)
+            h->GetXaxis()->SetRangeUser(minX, h->GetXaxis()->GetXmax());
+        if (maxX != -9999.0)
+            h->GetXaxis()->SetRangeUser(minX, maxX);
+
         h->SetStats(0);
         h->SetLineColor(kAzure - 5);
         h->SetLineWidth(3);
@@ -148,21 +176,138 @@ void make_prettyplots(const char *rootFile,
     }
 
     // --- Save ---------------------------------------------------------------
-    // Build output path: same directory as input file, named after the histogram
     std::string inPath(rootFile);
     std::string dir = inPath.substr(0, inPath.find_last_of("/\\"));
     if (dir == inPath)
-        dir = "."; // no directory component — use cwd
+        dir = ".";
 
-    std::string outPath = dir + "/" + std::string(histName) + ".png";
-    // Replace any "/" inside histName (e.g. "folder/hist") with "_"
-    for (char &ch : outPath)
+    std::string safeHistName = histName;
+    for (char &ch : safeHistName)
         if (ch == '/')
             ch = '_';
 
-    c.Modified();
-    c.Update();
+    std::string outPath = dir + "/" + safeHistName + ".png";
     c.SaveAs(outPath.c_str());
-
     std::cout << "Saved: " << outPath << "\n";
+}
+
+// ---------------------------------------------------------------------------
+// Multi-File Overlay Function
+// ---------------------------------------------------------------------------
+void make_prettyplots(TString filesCSV, TString labelsCSV, TString histName, TString xAxisLabel="", TString yAxisLabel="", double yMin=-9999, double yMax=-9999, double xMin=-9999, double xMax=-9999)
+{
+    SetStyle();
+
+    // Parse the comma-separated lists natively using ROOT's TString
+    TObjArray* fileArr = filesCSV.Tokenize(",");
+    TObjArray* labelArr = labelsCSV.Tokenize(",");
+
+    if (fileArr->GetEntriesFast() != labelArr->GetEntriesFast())
+    {
+        std::cerr << "ERROR: Number of files does not match number of labels!\n";
+        return;
+    }
+
+    // Array of distinct colors to cycle through
+    int colors[] = {kBlack, kRed + 1, kAzure + 2, kGreen + 2, kMagenta + 1, kOrange + 7, kTeal - 1, kPink + 2};
+    int nColors = 8;
+
+    std::vector<TH1 *> hists;
+    double globalMaxY = -999999.0;
+
+    // Load all histograms and determine the maximum peak
+    for (int i = 0; i < fileArr->GetEntriesFast(); i++)
+    {
+        TString currentFile = ((TObjString*)fileArr->At(i))->GetString();
+        TString currentLabel = ((TObjString*)labelArr->At(i))->GetString();
+
+        TFile *f = TFile::Open(currentFile, "READ");
+        if (!f || f->IsZombie())
+            continue;
+
+        TH1 *h = (TH1 *)f->Get(histName);
+        if (!h)
+        {
+            std::cerr << "WARNING: '" << histName << "' not found in " << currentFile << ". Skipping...\n";
+            f->Close();
+            continue;
+        }
+
+        TH1 *clone = (TH1 *)h->Clone(Form("h_%d", i));
+        clone->SetDirectory(0); // Detach from file
+        f->Close();
+
+        // Apply X-range BEFORE checking the max Y-height, otherwise peaks
+        // outside the viewing range might scale the Y-axis unnecessarily!
+        if (xMin != -9999.0 && xMax != -9999.0)
+            clone->GetXaxis()->SetRangeUser(xMin, xMax);
+        else if (xMin != -9999.0)
+            clone->GetXaxis()->SetRangeUser(xMin, clone->GetXaxis()->GetXmax());
+
+        if (clone->GetMaximum() > globalMaxY)
+        {
+            globalMaxY = clone->GetMaximum();
+        }
+
+        hists.push_back(clone);
+    }
+
+    if (hists.empty())
+    {
+        std::cerr << "ERROR: No valid histograms found to plot.\n";
+        return;
+    }
+
+    // --- Draw ---
+    TCanvas c("c", "", 0, 0, 2100, 1575);
+    c.cd();
+
+    // Create Legend (Positioned top right)
+    TLegend *leg = new TLegend(0.65, 0.70, 0.92, 0.90);
+    leg->SetBorderSize(0);
+    leg->SetFillStyle(0); // Transparent background
+
+    for (size_t i = 0; i < hists.size(); i++)
+    {
+        hists[i]->SetStats(0);
+        hists[i]->SetLineColor(colors[i % nColors]);
+        hists[i]->SetLineWidth(3);
+
+        if (i == 0)
+        {
+            // First histogram dictates the frame layout
+            if (yMin != -9999.0 && yMax != -9999.0) {
+                hists[i]->GetYaxis()->SetRangeUser(yMin, yMax);
+            } else {
+                hists[i]->SetMaximum(globalMaxY * 1.15); // Add 15% headroom automatically
+            }
+
+            if (xAxisLabel != "") hists[i]->GetXaxis()->SetTitle(xAxisLabel);
+            if (yAxisLabel != "") hists[i]->GetYaxis()->SetTitle(yAxisLabel);
+            
+            hists[i]->GetXaxis()->SetTitleOffset(1.1);
+            hists[i]->GetYaxis()->SetTitleOffset(1.4);
+            hists[i]->GetXaxis()->CenterTitle(true);
+            hists[i]->GetYaxis()->CenterTitle(true);
+            hists[i]->Draw("hist");
+        }
+        else
+        {
+            // Subsequent histograms stack on top
+            hists[i]->Draw("hist same");
+        }
+
+        TString currentLabel = ((TObjString*)labelArr->At(i))->GetString();
+        leg->AddEntry(hists[i], currentLabel.Data(), "l");
+    }
+
+    leg->Draw();
+
+    // --- Save ---
+    TString safeHistName = histName;
+    safeHistName.ReplaceAll("/", "_");
+
+    TString outPath = safeHistName + "_overlay.png";
+    c.SaveAs(outPath.Data());
+    std::cout << "Saved: " << outPath.Data() << "\n";
 }
