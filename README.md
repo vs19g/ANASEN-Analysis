@@ -74,7 +74,7 @@ Raw .fsu files  (FSU digitizer output)
 │  ├── GainMatchQQQ.C                                             │
 │  │       QQQ ring/wedge gain matching                           │
 │  │       Output: qqq_GainMatch.dat                              │
-│  ├── Calibration.C                                              │
+│  ├── CalibrationQQQ.C                                           │
 │  │        Final absolute energy calibration for all detectors   │
 │  │        Output: qqq_Calib.dat                                 │
 │  ├── PCGainMatch.C                                              │

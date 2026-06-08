@@ -1,5 +1,5 @@
 
-#define Calibration_cxx
+#define CalibrationQQQ_cxx
 
 #include <TH2.h>
 #include <TF1.h>
@@ -32,7 +32,7 @@ double qqqwGain[MAX_QQQ][MAX_RING][MAX_WEDGE] = {{{0}}};
 bool qqqwGainValid[MAX_QQQ][MAX_RING][MAX_WEDGE] = {{{false}}};
 // bool qqqrGainValid[MAX_QQQ][MAX_RING][MAX_WEDGE] = {{{false}}};
 
-void Calibration::Begin(TTree * /*tree*/)
+void CalibrationQQQ::Begin(TTree * /*tree*/)
 {
     plotter = new HistPlotter("Calib.root", "TFILE");
     // ----------------------- Load QQQ Gains
@@ -72,7 +72,7 @@ void Calibration::Begin(TTree * /*tree*/)
     }
 }
 
-Bool_t Calibration::Process(Long64_t entry)
+Bool_t CalibrationQQQ::Process(Long64_t entry)
 {
     b_qqqMulti->GetEntry(entry);
     b_qqqID->GetEntry(entry);
@@ -156,7 +156,7 @@ Bool_t Calibration::Process(Long64_t entry)
     return kTRUE;
 }
 
-void Calibration::Terminate()
+void CalibrationQQQ::Terminate()
 {
     const double AM241_PEAK = 5485.56;
     const double P_PEAK = 7000; // keV

@@ -1,5 +1,5 @@
-#ifndef Calibration_h
-#define Calibration_h
+#ifndef CalibrationQQQ_h
+#define CalibrationQQQ_h
 
 #include <TROOT.h>
 #include <TChain.h>
@@ -8,7 +8,7 @@
 
 #include "Armory/ClassDet.h"
 
-class Calibration : public TSelector {
+class CalibrationQQQ : public TSelector {
 public :
    TTree          *fChain;   //!pointer to the analyzed TTree or TChain
 
@@ -41,8 +41,8 @@ public :
    TBranch        *b_pcE;   //!
    TBranch        *b_pcT;   //!
 
-   Calibration(TTree * /*tree*/ =0) : fChain(0) { }
-   virtual ~Calibration() { }
+   CalibrationQQQ(TTree * /*tree*/ =0) : fChain(0) { }
+   virtual ~CalibrationQQQ() { }
    virtual Int_t   Version() const { return 2; }
    virtual void    Begin(TTree *tree);
    virtual void    SlaveBegin(TTree *tree);
@@ -57,13 +57,13 @@ public :
    virtual void    SlaveTerminate();
    virtual void    Terminate();
 
-   ClassDef(Calibration,0);
+   ClassDef(CalibrationQQQ,0);
 };
 
 #endif
 
-#ifdef Calibration_cxx
-void Calibration::Init(TTree *tree){
+#ifdef CalibrationQQQ_cxx
+void CalibrationQQQ::Init(TTree *tree){
 
    // Set branch addresses and branch pointers
    if (!tree) return;
@@ -95,20 +95,20 @@ void Calibration::Init(TTree *tree){
 
 }
 
-Bool_t Calibration::Notify(){
+Bool_t CalibrationQQQ::Notify(){
 
    return kTRUE;
 }
 
-void Calibration::SlaveBegin(TTree * /*tree*/){
+void CalibrationQQQ::SlaveBegin(TTree * /*tree*/){
 
    TString option = GetOption();
 
 }
 
-void Calibration::SlaveTerminate(){
+void CalibrationQQQ::SlaveTerminate(){
 
 }
 
 
-#endif // #ifdef Calibration_cxx
+#endif // #ifdef CalibrationQQQ_cxx
