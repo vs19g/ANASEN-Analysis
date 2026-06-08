@@ -40,8 +40,8 @@ Int_t colors[40] = {
 
 bool process_alpha_proton_scattering = false;
 bool doMiscHistograms = true;
-bool doPCSX3ClusterAnalysis = true;
-bool doPCQQQClusterAnalysis = true;
+bool doPCSX3ClusterAnalysis = false;
+bool doPCQQQClusterAnalysis = false;
 bool doOldAnalysis = false;
 bool do27AlapAnalysis = false;
 double source_vertex = 53; // 53
@@ -166,9 +166,10 @@ void TrackRecon::Begin(TTree * /*tree*/)
     dataset = std::string(getenv("DATASET"));
   if (getenv("source_vertex"))
     source_vertex = (double)std::atof(std::string(getenv("source_vertex")).c_str());
-
-  std::cout << "Dataset set to  " << dataset << std::endl;
-  std::cout << "source_vertex set to  " << source_vertex << std::endl;
+  
+  if (getenv("CO2percent"))
+    CO2percent = (double)std::atof((getenv("CO2percent")));
+  std::cout << "CO2 percent set to  " << CO2percent << std::endl;
 
   pwinstance.ConstructGeo();
 
@@ -263,26 +264,25 @@ void TrackRecon::Begin(TTree * /*tree*/)
   }
 
   // ------------- ELOSS Correction read in from tables -------------
-
-  //    MeV_to_cm = new TGraph("eloss_calculations/alphas_in_250torr_mix_filtered_6MeV.txt","%lf %*lf %lf");
+if (CO2percent == 3.0) {
   MeV_to_cm = new TGraph("eloss_calculations/alpha_lookup_20MeV_3pc.dat", "%lf %*lf %lf");
-  // MeV_to_cm = new TGraph("eloss_calculations/alpha_lookup_20MeV_4pc.dat", "%lf %*lf %lf");
-  cm_to_MeV = new TGraph(MeV_to_cm->GetN(), MeV_to_cm->GetY(), MeV_to_cm->GetX());
-
   MeV_to_cm_p = new TGraph("eloss_calculations/proton_lookup_20MeV_3pc.dat", "%lf %*lf %lf");
-  // MeV_to_cm_p = new TGraph("eloss_calculations/proton_lookup_20MeV_4pc.dat", "%lf %*lf %lf");
-  cm_to_MeVp = new TGraph(MeV_to_cm_p->GetN(), MeV_to_cm_p->GetY(), MeV_to_cm_p->GetX());
-
-  // Add these alongside your existing proton and alpha tables
   MeV_to_cm_27Al = new TGraph("eloss_calculations/aluminum_lookup_80MeV_3pc.dat", "%lf %*lf %lf");
-  // MeV_to_cm_27Al = new TGraph("eloss_calculations/aluminum_lookup_80MeV_4pc.dat", "%lf %*lf %lf");
-  cm_to_MeV_27Al = new TGraph(MeV_to_cm_27Al->GetN(), MeV_to_cm_27Al->GetY(), MeV_to_cm_27Al->GetX());
-
   MeV_to_cm_17F = new TGraph("eloss_calculations/fluorine_lookup_70MeV_3pc.dat", "%lf %*lf %lf");
-  // MeV_to_cm_17F = new TGraph("eloss_calculations/fluorine_lookup_70MeV_4pc.dat", "%lf %*lf %lf");
+}
+
+if (CO2percent == 4.0) {
+  MeV_to_cm = new TGraph("eloss_calculations/alpha_lookup_20MeV_4pc.dat", "%lf %*lf %lf");
+  MeV_to_cm_p = new TGraph("eloss_calculations/proton_lookup_20MeV_4pc.dat", "%lf %*lf %lf");
+  MeV_to_cm_27Al = new TGraph("eloss_calculations/aluminum_lookup_80MeV_4pc.dat", "%lf %*lf %lf");
+  MeV_to_cm_17F = new TGraph("eloss_calculations/fluorine_lookup_70MeV_4pc.dat", "%lf %*lf %lf");
+}
+
+  cm_to_MeV = new TGraph(MeV_to_cm->GetN(), MeV_to_cm->GetY(), MeV_to_cm->GetX());
+  cm_to_MeVp = new TGraph(MeV_to_cm_p->GetN(), MeV_to_cm_p->GetY(), MeV_to_cm_p->GetX());
+  cm_to_MeV_27Al = new TGraph(MeV_to_cm_27Al->GetN(), MeV_to_cm_27Al->GetY(), MeV_to_cm_27Al->GetX());
   cm_to_MeV_17F = new TGraph(MeV_to_cm_17F->GetN(), MeV_to_cm_17F->GetY(), MeV_to_cm_17F->GetX());
 
-  // cm_to_MeV.Eval(MeV_to_cm.Eval(detectedE)-PathLength) gives energy of particle before it traversed 'path length'
 }
 
 Bool_t TrackRecon::Process(Long64_t entry)
@@ -415,15 +415,15 @@ Bool_t TrackRecon::Process(Long64_t entry)
       {
         // std::cout << det.frontEL << " " << det.frontEL*sx3RightGain[id][det.stripF] << std::endl;
         // plotter->Fill2D("be_vs_x_sx3_id_"+std::to_string(id)+"_f"+std::to_string(det.stripF)+"_b"+std::to_string(det.stripB),200,-1,1,800,0,8192,det.frontX,det.backE,"evsx");
-        plotter->Fill2D("unmatched_be_vs_x_sx3_id_" + std::to_string(id), 200, -1, 1, 800, 0, 4096, det.frontX, det.backE, "evsx");
-        plotter->Fill2D("unmatched_be_vs_x_sx3", 200, -1, 1, 800, 0, 4096, det.frontX, det.backE, "evsx");
-        plotter->Fill2D("matched_be_vs_x_sx3", 200, -60, 60, 800, 0, 8192, det.frontX * sx3FrontGain[id][det.stripF] + sx3FrontOffset[id][det.stripF], det.backE * sx3BackGain[id][det.stripF][det.stripB], "evsx");
-        plotter->Fill2D("matched_be_vs_x_sx3_id_" + std::to_string(id), 200, -60, 60, 800, 0, 8192, det.frontX * sx3FrontGain[id][det.stripF] + sx3FrontOffset[id][det.stripF], det.backE * sx3BackGain[id][det.stripF][det.stripB], "evsx");
+        // plotter->Fill2D("unmatched_be_vs_x_sx3_id_" + std::to_string(id), 200, -1, 1, 800, 0, 4096, det.frontX, det.backE, "evsx");
+        // plotter->Fill2D("unmatched_be_vs_x_sx3", 200, -1, 1, 800, 0, 4096, det.frontX, det.backE, "evsx");
+        // plotter->Fill2D("matched_be_vs_x_sx3", 200, -60, 60, 800, 0, 8192, det.frontX * sx3FrontGain[id][det.stripF] + sx3FrontOffset[id][det.stripF], det.backE * sx3BackGain[id][det.stripF][det.stripB], "evsx");
+        // plotter->Fill2D("matched_be_vs_x_sx3_id_" + std::to_string(id), 200, -60, 60, 800, 0, 8192, det.frontX * sx3FrontGain[id][det.stripF] + sx3FrontOffset[id][det.stripF], det.backE * sx3BackGain[id][det.stripF][det.stripB], "evsx");
 
-        plotter->Fill2D("matched_be_vs_x_sx3_id_" + std::to_string(id) + "_f" + std::to_string(det.stripF), 200, -60, 60, 800, 0, 8192,
-                        det.frontX * sx3FrontGain[id][det.stripF] + sx3FrontOffset[id][det.stripF], det.backE * sx3BackGain[id][det.stripF][det.stripB], "evsx_matched");
+        // plotter->Fill2D("matched_be_vs_x_sx3_id_" + std::to_string(id) + "_f" + std::to_string(det.stripF), 200, -60, 60, 800, 0, 8192,
+        //                 det.frontX * sx3FrontGain[id][det.stripF] + sx3FrontOffset[id][det.stripF], det.backE * sx3BackGain[id][det.stripF][det.stripB], "evsx_matched");
         // plotter->Fill2D("fe_vs_x_sx3_id_"+std::to_string(id)+"_f"+std::to_string(det.stripF)+"_"+std::to_string(det.stripB),200,-1,1,800,0,4096,det.frontX,det.backE,"evsx");
-        plotter->Fill2D("l_vs_r_sx3_id_" + std::to_string(id) + "_f" + std::to_string(det.stripF), 800, 0, 4096, 800, 0, 4096, det.frontEL, det.frontER, "l_vs_r");
+        // plotter->Fill2D("l_vs_r_sx3_id_" + std::to_string(id) + "_f" + std::to_string(det.stripF), 800, 0, 4096, 800, 0, 4096, det.frontEL, det.frontER, "l_vs_r");
       }
       if (det.valid && (id == 9 || id == 7 || id == 1 || id == 3) && det.stripF != DEFAULT_NULL && det.stripB != DEFAULT_NULL)
       {
@@ -2034,7 +2034,8 @@ void miscHistograms_oneWire(HistPlotter *plotter, std::vector<Event> QQQ_Events,
   // consider the 'proton-like' QQQ branch seen in a,p data
   TRandom3 rand;
   rand.SetSeed();                                                              // random seed set
-  Kinematics apkin_a(1.008664916, 4.002603254, 4.002603254, 1.008664916, 7.1); // m3 is alpha, 6.79 MeV is 7.0 MeV proton energy after kapton+100mm 4He gas (molar mass 5.2, 250 torr)
+  Kinematics apkin_a(1.008664916, 4.002603254, 4.002603254, 1.008664916, 6.34); // m3 is alpha, 6.411 MeV is 7.0 MeV proton energy after  havar+kapton+100mm 4He gas (molar mass 5.2, 250 torr)
+  // Kinematics apkin_a(1.008664916, 4.002603254, 4.002603254, 1.008664916, 6.79); // m3 is alpha, 6.79 MeV is 7.0 MeV proton energy after kapton+100mm 4He gas (molar mass 5.2, 250 torr)
   for (auto qqqevent : QQQ_Events)
   {
     if (qqqevent.Energy1 < 0.6)
@@ -2120,7 +2121,8 @@ void protonMiscHistograms(HistPlotter *plotter, std::vector<Event> QQQ_Events, s
   // consider the 'proton-like' QQQ branch seen in a,p data
   TRandom3 rand;
   rand.SetSeed();                                                              // random seed set
-  Kinematics apkin_a(1.008664916, 4.002603254, 4.002603254, 1.008664916, 7.1); // m3 is alpha, 6.79 MeV is 7.0 MeV proton energy after kapton+100mm 4He gas (molar mass 5.2, 250 torr)
+  Kinematics apkin_a(1.008664916, 4.002603254, 4.002603254, 1.008664916, 6.34); // m3 is alpha, 6.411 MeV is 7.0 MeV proton energy after Havar+kapton+100mm 4He gas (molar mass 5.2, 250 torr)
+  // Kinematics apkin_a(1.008664916, 4.002603254, 4.002603254, 1.008664916, 6.79); // m3 is alpha, 6.79 MeV is 7.0 MeV proton energy after kapton+100mm 4He gas (molar mass 5.2, 250 torr)
   for (auto qqqevent : QQQ_Events)
   {
     if (qqqevent.Energy1 < 0.6)

@@ -1,113 +1,124 @@
-#Alpha runs at different spacer positions
-# rm results_run*.root
-export flipa=0
-export anode_offset=0
-export DATASET="27Al"
+#!/bin/bash
+
+# ==========================================
+# ANASEN Data Processing Script
+# ==========================================
+
+echo "Pre-compiling TrackRecon.C safely on a single core..."
+root -q -l -b -e '.L TrackRecon.C++O'
+
+# Function to process a single run
+process_run() {
+    local wrun=$(printf "%03d" "$1")
+    # Use PREFIX if set, otherwise default to "Run_"
+    local prefix="${PREFIX:-Run_}" 
+    local out="source_run${wrun}.root"
+
+    root -q -l -b -x "../ANASEN_analysis/data/${DATASET}/${prefix}${wrun}_mapped.root" \
+         -e "tree->Process(\"TrackRecon.C+\", \"${out}\")" > /dev/null 2>&1
+         
+    if [ -f "$out" ]; then
+        echo "Run $wrun completed successfully."
+    else
+        echo "ERROR: Run $wrun failed to generate $out"
+    fi
+}
+export -f process_run
+
+# --- Block 1: 27Al Source Runs No Gas (1-8) ---
 if [[ 1 -eq 0 ]]; then
-root -b -q -l -x ../ANASEN_analysis/source.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root result.root;
-#root -b -q -l -x ../ANASEN_analysis/data/27Al_Data/Run_009_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root results_run09.root;
-# exit
-root -b -q -l -x ../ANASEN_analysis/data/27Al_Data/Run_001_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root results_run01.root;
-root -b -q -l -x ../ANASEN_analysis/data/27Al_Data/Run_002_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root results_run02.root;
-root -b -q -l -x ../ANASEN_analysis/data/27Al_Data/Run_003_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root results_run03.root;
-root -b -q -l -x ../ANASEN_analysis/data/27Al_Data/Run_004_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root results_run04.root;
-root -b -q -l -x ../ANASEN_analysis/data/27Al_Data/Run_005_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root results_run05.root;
-root -b -q -l -x ../ANASEN_analysis/data/27Al_Data/Run_006_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root results_run06.root;
-root -b -q -l -x ../ANASEN_analysis/data/27Al_Data/Run_007_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root results_run07.root;
-root -b -q -l -x ../ANASEN_analysis/data/27Al_Data/Run_008_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root results_run08.root;
+    export DATASET="27Al_Data"
+    export PREFIX="Run_"
+    export CO2percent=3.0
+    
+    echo "Starting parallel processing for 27Al runs..."
+    rm -f p_output/all.root
+    
+    parallel --bar -j 6 process_run ::: {1..8}
 fi
 
-#exit
-#alpha+gas 27Al
-export DATASET="27Al"
-#root -q -b -x ../ANASEN_analysis/data/27Al_Data/Run_009_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root results_run09.root;
+# --- Block 2: 27Al Alpha+Gas Runs (9, 12) ---
+if [[ 1 -eq 0 ]]; then
+    export DATASET="27Al_Data"
+    export PREFIX="Run_"
+    export timecut_low=400.0
+    export source_vertex=53.44
+    export CO2percent=3.0
+    
+    echo "Processing 27Al alpha+gas runs..."
+    parallel --bar -j 6 process_run ::: 9 12
+    
+    unset timecut_low
+fi
+
+# --- Block 3: 27Al Protons+Gas Runs (15, 17-22) ---
+if [[ 1 -eq 0 ]]; then
+    export DATASET="27Al_Data"
+    export PREFIX="Run_"
+    export source_vertex=-200.0 # Source on the entrance window
+    export CO2percent=3.0
+    echo "Starting parallel processing for 27Al proton runs..."
+    rm -f p_output/all.root
+    
+    parallel --bar -j 6 process_run ::: 15 {17..22}
+    
+    # Uncomment to merge via hadd when ready
+    # hadd -j 4 -k p_output/all.root p_output/results_run*.root
+    exit
+fi
+
+# --- Block 4: 17F Source Runs (5-14) ---
+if [[ 1 -eq 0 ]]; then
+    export DATASET="17F_Data"
+    export PREFIX="Source_"
+    echo "Starting parallel processing for 17F source runs..."
+    rm -f p_output/all.root
+    
+    parallel --bar -j 6 process_run ::: {5..13}
+fi
+
+# --- Block 5: 17F Alpha Run with Gas (18-21) ---
+if [[ 1 -eq 0 ]]; then
+    export DATASET="17F_Data"
+    export PREFIX="SourceRun_"
+    export CO2percent=3.0
+    echo "Processing 17F alpha runs with dynamic source vertices..."
+    
+    # Running sequentially since the source_vertex variable changes per run
+    export source_vertex=53.44;  process_run 18
+    export source_vertex=14.24;  process_run 19
+    export source_vertex=-24.96; process_run 20
+    export source_vertex=-73.96; process_run 21
+fi
+
+# --- Block 6: 17F Proton Data  ---
 if [[ 1 -eq 1 ]]; then
-#export timecut_low=230.0;
-export timecut_low=400.0;
-#export timecut_high=400.0;
-#export source_vertex=53.44; root -q -b -x ../ANASEN_analysis/data/27Al_Data/Run_009_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root results_run09.root;
-#export source_vertex=53.44; root -q -b -x ../ANASEN_analysis/data/27Al_Data/Run_010_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root results_run10.root;
-#export source_vertex=53.44; root -q -b -x ../ANASEN_analysis/data/27Al_Data/Run_011_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root results_run11.root;
-export source_vertex=53.44; root -q -b -x ../ANASEN_analysis/data/27Al_Data/Run_012_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root source_results_run12.root;
-# exit
-#export source_vertex=53.44; root -q -b -x ../ANASEN_analysis/data/27Al_Data/Run_013_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root results_run13.root;
-#exit
-fi
-unset timecut_low
+    export DATASET="17F_Data"
+    export PREFIX="ProtonRun_"
+    
+    export source_vertex=-57.28
+    export CO2percent=4.0
+    # parallel --bar -j 6 process_run ::: {38..42} #4% CO2
+    export CO2percent=3.0
+    parallel --bar -j 6 process_run ::: {44..48} #3CO2 
+    # hadd -j 4 -k p_output/all.root p_output/results_run*.root
+    exit
 
-#protons+gas, 27Al
-#export flip180="1"
-#export flip180="0"
-if [[ 1 -eq 0 ]]; then
-export flipa=0
-export anode_offset=0
-export source_vertex=-200.0; #put the 'source' on the entrance window
-root -q -b -x ../ANASEN_analysis/data/27Al_Data/Run_017_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root results_run17.root;
-exit
-root -q -b -x ../ANASEN_analysis/data/27Al_Data/Run_018_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root results_run18.root;
-root -q -b -x ../ANASEN_analysis/data/27Al_Data/Run_015_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root results_run15.root;
-root -q -b -x ../ANASEN_analysis/data/27Al_Data/Run_019_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root results_run19.root;
-root -q -b -x ../ANASEN_analysis/data/27Al_Data/Run_020_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root results_run20.root;
-root -q -b -x ../ANASEN_analysis/data/27Al_Data/Run_021_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root results_run21.root;
-root -q -b -x ../ANASEN_analysis/data/27Al_Data/Run_022_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root results_run22.root;
-exit
 fi
 
-#27Al reaction data
-#root -b -q -l -x ../ANASEN_analysis/data/27Al_Data/Run_051_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root results_run51.root;
-#root -b -q -l -x ../ANASEN_analysis/data/27Al_Data/Run_078_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root results_run78.root;
-#root -b -q -l -x ../ANASEN_analysis/data/27Al_Data/Run_081_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root results_run81.root;
-
-#root -l -x  results_run19.root results_run12.root -e "new TBrowser"
-#exit
-export DATASET="17F"
-export flip180="0"
-if [[ 1 -eq 0 ]]; then
-root -q -l -b -x ../ANASEN_analysis/data/17F_Data/Source_005_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root results_run05.root;
-root -q -l -b -x ../ANASEN_analysis/data/17F_Data/Source_006_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root results_run06.root;
-root -q -l -b -x ../ANASEN_analysis/data/17F_Data/Source_007_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root results_run07.root;
-root -q -l -b -x ../ANASEN_analysis/data/17F_Data/Source_008_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root results_run08.root;
-root -q -l -b -x ../ANASEN_analysis/data/17F_Data/Source_009_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root results_run09.root;
-root -q -l -b -x ../ANASEN_analysis/data/17F_Data/Source_010_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root results_run10.root;
-root -q -l -b -x ../ANASEN_analysis/data/17F_Data/Source_011_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root results_run11.root;
-root -q -l -b -x ../ANASEN_analysis/data/17F_Data/Source_012_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root results_run12.root;
-root -q -l -b -x ../ANASEN_analysis/data/17F_Data/Source_013_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root results_run13.root;
-root -q -l -b -x ../ANASEN_analysis/data/17F_Data/Source_014_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root results_run14.root;
-fi
-#17F pulser runs
-#root -q -l -b -x ../ANASEN_analysis/data/17F_Data/PulserRun_015_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root results_run15.root;
-#root -q -l -b -x ../ANASEN_analysis/data/17F_Data/PulserRun_016_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root results_run16.root;
-#root -q -l -b -x ../ANASEN_analysis/data/17F_Data/PulserRun_017_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root results_run17.root;
-
-#17F alpha run with gas
-if [[ 1 -eq 1 ]]; then
-export source_vertex=53.44; root -q -l -b -x ../ANASEN_analysis/data/17F_Data/SourceRun_018_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root source_results_run18.root;
-export source_vertex=14.24; root -q -l -b -x ../ANASEN_analysis/data/17F_Data/SourceRun_019_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root source_results_run19.root;
-export source_vertex=-24.96; root -q -l -b -x ../ANASEN_analysis/data/17F_Data/SourceRun_020_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root source_results_run20.root;
-export source_vertex=-73.96; root -q -l -b -x ../ANASEN_analysis/data/17F_Data/SourceRun_021_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root source_results_run21.root;
-fi
-#17F reaction data
-#export flip180="0"
-if [[ 1 -eq 0 ]]; then
-export source_vertex=-57.28; root -q -l -b -x ../ANASEN_analysis/data/17F_Data/ProtonRun_035_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root results_run35.root;
-#export source_vertex=-8.28; root -q -l -b -x ../ANASEN_analysis/data/17F_Data/ProtonRun_036_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root resulrs_run36.root;
-#export source_vertex=-27.88; root -q -l -b -x ../ANASEN_analysis/data/17F_Data/ProtonRun_037_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root results_run37.root;
-#export source_vertex=11.32; root -q -l -b -x ../ANASEN_analysis/data/17F_Data/ProtonRun_038_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root results_run38.root;
-#export source_vertex=30.92; root -q -l -b -x ../ANASEN_analysis/data/17F_Data/ProtonRun_039_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root results_run39.root;
-#export source_vertex=50.52; root -q -l -b -x ../ANASEN_analysis/data/17F_Data/ProtonRun_041_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root results_run41.root;
-#export source_vertex=70.12; root -q -l -b -x ../ANASEN_analysis/data/17F_Data/ProtonRun_042_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root results_run42.root;
-#export source_vertex=109.32; root -q -l -b -x ../ANASEN_analysis/data/17F_Data/ProtonRun_043_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root results_run43.root;
-#root -q -l -b -x ../ANASEN_analysis/data/17F_Data/ProtonRun_043_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root results_run43.root;
-#root -q -l -b -x ../ANASEN_analysis/data/17F_Data/Run_099_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root results_run99.root;
-#root -q -l -b -x ../ANASEN_analysis/data/17F_Data/Run_104_mapped.root -e 'tree->Process("TrackRecon.C+O")'; mv Analyzer_SX3.root results_run104.root;
-#mv Analyzer_SX3.root results_run19.root;
-fi
+# ==========================================
+# Cleanup Environment Variables
+# ==========================================
 unset flipa
 unset flipc
 unset anode_offset
 unset cathode_offset
-unset souce_vertex
+unset source_vertex  # Fixed typo here
 unset DATASET
+unset PREFIX
 unset flip180
 unset timecut_low
 unset timecut_high
+unset CO2percent
+
+echo "Script execution finished."
