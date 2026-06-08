@@ -49,6 +49,7 @@ const double qqq_z = 100.0;
 double z_entrance = -174.3 - 9.7 - 100.0;
 const double anode_gain = 1.5146e-5; // channels --> MeV
 std::string dataset;
+int CO2percent;
 bool reactiondata = false;
 
 TF1 pcfix_func("func", model_invert, -200, 200);
@@ -166,7 +167,7 @@ void TrackRecon::Begin(TTree * /*tree*/)
     dataset = std::string(getenv("DATASET"));
   if (getenv("source_vertex"))
     source_vertex = (double)std::atof(std::string(getenv("source_vertex")).c_str());
-  
+
   if (getenv("CO2percent"))
     CO2percent = (double)std::atof((getenv("CO2percent")));
   std::cout << "CO2 percent set to  " << CO2percent << std::endl;
@@ -264,25 +265,25 @@ void TrackRecon::Begin(TTree * /*tree*/)
   }
 
   // ------------- ELOSS Correction read in from tables -------------
-if (CO2percent == 3.0) {
-  MeV_to_cm = new TGraph("eloss_calculations/alpha_lookup_20MeV_3pc.dat", "%lf %*lf %lf");
-  MeV_to_cm_p = new TGraph("eloss_calculations/proton_lookup_20MeV_3pc.dat", "%lf %*lf %lf");
-  MeV_to_cm_27Al = new TGraph("eloss_calculations/aluminum_lookup_80MeV_3pc.dat", "%lf %*lf %lf");
-  MeV_to_cm_17F = new TGraph("eloss_calculations/fluorine_lookup_70MeV_3pc.dat", "%lf %*lf %lf");
-}
 
-if (CO2percent == 4.0) {
-  MeV_to_cm = new TGraph("eloss_calculations/alpha_lookup_20MeV_4pc.dat", "%lf %*lf %lf");
-  MeV_to_cm_p = new TGraph("eloss_calculations/proton_lookup_20MeV_4pc.dat", "%lf %*lf %lf");
-  MeV_to_cm_27Al = new TGraph("eloss_calculations/aluminum_lookup_80MeV_4pc.dat", "%lf %*lf %lf");
-  MeV_to_cm_17F = new TGraph("eloss_calculations/fluorine_lookup_70MeV_4pc.dat", "%lf %*lf %lf");
-}
-
+  if (CO2percent == 4)
+  {
+    MeV_to_cm = new TGraph("eloss_calculations/alpha_lookup_20MeV_4pc.dat", "%lf %*lf %lf");
+    MeV_to_cm_p = new TGraph("eloss_calculations/proton_lookup_20MeV_4pc.dat", "%lf %*lf %lf");
+    MeV_to_cm_27Al = new TGraph("eloss_calculations/aluminum_lookup_80MeV_4pc.dat", "%lf %*lf %lf");
+    MeV_to_cm_17F = new TGraph("eloss_calculations/fluorine_lookup_70MeV_4pc.dat", "%lf %*lf %lf");
+  }
+  else
+  {
+    MeV_to_cm = new TGraph("eloss_calculations/alpha_lookup_20MeV_3pc.dat", "%lf %*lf %lf");
+    MeV_to_cm_p = new TGraph("eloss_calculations/proton_lookup_20MeV_3pc.dat", "%lf %*lf %lf");
+    MeV_to_cm_27Al = new TGraph("eloss_calculations/aluminum_lookup_80MeV_3pc.dat", "%lf %*lf %lf");
+    MeV_to_cm_17F = new TGraph("eloss_calculations/fluorine_lookup_70MeV_3pc.dat", "%lf %*lf %lf");
+  }
   cm_to_MeV = new TGraph(MeV_to_cm->GetN(), MeV_to_cm->GetY(), MeV_to_cm->GetX());
   cm_to_MeVp = new TGraph(MeV_to_cm_p->GetN(), MeV_to_cm_p->GetY(), MeV_to_cm_p->GetX());
   cm_to_MeV_27Al = new TGraph(MeV_to_cm_27Al->GetN(), MeV_to_cm_27Al->GetY(), MeV_to_cm_27Al->GetX());
   cm_to_MeV_17F = new TGraph(MeV_to_cm_17F->GetN(), MeV_to_cm_17F->GetY(), MeV_to_cm_17F->GetX());
-
 }
 
 Bool_t TrackRecon::Process(Long64_t entry)
@@ -2033,9 +2034,9 @@ void miscHistograms_oneWire(HistPlotter *plotter, std::vector<Event> QQQ_Events,
 {
   // consider the 'proton-like' QQQ branch seen in a,p data
   TRandom3 rand;
-  rand.SetSeed();                                                              // random seed set
-  Kinematics apkin_a(1.008664916, 4.002603254, 4.002603254, 1.008664916, 6.34); // m3 is alpha, 6.411 MeV is 7.0 MeV proton energy after  havar+kapton+100mm 4He gas (molar mass 5.2, 250 torr)
-  // Kinematics apkin_a(1.008664916, 4.002603254, 4.002603254, 1.008664916, 6.79); // m3 is alpha, 6.79 MeV is 7.0 MeV proton energy after kapton+100mm 4He gas (molar mass 5.2, 250 torr)
+  rand.SetSeed(); // random seed set
+  // Kinematics apkin_a(1.008664916, 4.002603254, 4.002603254, 1.008664916, 6.34); // m3 is alpha, 6.411 MeV is 7.0 MeV proton energy after havar+mylar+kapton+100mm 4He gas (molar mass 5.3, 250 torr)
+  Kinematics apkin_a(1.008664916, 4.002603254, 4.002603254, 1.008664916, 6.79); // m3 is alpha, 6.79 MeV is 7.0 MeV proton energy after kapton+100mm 4He gas (molar mass 5.2, 250 torr)
   for (auto qqqevent : QQQ_Events)
   {
     if (qqqevent.Energy1 < 0.6)
@@ -2120,9 +2121,16 @@ void protonMiscHistograms(HistPlotter *plotter, std::vector<Event> QQQ_Events, s
 {
   // consider the 'proton-like' QQQ branch seen in a,p data
   TRandom3 rand;
-  rand.SetSeed();                                                              // random seed set
-  Kinematics apkin_a(1.008664916, 4.002603254, 4.002603254, 1.008664916, 6.34); // m3 is alpha, 6.411 MeV is 7.0 MeV proton energy after Havar+kapton+100mm 4He gas (molar mass 5.2, 250 torr)
-  // Kinematics apkin_a(1.008664916, 4.002603254, 4.002603254, 1.008664916, 6.79); // m3 is alpha, 6.79 MeV is 7.0 MeV proton energy after kapton+100mm 4He gas (molar mass 5.2, 250 torr)
+  rand.SetSeed(); // random seed set
+  double initial_energy = 7.0;
+  if (dataset == "27Al")
+    initial_energy = 6.79; // m3 is alpha, 6.79 MeV is 7.0 MeV proton energy after kapton+100mm 4He gas (molar mass 5.2, 250 torr)
+  if (dataset == "17F")
+    initial_energy = 6.34; // m3 is alpha, 6.411 MeV is 7.0 MeV proton energy after Havar+kapton+100mm 4He gas (molar mass 5.2, 250 torr)
+
+  Kinematics apkin_a(1.008664916, 4.002603254, 4.002603254, 1.008664916, initial_energy); // m3 is alpha
+
+  TF1 pcfix_func("pcfix_func", "pol2", -200, 200);
   for (auto qqqevent : QQQ_Events)
   {
     if (qqqevent.Energy1 < 0.6)
