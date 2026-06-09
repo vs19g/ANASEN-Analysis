@@ -39,9 +39,9 @@ Int_t colors[40] = {
 #include <algorithm>
 
 bool process_alpha_proton_scattering = false;
-bool doMiscHistograms = true;
-bool doPCSX3ClusterAnalysis = false;
-bool doPCQQQClusterAnalysis = false;
+bool doMiscHistograms = false;
+bool doPCSX3ClusterAnalysis = true;
+bool doPCQQQClusterAnalysis = true;
 bool doOldAnalysis = false;
 bool do27AlapAnalysis = false;
 double source_vertex = 53; // 53
@@ -169,7 +169,7 @@ void TrackRecon::Begin(TTree * /*tree*/)
     source_vertex = (double)std::atof(std::string(getenv("source_vertex")).c_str());
 
   if (getenv("CO2percent"))
-    CO2percent = (double)std::atof((getenv("CO2percent")));
+    CO2percent = std::atoi(getenv("CO2percent"));
   std::cout << "CO2 percent set to  " << CO2percent << std::endl;
 
   pwinstance.ConstructGeo();
@@ -266,12 +266,29 @@ void TrackRecon::Begin(TTree * /*tree*/)
 
   // ------------- ELOSS Correction read in from tables -------------
 
-  if (CO2percent == 4)
+  if (dataset == "17F" && CO2percent == 3)
+  {
+    MeV_to_cm = new TGraph("eloss_calculations/alpha_lookup_20MeV_3pc.dat", "%lf %*lf %lf");
+    MeV_to_cm_p = new TGraph("eloss_calculations/proton_lookup_20MeV_3pc.dat", "%lf %*lf %lf");
+    MeV_to_cm_27Al = new TGraph("eloss_calculations/aluminum_lookup_80MeV_3pc.dat", "%lf %*lf %lf");
+    MeV_to_cm_17F = new TGraph("eloss_calculations/fluorine_lookup_70MeV_3pc.dat", "%lf %*lf %lf");
+
+    // MeV_to_cm = new TGraph("eloss_calculations/alpha_lookup_20MeV_3pc_350Torr.dat", "%lf %*lf %lf");
+    // MeV_to_cm_p = new TGraph("eloss_calculations/proton_lookup_20MeV_3pc_350Torr.dat", "%lf %*lf %lf");
+    // MeV_to_cm_17F = new TGraph("eloss_calculations/fluorine_lookup_70MeV_3pc_350Torr.dat", "%lf %*lf %lf");
+    // MeV_to_cm_27Al = new TGraph("eloss_calculations/aluminum_lookup_80MeV_3pc_350Torr.dat", "%lf %*lf %lf");
+  }
+  else if (dataset == "17F" && CO2percent == 4)
   {
     MeV_to_cm = new TGraph("eloss_calculations/alpha_lookup_20MeV_4pc.dat", "%lf %*lf %lf");
     MeV_to_cm_p = new TGraph("eloss_calculations/proton_lookup_20MeV_4pc.dat", "%lf %*lf %lf");
     MeV_to_cm_27Al = new TGraph("eloss_calculations/aluminum_lookup_80MeV_4pc.dat", "%lf %*lf %lf");
     MeV_to_cm_17F = new TGraph("eloss_calculations/fluorine_lookup_70MeV_4pc.dat", "%lf %*lf %lf");
+
+    // MeV_to_cm = new TGraph("eloss_calculations/alpha_lookup_20MeV_4pc_350Torr.dat", "%lf %*lf %lf");
+    // MeV_to_cm_p = new TGraph("eloss_calculations/proton_lookup_20MeV_4pc_350Torr.dat", "%lf %*lf %lf");
+    // MeV_to_cm_17F = new TGraph("eloss_calculations/fluorine_lookup_70MeV_4pc_350Torr.dat", "%lf %*lf %lf");
+    // MeV_to_cm_27Al = new TGraph("eloss_calculations/aluminum_lookup_80MeV_4pc_350Torr.dat", "%lf %*lf %lf");
   }
   else
   {
@@ -1068,13 +1085,13 @@ Bool_t TrackRecon::Process(Long64_t entry)
       double beam_path_length = TMath::Abs(vertex_recon - z_entrance) * 0.1;
 
 #ifdef AL_BEAM
-      double beam_energy_at_vertex = cm_to_MeV_27Al->Eval(MeV_to_cm_27Al->Eval(72.0) - beam_path_length);
+      double beam_energy_at_vertex = cm_to_MeV_27Al->Eval(MeV_to_cm_27Al->Eval(65.195) - beam_path_length); // 72MeV is the energy of the 27Al beam right ebfore teh chamber
       Kinematics apkin_p(mass_27Al, mass_4He, mass_1H, mass_30Si, beam_energy_at_vertex / mass_27Al);
       Kinematics apkin_a(mass_27Al, mass_4He, mass_4He, mass_30Si, beam_energy_at_vertex / mass_27Al);
 #endif
 
 #ifdef F_BEAM
-      double beam_energy_at_vertex = cm_to_MeV_17F->Eval(MeV_to_cm_17F->Eval(65.0) - beam_path_length);
+      double beam_energy_at_vertex = cm_to_MeV_17F->Eval(MeV_to_cm_17F->Eval(60.741) - beam_path_length); // 67.8 MeV iws the energy of the 17F beam right before the chamber
       Kinematics apkin_p(mass_17F, mass_4He, mass_1H, mass_20Ne, beam_energy_at_vertex / mass_17F);
       Kinematics apkin_a(mass_17F, mass_4He, mass_4He, mass_20Ne, beam_energy_at_vertex / mass_17F);
 #endif
@@ -1233,8 +1250,14 @@ void protonAlphaHistograms(HistPlotter *plotter, std::vector<Event> QQQ_Events, 
 
   // Sidetrack for a(p,p)
   std::string aplabel = "a(p,p)";
-  Kinematics apkin_p(1.008664916, 4.002603254, 1.008664916, 4.002603254, 7.0); // m3 is proton
-  Kinematics apkin_a(1.008664916, 4.002603254, 4.002603254, 1.008664916, 7.0); // m3 is alpha
+  double initial_energy = 7.0;
+  if (dataset == "27Al")
+    initial_energy = 6.79;
+  if (dataset == "17F")
+    initial_energy = 6.78;
+
+  Kinematics apkin_p(1.008664916, 4.002603254, 1.008664916, 4.002603254, initial_energy); // m3 is proton
+  Kinematics apkin_a(1.008664916, 4.002603254, 4.002603254, 1.008664916, initial_energy); // m3 is alpha
 
   for (auto qqqevent : QQQ_Events)
   {
@@ -1397,6 +1420,7 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, s
       double t_minimum = -1.0 * (x1.X() * v.X() + x1.Y() * v.Y()) / (v.X() * v.X() + v.Y() * v.Y());
       TVector3 vector_closest_to_z_sx3 = x1 + t_minimum * v;
       plotter->Fill1D("VertexReconZ_SX3" + std::to_string(PCSX3TimeCut), 600, -1300, 1300, vector_closest_to_z_sx3.Z(), "hPCZSX3");
+      plotter->Fill1D("VertexReconZ_SX3", 600, -1300, 1300, vector_closest_to_z_sx3.Z());
       plotter->Fill2D("VertexReconXY_SX3" + std::to_string(PCSX3TimeCut), 100, -100, 100, 100, -100, 100, vector_closest_to_z_sx3.X(), vector_closest_to_z_sx3.Y(), "hPCZSX3");
 
       plotter->Fill2D("pcz_vs_time", 2000, 0, 2000, 600, -200, 200, pcevent.Time1 * 1e-9, pcevent.pos.Z());                   // x-axis is all Si det, y-axis is PC anode+cathode only
@@ -1419,7 +1443,10 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, s
         plotter->Fill1D("VertexRecon_pczfix", 800, -300, 300, r_rhoMin_fix.Z());
         plotter->Fill1D("pczfix_A1C2_1d_sx3", 600, -200, 200, pcz_fix);
         plotter->Fill2D("pczfix_vs_sx3pczguess_A1C2", 600, -200, 200, 600, -200, 200, pczguess, pcz_fix);
-        plotter->Fill2D("pcz_vs_sx3pczguess_A1C2_strip" + std::to_string(sx3event.ch2), 300, -200, 200, 600, -200, 200, pczguess, pcevent.pos.Z());
+        plotter->Fill2D("pczfix_residual_vs_pczguess_A1C2", 600, -200, 200, 200, -100, 100, pczguess, pcz_fix - pczguess);
+        plotter->Fill2D("pczfix_residual_vs_phi_A1C2", 200, 0, 6.28, 200, -100, 100, r_rhoMin_fix.Phi(), pcz_fix - pczguess);
+        plotter->Fill1D("pczfix-sx3pczguess_A1C2", 200, -100, 100, pcz_fix - pczguess);
+        plotter->Fill2D("pczfix_vs_sx3pczguess_A1C2_strip" + std::to_string(sx3event.ch2), 300, -200, 200, 600, -200, 200, pczguess, pcevent.pos.Z());
 
         double sinTheta_customV = TMath::Sin((sx3event.pos - TVector3(0, 0, r_rhoMin_fix.Z())).Theta());
         plotter->Fill2D("dE3_E_CathodeSX3_A1C2_TC" + std::to_string(PCSX3TimeCut) + "_PC" + std::to_string(phicut), 400, 0, 30, 800, 0, 10000, sx3event.Energy1, pcevent.Energy2 * sinTheta_customV);
@@ -2034,9 +2061,15 @@ void miscHistograms_oneWire(HistPlotter *plotter, std::vector<Event> QQQ_Events,
 {
   // consider the 'proton-like' QQQ branch seen in a,p data
   TRandom3 rand;
-  rand.SetSeed(); // random seed set
-  // Kinematics apkin_a(1.008664916, 4.002603254, 4.002603254, 1.008664916, 6.34); // m3 is alpha, 6.411 MeV is 7.0 MeV proton energy after havar+mylar+kapton+100mm 4He gas (molar mass 5.3, 250 torr)
-  Kinematics apkin_a(1.008664916, 4.002603254, 4.002603254, 1.008664916, 6.79); // m3 is alpha, 6.79 MeV is 7.0 MeV proton energy after kapton+100mm 4He gas (molar mass 5.2, 250 torr)
+  rand.SetSeed(); // random seed setW
+  double initial_energy = 7.0;
+  if (dataset == "27Al") /// m3 is alpha, 6.79 MeV is 7.0 MeV proton energy after kapton+100mm 4He gas (molar mass 5.6, 250 torr)
+    initial_energy = 6.79;
+  if (dataset == "17F")
+    initial_energy = 6.78; // m3 is alpha, 6.79 MeV is 7.0 MeV proton energy after kapton+100mm 4He gas (molar mass 5.6, 350 torr)
+  // initial_energy = 6.32; // m3 is alpha, 6.411 MeV is 7.0 MeV proton energy after havar+mylar+kapton+100mm 4He gas (molar mass 5.3, 250 torr)
+
+  Kinematics apkin_a(1.008664916, 4.002603254, 4.002603254, 1.008664916, initial_energy);
   for (auto qqqevent : QQQ_Events)
   {
     if (qqqevent.Energy1 < 0.6)
@@ -2126,7 +2159,7 @@ void protonMiscHistograms(HistPlotter *plotter, std::vector<Event> QQQ_Events, s
   if (dataset == "27Al")
     initial_energy = 6.79; // m3 is alpha, 6.79 MeV is 7.0 MeV proton energy after kapton+100mm 4He gas (molar mass 5.2, 250 torr)
   if (dataset == "17F")
-    initial_energy = 6.34; // m3 is alpha, 6.411 MeV is 7.0 MeV proton energy after Havar+kapton+100mm 4He gas (molar mass 5.2, 250 torr)
+    initial_energy = 6.32; // m3 is alpha, 6.411 MeV is 7.0 MeV proton energy after Havar+kapton+100mm 4He gas (molar mass 5.2, 250 torr)
 
   Kinematics apkin_a(1.008664916, 4.002603254, 4.002603254, 1.008664916, initial_energy); // m3 is alpha
 
