@@ -20,8 +20,8 @@ process_run() {
 export -f process_run
 export SCAN_DIR
 
-for slope_x100 in 40 42 44 46 48 50 52 54 56 58 60 62 64 66; do
-# for slope_x100 in 58 60 62 64 66; do
+for slope_x100 in 40 42 44 46 48 50 52 54 56 58 60 62 64 66 68 70 72 74 76 78 80 82 84 86 88 90; do
+# for slope_x100 in 68 70 72 74 76 78 80 82 84 86 88 90; do
     slope=$(awk "BEGIN{printf \"%.2f\", $slope_x100/100}")
     echo "=== slope=${slope} ==="
 
@@ -33,7 +33,7 @@ for slope_x100 in 40 42 44 46 48 50 52 54 56 58 60 62 64 66; do
     # 27Al alpha+gas runs (9, 12, 13)
     export DATASET="27Al" PREFIX="Run_"
     echo "  27Al runs 9 12 13..."
-    # export source_vertex=53.44; export timecut_low=400.0; process_run 12 "$slope"
+    export source_vertex=53.44; export timecut_low=400.0; process_run 12 "$slope"
     export source_vertex=-5.36; export timecut_low=12.0; export timecut_high=120.0; process_run 9 "$slope"
     unset timecut_low
     unset timecut_high

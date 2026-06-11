@@ -2,7 +2,7 @@
 /*double model(double* x, double* p) {
     double result = x[0];
     double factor = 29.0;
-    double slope = 0.7;
+    double slope = 0.40;
     if(TMath::Abs(x[0]) < 16.2) result=x[0]*slope;
     else if(TMath::Abs(x[0]) < 49.8 ) result=x[0]*slope+TMath::Sign(1.0,x[0])*factor;
     else if(TMath::Abs(x[0]) < 85.2 ) result=x[0]*slope+TMath::Sign(1.0,x[0])*factor*2;
@@ -12,7 +12,7 @@
 
 double model_invert(double *y, double *q) {
     double result=y[0];
-    double slope = 0.7;
+    double slope = 0.40;
     double factor = 0.0;
     if(TMath::Abs(y[0]) < 16.2/slope) result = y[0]/slope;
     else if(TMath::Abs(y[0]) < 49.8/slope ) result=y[0]/slope-TMath::Sign(1.0,y[0])*factor;
@@ -23,7 +23,7 @@ double model_invert(double *y, double *q) {
 
 double model_invert(double* y, double* p) {
     double result = y[0];
-    double slope = 0.6;
+    double slope = 0.52;
 	double z_grid[8] = {147.998,101.946,59.7634,19.6965,-19.6965,-59.7634,-101.946,-147.998};
  	for(int i=0;i<7;i++) {
  		if(y[0] <= z_grid[i] && y[0] > z_grid[i+1]) {
@@ -38,7 +38,7 @@ double model_invert(double* y, double* p) {
 double model_a1c1(double* x, double* p) {
     double result = x[0];
     double factor = 29.0;
-    double slope = 0.0;
+    double slope = 0.52;
     if(TMath::Abs(x[0]) < 16.2) result=x[0]*slope;
     else if(TMath::Abs(x[0]) < 49.8 ) result=x[0]*slope+TMath::Sign(1.0,x[0])*factor;
     else if(TMath::Abs(x[0]) < 85.2 ) result=x[0]*slope+TMath::Sign(1.0,x[0])*factor*2;
@@ -48,7 +48,7 @@ double model_a1c1(double* x, double* p) {
 
 double model_invert_a1c1(double *y, double *q) {
     double result=y[0];
-/*    double slope = 1.0;
+/*    double slope = 0.40;
     double factor = 5.0;
     if(TMath::Abs(y[0]) < 16.2/slope) result = y[0]/slope;
     else if(TMath::Abs(y[0]) < 49.8/slope ) result=y[0]/slope-TMath::Sign(1.0,y[0])*factor;

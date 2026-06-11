@@ -42,20 +42,20 @@ if [[ 1 -eq 0 ]]; then
 fi
 
 # --- Block 2: 27Al Alpha+Gas Runs (9, 12) ---
-if [[ 1 -eq 0 ]]; then
+if [[ 1 -eq 1 ]]; then
     export DATASET="27Al"
     export PREFIX="Run_"
     export OUT_DIR="Output_a"
     echo "Processing 27Al alpha+gas runs..."
     export source_vertex=-5.36; export timecut_low=12.0; export timecut_high=119.0; process_run 9 "$slope"
+    unset timecut_high
     export source_vertex=53.44; export timecut_low=400.0; process_run 12 "$slope"
     
     unset timecut_low
-    unset timecut_high
 fi
 
 # --- Block 3: 27Al Protons+Gas Runs (15, 17-22) ---
-if [[ 1 -eq 0 ]]; then
+if [[ 1 -eq 1 ]]; then
     export DATASET="27Al"
     export PREFIX="Run_"
     export OUT_DIR="Output_p"
@@ -77,7 +77,7 @@ if [[ 1 -eq 0 ]]; then
 fi
 
 # --- Block 5: 17F Alpha Run with Gas (18-21) ---
-if [[ 1 -eq 1 ]]; then
+if [[ 1 -eq 0 ]]; then
     export DATASET="17F"
     export PREFIX="SourceRun_"
     export OUT_DIR="Output_a"
