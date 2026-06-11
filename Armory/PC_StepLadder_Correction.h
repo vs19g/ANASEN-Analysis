@@ -46,16 +46,16 @@ double model_a1c1(double* x, double* p) {
     return result;
 }
 
-double model_invert_a1c1(double *y, double *q) {
-    double result=y[0];
-/*    double slope = 0.40;
-    double factor = 5.0;
-    if(TMath::Abs(y[0]) < 16.2/slope) result = y[0]/slope;
-    else if(TMath::Abs(y[0]) < 49.8/slope ) result=y[0]/slope-TMath::Sign(1.0,y[0])*factor;
-    else if(TMath::Abs(y[0]) < 85.2/slope ) result=y[0]/slope-TMath::Sign(1.0,y[0])*factor*2;
-    else result=y[0]/slope-TMath::Sign(1.0,y[0])*factor**/;
-    return result+40;
-}
+// double model_invert_a1c1(double *y, double *q) {
+//     double result=y[0];
+// /*    double slope = 0.40;
+//     double factor = 5.0;
+//     if(TMath::Abs(y[0]) < 16.2/slope) result = y[0]/slope;
+//     else if(TMath::Abs(y[0]) < 49.8/slope ) result=y[0]/slope-TMath::Sign(1.0,y[0])*factor;
+//     else if(TMath::Abs(y[0]) < 85.2/slope ) result=y[0]/slope-TMath::Sign(1.0,y[0])*factor*2;
+//     else result=y[0]/slope-TMath::Sign(1.0,y[0])*factor**/;
+//     return result+40;
+// }
 
 
 /*void testmodel() {

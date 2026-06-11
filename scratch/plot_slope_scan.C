@@ -25,9 +25,11 @@ void plot_slope_scan()
     //     0.82, 0.84, 0.86, 0.88, 0.90};
     // const int N = 25;
 
-    double slopes[] = {0.42, 0.44, 0.46, 0.48, 0.50, 0.52, 0.54, 0.56, 0.58, 0.60, 0.62, 0.64};
-    const int N = 12; // Updated to 14 to match the size of your slopes array
-
+    // double slopes[] = {0.42, 0.44, 0.46, 0.48, 0.50, 0.52, 0.54, 0.56, 0.58, 0.60, 0.62, 0.64};
+    // const int N = 12; // Updated to 14 to match the size of your slopes array
+    const int N = 1; // Updated to 14 to match the size of your slopes array
+    double slopes[] = {0.52};
+    
     int runs[] = {9, 12, 18, 19, 20, 21};
     const int NRUNS = 6;
     // int runs[] = {9, 12};
@@ -272,12 +274,12 @@ void plot_slope_scan()
     mg1->Draw("A");
 
     double bestSlope = 0, bestStdDev = 1e9;
-    if (gStdDevRun_sx3[0]->GetN() > 0)
+    if (gStdDevRun_sx3[3]->GetN() > 0)
     {
-        for (int i = 0; i < gStdDevRun_sx3[0]->GetN(); i++)
+        for (int i = 0; i < gStdDevRun_sx3[3]->GetN(); i++)
         {
             double x, y;
-            gStdDevRun_sx3[0]->GetPoint(i, x, y);
+            gStdDevRun_sx3[3]->GetPoint(i, x, y);
             if (y > 0 && y < bestStdDev)
             {
                 bestStdDev = y;
@@ -288,12 +290,12 @@ void plot_slope_scan()
         lb->SetLineColor(kRed);
         lb->SetLineStyle(kDashed);
         lb->Draw();
-        printf(">>> Best slope (Run %d) = %.2f  StdDev=%.2f mm\n", runs[0], bestSlope, bestStdDev);
+        printf(">>> Best slope (Run %d) = %.2f  StdDev=%.2f mm\n", runs[3], bestSlope, bestStdDev);
     }
 
     // --- Pad 2: Mean ---
     pad1_grid->cd(2);
-    gPad->SetGrid(1, 1);
+    // gPad->SetGrid(1, 1);
     TMultiGraph *mg2 = new TMultiGraph("mg_mean", "Mean of Residuals vs Slope;Slope;Mean Offset (mm)");
 
     for (int ir = 0; ir < NRUNS; ir++)
@@ -358,7 +360,7 @@ void plot_slope_scan()
 
     TPad *pad2_grid = new TPad("pad2_grid", "Grid", 0.0, 0.0, 1.0, 0.92);
     pad2_grid->Draw();
-    pad2_grid->Divide(5, 5);
+    pad2_grid->Divide(3,4);
 
     for (int i = 0; i < N; i++)
     {
@@ -453,7 +455,7 @@ void plot_slope_scan()
 
     TPad *pad3_grid = new TPad("pad3_grid", "Grid", 0.0, 0.0, 1.0, 0.92);
     pad3_grid->Draw();
-    pad3_grid->Divide(5, 5);
+    pad3_grid->Divide(3,4);
 
     for (int i = 0; i < N; i++)
     {

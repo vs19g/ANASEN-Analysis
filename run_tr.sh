@@ -55,14 +55,15 @@ if [[ 1 -eq 1 ]]; then
 fi
 
 # --- Block 3: 27Al Protons+Gas Runs (15, 17-22) ---
-if [[ 1 -eq 1 ]]; then
+if [[ 1 -eq 0 ]]; then
     export DATASET="27Al"
     export PREFIX="Run_"
     export OUT_DIR="Output_p"
     export source_vertex=-200.0 # Source on the entrance window
     echo "Starting parallel processing for 27Al proton runs..."
 
-    parallel --bar -j 6 process_run ::: 15 {17..22}
+    process_run 17
+    # parallel --bar -j 6 process_run ::: 15 {17..22}
     hadd -j 4 -k ${OUT_DIR}/Al_protons.root ${OUT_DIR}/results_run0{17..22}.root
 fi
 
@@ -77,17 +78,17 @@ if [[ 1 -eq 0 ]]; then
 fi
 
 # --- Block 5: 17F Alpha Run with Gas (18-21) ---
-if [[ 1 -eq 0 ]]; then
+if [[ 1 -eq 1 ]]; then
     export DATASET="17F"
     export PREFIX="SourceRun_"
     export OUT_DIR="Output_a"
     echo "Processing 17F alpha runs with dynamic source vertices..."
     
     # Running sequentially since the source_vertex variable changes per run
-    # export source_vertex=53.44;  process_run 18
+    export source_vertex=53.44;  process_run 18
     export source_vertex=14.24;  process_run 19
-    # export source_vertex=-24.96; process_run 20
-    # export source_vertex=-73.96; process_run 21
+    export source_vertex=-24.96; process_run 20
+    export source_vertex=-73.96; process_run 21
 fi
 
 # --- Block 6: 17F Proton Data  ---

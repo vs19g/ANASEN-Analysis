@@ -44,6 +44,7 @@ bool doPCSX3ClusterAnalysis = true;
 bool doPCQQQClusterAnalysis = true;
 bool doOldAnalysis = false;
 bool do27AlapAnalysis = false;
+bool BenchMark = true;
 double source_vertex = 53; // 53
 const double qqq_z = 105.0;
 double z_entrance = -174.3 - 9.7 - 100.0;
@@ -143,13 +144,14 @@ void protonAlphaHistograms(HistPlotter *plotter, std::vector<Event> QQQ_Events, 
 void miscHistograms_oneWire(HistPlotter *plotter, std::vector<Event> QQQ_Events, std::vector<std::vector<std::tuple<int, double, double>>> aClusters);
 void protonMiscHistograms(HistPlotter *plotter, std::vector<Event> QQQ_Events, std::vector<Event> SX3_Events, std::vector<Event> PC_Events);
 void protonMiscHistograms_sx3(HistPlotter *plotter, std::vector<Event> QQQ_Events, std::vector<Event> SX3_Events, std::vector<Event> PC_Events);
-void PCSX3ClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, std::vector<Event> SX3_Events, std::vector<Event> PC_Events);
-void PCQQQClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, std::vector<Event> SX3_Events, std::vector<Event> PC_Events);
+void PCSX3ClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, std::vector<Event> SX3_Events, std::vector<Event> PC_Events,
+                          const std::vector<std::vector<std::tuple<int, double, double>>> &aClusters, const std::vector<std::vector<std::tuple<int, double, double>>> &cClusters);
+void PCQQQClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, std::vector<Event> SX3_Events, std::vector<Event> PC_Events,
+                          const std::vector<std::vector<std::tuple<int, double, double>>> &aClusters, const std::vector<std::vector<std::tuple<int, double, double>>> &cClusters);
 
 void TrackRecon::Begin(TTree * /*tree*/)
 {
   pcfix_func.SetNpx(100000);
-
   ///// ---------Set Environment Variables--------- /////
   TString option = GetOption();
   if (option != "")
@@ -598,8 +600,8 @@ Bool_t TrackRecon::Process(Long64_t entry)
           // if(eRingMeV<1.2 || eWedgeMeV<1.2) continue;
 
           // double theta = 2 * TMath::Pi() * (-qqq.id[i] * 16 + (15 - chWedge) + 0.5) / (16 * 4);
-          
-					double theta = (M_PI/180.)*(-90*qqq.id[i]+(87./16.)*((15-chWedge)+0.5)+3.0);
+
+          double theta = (M_PI / 180.) * (-90 * qqq.id[i] + (87. / 16.) * ((15 - chWedge) + 0.5) + 3.0);
           double rho = 50. + (50. / 16.) * (chRing + 0.5); //"?"
           // z used to be 75+30+23=128
           // we found a 12mm shift towards the vertex later --> 116
@@ -1024,11 +1026,11 @@ Bool_t TrackRecon::Process(Long64_t entry)
 
   if (doPCSX3ClusterAnalysis)
   {
-    PCSX3ClusterAnalysis(plotter, QQQ_Events, SX3_Events, PC_Events);
+    PCSX3ClusterAnalysis(plotter, QQQ_Events, SX3_Events, PC_Events, aClusters, cClusters);
   }
   if (doPCQQQClusterAnalysis)
   {
-    PCQQQClusterAnalysis(plotter, QQQ_Events, SX3_Events, PC_Events);
+    PCQQQClusterAnalysis(plotter, QQQ_Events, SX3_Events, PC_Events, aClusters, cClusters);
   }
 
 ///////////////////nA analysis using pseudo-wire (GetPseudoWire + getClosestWirePosAtWirePhi)///////////////////
@@ -1362,7 +1364,9 @@ void protonAlphaHistograms(HistPlotter *plotter, std::vector<Event> QQQ_Events, 
   return;
 }
 
-void PCSX3ClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, std::vector<Event> SX3_Events, std::vector<Event> PC_Events){
+void PCSX3ClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, std::vector<Event> SX3_Events, std::vector<Event> PC_Events,
+                          const std::vector<std::vector<std::tuple<int, double, double>>> &aClusters, const std::vector<std::vector<std::tuple<int, double, double>>> &cClusters)
+{
   for (auto pcevent : PC_Events)
   {
     bool PCSX3TimeCut = false;
@@ -1403,8 +1407,8 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, s
         plotter->Fill2D("pcz_vs_pcphi_TimeCut", 600, -200, 200, 120, -360, 360, pcevent.pos.Z(), pcevent.pos.Phi() * 180 / M_PI, "Z_Reconstruction");
       }
 
-      double sx3rho = 88.0; 
-      double sx3z = sx3event.pos.Z(); 
+      double sx3rho = 88.0;
+      double sx3z = sx3event.pos.Z();
       double pcz = pcevent.pos.Z();
       double calcsx3theta = TMath::ATan2(sx3rho - z_to_crossover_rho(pcz), sx3z - pcz);
       plotter->Fill2D("dE2_E_Anodesx3B", 400, 0, 30, 800, 0, 40000, sx3event.Energy1, pcevent.Energy1 * TMath::Sin(calcsx3theta), "PID_dE_E");
@@ -1423,11 +1427,12 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, s
       plotter->Fill1D("VertexReconZ_SX3", 600, -1300, 1300, vector_closest_to_z_sx3.Z(), "Vertex_Reconstruction");
       plotter->Fill2D("VertexReconXY_SX3" + std::to_string(PCSX3TimeCut), 100, -100, 100, 100, -100, 100, vector_closest_to_z_sx3.X(), vector_closest_to_z_sx3.Y(), "Vertex_Reconstruction");
 
-      plotter->Fill2D("pcz_vs_time", 2000, 0, 2000, 600, -200, 200, pcevent.Time1 * 1e-9, pcevent.pos.Z(), "Timing"); 
-      plotter->Fill2D("pcphi_vs_time", 2000, 0, 2000, 180, -360, 360, pcevent.Time1 * 1e-9, pcevent.pos.Phi() * 180. / M_PI, "Timing"); 
-      plotter->Fill2D("sx3phi_vs_time", 2000, 0, 2000, 180, -360, 360, pcevent.Time1 * 1e-9, sx3event.pos.Phi() * 180. / M_PI, "Timing"); 
+      plotter->Fill2D("pcz_vs_time", 2000, 0, 2000, 600, -200, 200, pcevent.Time1 * 1e-9, pcevent.pos.Z(), "Timing");
+      plotter->Fill2D("pcphi_vs_time", 2000, 0, 2000, 180, -360, 360, pcevent.Time1 * 1e-9, pcevent.pos.Phi() * 180. / M_PI, "Timing");
+      plotter->Fill2D("sx3phi_vs_time", 2000, 0, 2000, 180, -360, 360, pcevent.Time1 * 1e-9, sx3event.pos.Phi() * 180. / M_PI, "Timing");
 
-      plotter->Fill2D("pcz_vs_sx3pczguess", 600, -200, 200, 600, -200, 200, pczguess, pcevent.pos.Z(), "Z_Reconstruction"); 
+      plotter->Fill2D("pcz_vs_sx3pczguess", 600, -200, 200, 600, -200, 200, pczguess, pcevent.pos.Z(), "Z_Reconstruction");
+
       if (pcevent.multi1 == 1 && pcevent.multi2 == 2)
       {
         plotter->Fill2D("pcz_vs_sx3pczguess_A1C2", 600, -200, 200, 600, -200, 200, pczguess, pcevent.pos.Z(), "Z_Reconstruction");
@@ -1466,7 +1471,7 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, s
           plotter->Fill2D("pcz_vs_sx3pczguess_A1C3_strip" + std::to_string(sx3event.ch2), 300, -200, 200, 600, -200, 200, pczguess, pcevent.pos.Z(), "Z_Reconstruction");
         }
 
-        plotter->Fill2D("pcz_vs_sx3pczguess_int", 600, -200, 200, 600, -200, 200, pcz_guess_int, pcevent.pos.Z(), "Z_Reconstruction"); 
+        plotter->Fill2D("pcz_vs_sx3pczguess_int", 600, -200, 200, 600, -200, 200, pcz_guess_int, pcevent.pos.Z(), "Z_Reconstruction");
         plotter->Fill2D("pcz_vs_sx3pczguess_strip" + std::to_string(sx3event.ch2), 300, -200, 200, 600, -200, 200, pczguess, pcevent.pos.Z(), "Z_Reconstruction");
 
         bool sx3PhiCut = (TMath::Abs(sx3event.pos.Phi() - pcevent.pos.Phi()) < 45.0 * M_PI / 180.);
@@ -1491,11 +1496,95 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, s
       {
         plotter->Fill1D("PCZ_sx3", 800, -200, 200, pcevent.pos.Z(), "Z_Reconstruction");
       }
-    } 
+
+      //-----------------------Benchmarking Method for Source Runs------------------------//
+
+      if (BenchMark && aClusters.size() == 1 && cClusters.size() == 1)
+      {
+        const auto &aCl = aClusters.front();
+        const auto &cCl = cClusters.front();
+
+        auto vertexFromPCPoint = [&x1](const TVector3 &x2f)
+        {
+          TVector3 vf = x2f - x1;
+          double tm = -1.0 * (x1.X() * vf.X() + x1.Y() * vf.Y()) / (vf.X() * vf.X() + vf.Y() * vf.Y());
+          return TVector3(x1 + tm * vf);
+        };
+
+        auto fillSuite = [&](const std::string &tag, double pcz_method, const TVector3 &vtx)
+        {
+          plotter->Fill1D("Benchmark_SX3_VertexZ_" + tag, 800, -400, 400, vtx.Z(), "Benchmark_SX3");
+          plotter->Fill1D("Benchmark_SX3_VertexZ_" + tag + "_TC" + std::to_string(PCSX3TimeCut) + "_PC" + std::to_string(phicut), 800, -400, 400, vtx.Z(), "Benchmark_SX3");
+          plotter->Fill2D("Benchmark_SX3_VertexXY_" + tag, 200, -100, 100, 200, -100, 100, vtx.X(), vtx.Y(), "Benchmark_SX3");
+          plotter->Fill1D("Benchmark_SX3_PCZ_" + tag, 600, -200, 200, pcz_method, "Benchmark_SX3");
+          plotter->Fill2D("Benchmark_SX3_PCZ_vs_sx3pczguess_" + tag, 600, -200, 200, 600, -200, 200, pcz_guess_int, pcz_method, "Benchmark_SX3");
+          plotter->Fill2D("Benchmark_SX3_PCZresidual_vs_pczguess_" + tag, 600, -200, 200, 200, -100, 100, pczguess, pcz_method - pczguess, "Benchmark_SX3");
+          plotter->Fill1D("Benchmark_SX3_PCZ-sx3pczguess_" + tag, 200, -100, 100, pcz_method - pczguess, "Benchmark_SX3");
+          plotter->Fill1D("Benchmark_SX3_PCZ-sx3pczint_" + tag, 200, -100, 100, pcz_method - pcz_guess_int, "Benchmark_SX3");
+        };
+
+        auto fillVsRef = [&](const std::string &tag, double pcz_method, const TVector3 &vtx, double pcz_ref, const TVector3 &vtx_ref)
+        {
+          plotter->Fill2D("Benchmark_SX3_PCZ_" + tag + "_vs_ref", 400, -200, 200, 400, -200, 200, pcz_ref, pcz_method, "Benchmark_SX3_ref");
+          plotter->Fill1D("Benchmark_SX3_PCZ_" + tag + "_minus_ref", 400, -100, 100, pcz_method - pcz_ref, "Benchmark_SX3_ref");
+          plotter->Fill2D("Benchmark_SX3_VertexZ_" + tag + "_vs_ref", 400, -200, 200, 400, -200, 200, vtx_ref.Z(), vtx.Z(), "Benchmark_SX3_ref");
+          plotter->Fill1D("Benchmark_SX3_VertexZ_" + tag + "_minus_ref", 400, -100, 100, vtx.Z() - vtx_ref.Z(), "Benchmark_SX3_ref");
+        };
+
+        // cathode charge-division reference on this event (the A1C2 recipe)
+        double pcz_ref = pcfix_func.Eval(pcevent.pos.Z());
+        TVector3 vtx_ref = vertexFromPCPoint(TVector3(pcevent.pos.X(), pcevent.pos.Y(), pcz_ref));
+
+        // anode-only PC point, oneWire method: pseudo-wire interpolated to the
+        // SX3 hit's phi, with the same quality cuts as miscHistograms_oneWire
+        auto [apwire_bm, apSumE_bm, apMaxE_bm, apTSMaxE_bm] = pwinstance.GetPseudoWire(aCl, "ANODE");
+        TVector3 pc_anodeOnly = pwinstance.getClosestWirePosAtWirePhi(apwire_bm, sx3event.pos.Phi());
+        TVector3 vtx_anodeOnly = vertexFromPCPoint(pc_anodeOnly);
+        bool anodeOnlyGood = vtx_anodeOnly.Perp() <= 6.0 && vtx_anodeOnly.Z() >= -173.6 && vtx_anodeOnly.Z() <= 100 && phicut;
+
+        if (pcevent.multi1 == 1 && pcevent.multi2 == 2)
+        {
+          fillSuite("A1C2", pcz_ref, vtx_ref); // baseline with identical binning
+
+          // ---- A1C1 emulation: crossover with only the max-E cathode wire (Cmax),
+          //      used directly with no z-model ----
+          auto cMaxWire = *std::max_element(cCl.begin(), cCl.end(),
+                                            [](const std::tuple<int, double, double> &w1, const std::tuple<int, double, double> &w2)
+                                            { return std::get<1>(w1) < std::get<1>(w2); });
+          std::vector<std::tuple<int, double, double>> cOne = {cMaxWire};
+          auto [xo_a1c1, alpha_a1c1, apSumE1, cpSumE1, apMaxE1, cpMaxE1, apTSMaxE1, cpTSMaxE1] = pwinstance.FindCrossoverProperties(aCl, cOne);
+          if (alpha_a1c1 != 9999999 && apSumE1 != -1)
+          {
+            TVector3 vtx_a1c1 = vertexFromPCPoint(xo_a1c1);
+            fillSuite("A1C1", xo_a1c1.Z(), vtx_a1c1);
+            fillVsRef("A1C1", xo_a1c1.Z(), vtx_a1c1, pcz_ref, vtx_ref);
+          }
+
+          // ---- A1C0 emulation: oneWire method, cathodes ignored ----
+          if (anodeOnlyGood)
+          {
+            fillSuite("A1C0", pc_anodeOnly.Z(), vtx_anodeOnly);
+            fillVsRef("A1C0", pc_anodeOnly.Z(), vtx_anodeOnly, pcz_ref, vtx_ref);
+          }
+        }
+
+        // ---- A2C0 emulation: 2-wire anode pseudo-wire, oneWire method ----
+        if (pcevent.multi1 == 2 && pcevent.multi2 == 2)
+        {
+          fillSuite("A2C2", pcz_ref, vtx_ref); // reference population for A2C0
+          if (anodeOnlyGood)
+          {
+            fillSuite("A2C0", pc_anodeOnly.Z(), vtx_anodeOnly);
+            fillVsRef("A2C0", pc_anodeOnly.Z(), vtx_anodeOnly, pcz_ref, vtx_ref);
+          }
+        }
+      }
+    }
   }
 }
 
-void PCQQQClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, std::vector<Event> SX3_Events, std::vector<Event> PC_Events)
+void PCQQQClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, std::vector<Event> SX3_Events, std::vector<Event> PC_Events,
+                          const std::vector<std::vector<std::tuple<int, double, double>>> &aClusters, const std::vector<std::vector<std::tuple<int, double, double>>> &cClusters)
 {
   for (auto pcevent : PC_Events)
   {
@@ -1505,7 +1594,7 @@ void PCQQQClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, s
       plotter->Fill2D("dt_pcA_qqqR_vs_qqqRE", 640, -2000, 2000, 400, 0, 30, qqqevent.Time1 - pcevent.Time1, qqqevent.Energy1, "Timing");
       plotter->Fill1D("dt_pcC_qqqW", 640, -2000, 2000, qqqevent.Time2 - pcevent.Time2, "Timing");
       plotter->Fill2D("phiPC_vs_phiQQQ", 180, -360, 360, 180, -360, 360, qqqevent.pos.Phi() * 180 / M_PI, pcevent.pos.Phi() * 180 / M_PI, "Kinematics_Angles");
-      double sinTheta = TMath::Sin((qqqevent.pos - TVector3(0, 0, source_vertex)).Theta()); 
+      double sinTheta = TMath::Sin((qqqevent.pos - TVector3(0, 0, source_vertex)).Theta());
 
       TVector3 x2(pcevent.pos);
       TVector3 x1(qqqevent.pos);
@@ -1524,7 +1613,7 @@ void PCQQQClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, s
         plotter->Fill1D("dt_pcC_qqqW_pidlow_PC1", 640, -2000, 2000, qqqevent.Time2 - pcevent.Time2, "Timing");
       }
       if (timecut)
-      { 
+      {
         plotter->Fill2D("dE_E_AnodeQQQR", 400, 0, 30, 800, 0, 40000, qqqevent.Energy1, pcevent.Energy1, "PID_dE_E");
         plotter->Fill2D("dE_E_CathodeQQQR", 400, 0, 30, 800, 0, 10000, qqqevent.Energy2, pcevent.Energy2, "PID_dE_E");
         if (pcevent.multi1 == 1 && pcevent.multi2 == 2)
@@ -1546,7 +1635,7 @@ void PCQQQClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, s
         plotter->Fill2D("dE2_E_AnodeQQQR_TC1_PC" + std::to_string(phicut), 400, 0, 30, 800, 0, 4000, qqqevent.Energy1, pcevent.Energy1 * sinTheta, "PID_dE_E");
         plotter->Fill2D("dE2_E_CathodeQQQR_TC1_PC" + std::to_string(phicut), 400, 0, 30, 800, 0, 1000, qqqevent.Energy2, pcevent.Energy2 * sinTheta, "PID_dE_E");
         plotter->Fill2D("dEC_vs_dEA_TC1_PC" + std::to_string(phicut), 800, 0, 40000, 800, 0, 10000, pcevent.Energy1, pcevent.Energy2, "PID_dE_E");
-        plotter->Fill2D("qqqphi_vs_time", 2000, 0, 2000, 180, -360, 360, pcevent.Time1 * 1e-9, qqqevent.pos.Phi() * 180. / M_PI, "Timing"); 
+        plotter->Fill2D("qqqphi_vs_time", 2000, 0, 2000, 180, -360, 360, pcevent.Time1 * 1e-9, qqqevent.pos.Phi() * 180. / M_PI, "Timing");
 
         plotter->Fill1D("dt_pcA_qqqR_timecut", 640, -2000, 2000, qqqevent.Time1 - pcevent.Time1, "Timing");
         plotter->Fill1D("dt_pcC_qqqW_timecut", 640, -2000, 2000, qqqevent.Time2 - pcevent.Time2, "Timing");
@@ -1622,10 +1711,89 @@ void PCQQQClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, s
           plotter->Fill2D("dE3_Ef_CathodeQQQR_TC1PC" + std::to_string(phicut) + "_pidlow" + std::to_string(lowercut_cath), 600, 0, 15, 800, 0, 10000, qqqEfix, pcevent.Energy2 * sinTheta_customV, "PID_dE_E");
         }
 
-        if(BenchMark)
-      {
-        
-      }
+        //-----------------------Benchmarking Method for Source Runs------------------------//
+
+        if (BenchMark && aClusters.size() == 1 && cClusters.size() == 1)
+        {
+          const auto &aCl = aClusters.front();
+          const auto &cCl = cClusters.front();
+
+          auto vertexFromPCPoint = [&x1](const TVector3 &x2f)
+          {
+            TVector3 vf = x2f - x1;
+            double tm = -1.0 * (x1.X() * vf.X() + x1.Y() * vf.Y()) / (vf.X() * vf.X() + vf.Y() * vf.Y());
+            return TVector3(x1 + tm * vf);
+          };
+
+          auto fillSuite = [&](const std::string &tag, double pcz_method, const TVector3 &vtx)
+          {
+            plotter->Fill1D("Benchmark_QQQ_VertexZ_" + tag, 800, -400, 400, vtx.Z(), "Benchmark_QQQ");
+            plotter->Fill1D("Benchmark_QQQ_VertexZ_" + tag + "_TC" + std::to_string(timecut) + "_PC" + std::to_string(phicut), 800, -400, 400, vtx.Z(), "Benchmark_QQQ");
+            plotter->Fill2D("Benchmark_QQQ_VertexXY_" + tag, 200, -100, 100, 200, -100, 100, vtx.X(), vtx.Y(), "Benchmark_QQQ");
+            plotter->Fill1D("Benchmark_QQQ_PCZ_" + tag, 600, -200, 200, pcz_method, "Benchmark_QQQ");
+            plotter->Fill2D("Benchmark_QQQ_PCZ_vs_qqqpczguess_" + tag, 600, -200, 200, 600, -200, 200, pcz_guess_int, pcz_method, "Benchmark_QQQ");
+            plotter->Fill2D("Benchmark_QQQ_PCZresidual_vs_pczguess_" + tag, 600, -200, 200, 200, -100, 100, pcz_guess_37, pcz_method - pcz_guess_37, "Benchmark_QQQ");
+            plotter->Fill1D("Benchmark_QQQ_PCZ-qqqpczguess_" + tag, 200, -100, 100, pcz_method - pcz_guess_37, "Benchmark_QQQ");
+            plotter->Fill1D("Benchmark_QQQ_PCZ-qqqpczint_" + tag, 200, -100, 100, pcz_method - pcz_guess_int, "Benchmark_QQQ");
+          };
+
+          auto fillVsRef = [&](const std::string &tag, double pcz_method, const TVector3 &vtx, double pcz_ref, const TVector3 &vtx_ref)
+          {
+            plotter->Fill2D("Benchmark_QQQ_PCZ_" + tag + "_vs_ref", 400, -200, 200, 400, -200, 200, pcz_ref, pcz_method, "Benchmark_QQQ_ref");
+            plotter->Fill1D("Benchmark_QQQ_PCZ_" + tag + "_minus_ref", 400, -100, 100, pcz_method - pcz_ref, "Benchmark_QQQ_ref");
+            plotter->Fill2D("Benchmark_QQQ_VertexZ_" + tag + "_vs_ref", 400, -200, 200, 400, -200, 200, vtx_ref.Z(), vtx.Z(), "Benchmark_QQQ_ref");
+            plotter->Fill1D("Benchmark_QQQ_VertexZ_" + tag + "_minus_ref", 400, -100, 100, vtx.Z() - vtx_ref.Z(), "Benchmark_QQQ_ref");
+          };
+
+          // cathode charge-division reference on this event (the A1C2 recipe)
+          double pcz_ref = pcfix_func.Eval(pcevent.pos.Z());
+          TVector3 vtx_ref = vertexFromPCPoint(TVector3(pcevent.pos.X(), pcevent.pos.Y(), pcz_ref));
+
+          // anode-only PC point, oneWire method: pseudo-wire interpolated to the
+          // QQQ hit's phi, with the same quality cuts as miscHistograms_oneWire
+          auto [apwire_bm, apSumE_bm, apMaxE_bm, apTSMaxE_bm] = pwinstance.GetPseudoWire(aCl, "ANODE");
+          TVector3 pc_anodeOnly = pwinstance.getClosestWirePosAtWirePhi(apwire_bm, qqqevent.pos.Phi());
+          TVector3 vtx_anodeOnly = vertexFromPCPoint(pc_anodeOnly);
+          bool anodeOnlyGood = vtx_anodeOnly.Perp() <= 6.0 && vtx_anodeOnly.Z() >= -173.6 && vtx_anodeOnly.Z() <= 100 && phicut;
+
+          if (pcevent.multi1 == 1 && pcevent.multi2 == 2)
+          {
+            fillSuite("A1C2", pcz_ref, vtx_ref); // baseline with identical binning
+
+            // ---- A1C1 emulation: crossover with only the max-E cathode wire (Cmax),
+            //      used directly with no z-model ----
+            auto cMaxWire = *std::max_element(cCl.begin(), cCl.end(),
+                                              [](const std::tuple<int, double, double> &w1, const std::tuple<int, double, double> &w2)
+                                              { return std::get<1>(w1) < std::get<1>(w2); });
+            std::vector<std::tuple<int, double, double>> cOne = {cMaxWire};
+            auto [xo_a1c1, alpha_a1c1, apSumE1, cpSumE1, apMaxE1, cpMaxE1, apTSMaxE1, cpTSMaxE1] = pwinstance.FindCrossoverProperties(aCl, cOne);
+            if (alpha_a1c1 != 9999999 && apSumE1 != -1)
+            {
+              TVector3 vtx_a1c1 = vertexFromPCPoint(xo_a1c1);
+              fillSuite("A1C1", xo_a1c1.Z(), vtx_a1c1);
+              fillVsRef("A1C1", xo_a1c1.Z(), vtx_a1c1, pcz_ref, vtx_ref);
+            }
+
+            // ---- A1C0 emulation: oneWire method, cathodes ignored ----
+            if (anodeOnlyGood)
+            {
+              fillSuite("A1C0", pc_anodeOnly.Z(), vtx_anodeOnly);
+              fillVsRef("A1C0", pc_anodeOnly.Z(), vtx_anodeOnly, pcz_ref, vtx_ref);
+            }
+          }
+
+          // ---- A2C0 emulation: 2-wire anode pseudo-wire, oneWire method ----
+          if (pcevent.multi1 == 2 && pcevent.multi2 == 2)
+          {
+            fillSuite("A2C2", pcz_ref, vtx_ref); // reference population for A2C0
+            if (anodeOnlyGood)
+            {
+              fillSuite("A2C0", pc_anodeOnly.Z(), vtx_anodeOnly);
+              fillVsRef("A2C0", pc_anodeOnly.Z(), vtx_anodeOnly, pcz_ref, vtx_ref);
+            }
+          }
+        }
+
         double qqqrho = qqqevent.pos.Perp();
         double qqqz = (qqqevent.pos - TVector3(0, 0, source_vertex)).Z();
         double tan_theta = qqqrho / qqqz;
@@ -1644,7 +1812,7 @@ void PCQQQClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, s
         plotter->Fill2D("pczguess_vs_pc_phi=" + std::to_string(qqqevent.pos.Phi() * 180. / M_PI), 300, 0, 200, 150, 0, 200, pcz_guess, pcevent.pos.Z(), "Z_Reconstruction");
       }
     }
-  } 
+  }
 }
 // We pass plotter as a pointer, strings as const references (for speed),
 // and the Kinematics object as a reference.
