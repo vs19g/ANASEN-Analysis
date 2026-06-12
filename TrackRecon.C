@@ -1367,6 +1367,9 @@ void protonAlphaHistograms(HistPlotter *plotter, std::vector<Event> QQQ_Events, 
 void PCSX3ClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, std::vector<Event> SX3_Events, std::vector<Event> PC_Events,
                           const std::vector<std::vector<std::tuple<int, double, double>>> &aClusters, const std::vector<std::vector<std::tuple<int, double, double>>> &cClusters)
 {
+
+  static TRandom3 rand(0);
+
   for (auto pcevent : PC_Events)
   {
     bool PCSX3TimeCut = false;
@@ -1539,6 +1542,7 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, s
         // SX3 hit's phi, with the same quality cuts as miscHistograms_oneWire
         auto [apwire_bm, apSumE_bm, apMaxE_bm, apTSMaxE_bm] = pwinstance.GetPseudoWire(aCl, "ANODE");
         TVector3 pc_anodeOnly = pwinstance.getClosestWirePosAtWirePhi(apwire_bm, sx3event.pos.Phi());
+        pc_anodeOnly.SetZ(rand.Gaus(pc_anodeOnly.Z(), 8.0));
         TVector3 vtx_anodeOnly = vertexFromPCPoint(pc_anodeOnly);
         bool anodeOnlyGood = vtx_anodeOnly.Perp() <= 6.0 && vtx_anodeOnly.Z() >= -173.6 && vtx_anodeOnly.Z() <= 100 && phicut;
 
@@ -1546,19 +1550,11 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, s
         {
           fillSuite("A1C2", pcz_ref, vtx_ref); // baseline with identical binning
 
-          // ---- A1C1 emulation: crossover with only the max-E cathode wire (Cmax),
-          //      used directly with no z-model ----
-          auto cMaxWire = *std::max_element(cCl.begin(), cCl.end(),
-                                            [](const std::tuple<int, double, double> &w1, const std::tuple<int, double, double> &w2)
-                                            { return std::get<1>(w1) < std::get<1>(w2); });
-          std::vector<std::tuple<int, double, double>> cOne = {cMaxWire};
-          auto [xo_a1c1, alpha_a1c1, apSumE1, cpSumE1, apMaxE1, cpMaxE1, apTSMaxE1, cpTSMaxE1] = pwinstance.FindCrossoverProperties(aCl, cOne);
-          if (alpha_a1c1 != 9999999 && apSumE1 != -1)
-          {
-            TVector3 vtx_a1c1 = vertexFromPCPoint(xo_a1c1);
-            fillSuite("A1C1", xo_a1c1.Z(), vtx_a1c1);
-            fillVsRef("A1C1", xo_a1c1.Z(), vtx_a1c1, pcz_ref, vtx_ref);
-          }
+          double pcz_dith = rand.Gaus(pcevent.pos.Z(), 8.0);
+
+          TVector3 vtx_a1c1 = vertexFromPCPoint(TVector3(pcevent.pos.X(), pcevent.pos.Y(), pcz_dith));
+          fillSuite("A1C1", pcz_dith, vtx_a1c1);
+          fillVsRef("A1C1", pcz_dith, vtx_a1c1, pcz_ref, vtx_ref);
 
           // ---- A1C0 emulation: oneWire method, cathodes ignored ----
           if (anodeOnlyGood)
@@ -1586,6 +1582,8 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, s
 void PCQQQClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, std::vector<Event> SX3_Events, std::vector<Event> PC_Events,
                           const std::vector<std::vector<std::tuple<int, double, double>>> &aClusters, const std::vector<std::vector<std::tuple<int, double, double>>> &cClusters)
 {
+  static TRandom3 rand(0);
+
   for (auto pcevent : PC_Events)
   {
     for (auto qqqevent : QQQ_Events)
@@ -1753,6 +1751,7 @@ void PCQQQClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, s
           // QQQ hit's phi, with the same quality cuts as miscHistograms_oneWire
           auto [apwire_bm, apSumE_bm, apMaxE_bm, apTSMaxE_bm] = pwinstance.GetPseudoWire(aCl, "ANODE");
           TVector3 pc_anodeOnly = pwinstance.getClosestWirePosAtWirePhi(apwire_bm, qqqevent.pos.Phi());
+          pc_anodeOnly.SetZ(rand.Gaus(pc_anodeOnly.Z(), 8.0));
           TVector3 vtx_anodeOnly = vertexFromPCPoint(pc_anodeOnly);
           bool anodeOnlyGood = vtx_anodeOnly.Perp() <= 6.0 && vtx_anodeOnly.Z() >= -173.6 && vtx_anodeOnly.Z() <= 100 && phicut;
 
@@ -1762,17 +1761,16 @@ void PCQQQClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, s
 
             // ---- A1C1 emulation: crossover with only the max-E cathode wire (Cmax),
             //      used directly with no z-model ----
-            auto cMaxWire = *std::max_element(cCl.begin(), cCl.end(),
-                                              [](const std::tuple<int, double, double> &w1, const std::tuple<int, double, double> &w2)
-                                              { return std::get<1>(w1) < std::get<1>(w2); });
-            std::vector<std::tuple<int, double, double>> cOne = {cMaxWire};
-            auto [xo_a1c1, alpha_a1c1, apSumE1, cpSumE1, apMaxE1, cpMaxE1, apTSMaxE1, cpTSMaxE1] = pwinstance.FindCrossoverProperties(aCl, cOne);
-            if (alpha_a1c1 != 9999999 && apSumE1 != -1)
-            {
-              TVector3 vtx_a1c1 = vertexFromPCPoint(xo_a1c1);
-              fillSuite("A1C1", xo_a1c1.Z(), vtx_a1c1);
-              fillVsRef("A1C1", xo_a1c1.Z(), vtx_a1c1, pcz_ref, vtx_ref);
-            }
+            if (!phicut)
+              continue;
+            if (pcevent.Time1 - qqqevent.Time1 < -150 || pcevent.Time1 - qqqevent.Time1 > 850)
+              continue;
+
+            double pcz_dith = rand.Gaus(pcevent.pos.Z(), 8.0);
+
+            TVector3 vtx_a1c1 = vertexFromPCPoint(TVector3(pcevent.pos.X(), pcevent.pos.Y(), pcz_dith));
+            fillSuite("A1C1", pcz_dith, vtx_a1c1);
+            fillVsRef("A1C1", pcz_dith, vtx_a1c1, pcz_ref, vtx_ref);
 
             // ---- A1C0 emulation: oneWire method, cathodes ignored ----
             if (anodeOnlyGood)
