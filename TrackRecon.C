@@ -49,6 +49,7 @@ double source_vertex = 53; // 53
 const double qqq_z = 105.0;
 double z_entrance = -174.3 - 9.7 - 100.0;
 const double anode_gain = 1.5146e-5; // channels --> MeV
+double dither_sigma = 8.0;
 std::string dataset;
 int CO2percent;
 bool reactiondata = false;
@@ -173,6 +174,15 @@ void TrackRecon::Begin(TTree * /*tree*/)
   if (getenv("CO2percent"))
     CO2percent = std::atoi(getenv("CO2percent"));
   std::cout << "CO2 percent set to  " << CO2percent << std::endl;
+
+  if (getenv("source_vertex"))
+    source_vertex = (double)std::atof(std::string(getenv("source_vertex")).c_str());
+
+  if (getenv("DITHER_SIGMA"))
+  {
+    dither_sigma = std::atof(getenv("DITHER_SIGMA"));
+    std::cout << "Dither Sigma set to " << dither_sigma << " mm" << std::endl;
+  }
 
   pwinstance.ConstructGeo();
 
@@ -1542,7 +1552,7 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, s
         // SX3 hit's phi, with the same quality cuts as miscHistograms_oneWire
         auto [apwire_bm, apSumE_bm, apMaxE_bm, apTSMaxE_bm] = pwinstance.GetPseudoWire(aCl, "ANODE");
         TVector3 pc_anodeOnly = pwinstance.getClosestWirePosAtWirePhi(apwire_bm, sx3event.pos.Phi());
-        pc_anodeOnly.SetZ(rand.Gaus(pc_anodeOnly.Z(), 8.0));
+        pc_anodeOnly.SetZ(rand.Gaus(pc_anodeOnly.Z(), dither_sigma));
         TVector3 vtx_anodeOnly = vertexFromPCPoint(pc_anodeOnly);
         bool anodeOnlyGood = vtx_anodeOnly.Perp() <= 6.0 && vtx_anodeOnly.Z() >= -173.6 && vtx_anodeOnly.Z() <= 100 && phicut;
 
@@ -1550,7 +1560,7 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, s
         {
           fillSuite("A1C2", pcz_ref, vtx_ref); // baseline with identical binning
 
-          double pcz_dith = rand.Gaus(pcevent.pos.Z(), 8.0);
+          double pcz_dith = rand.Gaus(pcevent.pos.Z(), dither_sigma);
 
           TVector3 vtx_a1c1 = vertexFromPCPoint(TVector3(pcevent.pos.X(), pcevent.pos.Y(), pcz_dith));
           fillSuite("A1C1", pcz_dith, vtx_a1c1);
@@ -1751,7 +1761,7 @@ void PCQQQClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, s
           // QQQ hit's phi, with the same quality cuts as miscHistograms_oneWire
           auto [apwire_bm, apSumE_bm, apMaxE_bm, apTSMaxE_bm] = pwinstance.GetPseudoWire(aCl, "ANODE");
           TVector3 pc_anodeOnly = pwinstance.getClosestWirePosAtWirePhi(apwire_bm, qqqevent.pos.Phi());
-          pc_anodeOnly.SetZ(rand.Gaus(pc_anodeOnly.Z(), 8.0));
+          pc_anodeOnly.SetZ(rand.Gaus(pc_anodeOnly.Z(), dither_sigma));
           TVector3 vtx_anodeOnly = vertexFromPCPoint(pc_anodeOnly);
           bool anodeOnlyGood = vtx_anodeOnly.Perp() <= 6.0 && vtx_anodeOnly.Z() >= -173.6 && vtx_anodeOnly.Z() <= 100 && phicut;
 
@@ -1766,7 +1776,7 @@ void PCQQQClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, s
             if (pcevent.Time1 - qqqevent.Time1 < -150 || pcevent.Time1 - qqqevent.Time1 > 850)
               continue;
 
-            double pcz_dith = rand.Gaus(pcevent.pos.Z(), 8.0);
+            double pcz_dith = rand.Gaus(pcevent.pos.Z(), dither_sigma);
 
             TVector3 vtx_a1c1 = vertexFromPCPoint(TVector3(pcevent.pos.X(), pcevent.pos.Y(), pcz_dith));
             fillSuite("A1C1", pcz_dith, vtx_a1c1);
@@ -2323,7 +2333,6 @@ void protonMiscHistograms(HistPlotter *plotter, std::vector<Event> QQQ_Events, s
 
   Kinematics apkin_a(1.008664916, 4.002603254, 4.002603254, 1.008664916, initial_energy); // m3 is alpha
 
-  TF1 pcfix_func("pcfix_func", "pol2", -200, 200);
   for (auto qqqevent : QQQ_Events)
   {
     if (qqqevent.Energy1 < 0.6)

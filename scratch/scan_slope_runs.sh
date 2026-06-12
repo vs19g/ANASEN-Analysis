@@ -4,7 +4,7 @@
 # runs all source runs, saves results under slope_scan/run<NNN>/slope_<val>.root
 
 set -e
-CORRECTION_H="Armory/PC_StepLadder_Correction.h"
+CORRECTION_H="../Armory/PC_StepLadder_Correction.h"
 SCAN_DIR="slope_scan"
 
 process_run() {
@@ -13,7 +13,7 @@ process_run() {
     local outdir="${SCAN_DIR}/run${wrun}"
     mkdir -p "$outdir"
     local out="${outdir}/slope_${slope}.root"
-    root -q -l -b -x "../ANASEN_analysis/data/${DATASET}_Data/${PREFIX}${wrun}_mapped.root" \
+    root -q -l -b -x "../../ANASEN_analysis/data/${DATASET}_Data/${PREFIX}${wrun}_mapped.root" \
          -e "tree->Process(\"TrackRecon.C+\", \"${out}\")" > /dev/null 2>&1
     [ -f "$out" ] && echo "  run $wrun slope $slope OK" || echo "  run $wrun slope $slope FAILED"
 }

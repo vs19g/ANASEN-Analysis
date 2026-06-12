@@ -61,6 +61,7 @@ def generate_lookup(z, mass_u, e_start_mev, label):
 # Format: generate_lookup(Z, mass_u, E_start_MeV, label)
 generate_lookup(1, 1.0078, 20, "proton")
 generate_lookup(2, 4.0026, 20, "alpha")
+generate_lookup(1, 2.01355, 20, "deutron")
 generate_lookup(13,26.9815, 80, "aluminum")
 generate_lookup(9,17.0021, 70, "fluorine")
 generate_lookup(8,15.9949, 70, "oxygen")
