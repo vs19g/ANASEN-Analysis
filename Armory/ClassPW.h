@@ -86,7 +86,7 @@ public:
   double GetAnodeTheta(short id) const { return (An[id].first - An[id].second).Theta(); }
   double GetAnodePhi(short id) const { return (An[id].first - An[id].second).Phi(); }
 
-  TVector3 GetCathodneMid(short id) const { return (Ca[id].first + Ca[id].second) * 0.5; }
+  TVector3 GetCathodeMid(short id) const { return (Ca[id].first + Ca[id].second) * 0.5; }
   double GetCathodeTheta(short id) const { return (Ca[id].first - Ca[id].second).Theta(); }
   double GetCathodePhi(short id) const { return (Ca[id].first - Ca[id].second).Phi(); }
 

@@ -7,6 +7,7 @@ SCAN_DIR="dither_scan"
 
 echo "=== Compiling TrackRecon.C once... ==="
 root -q -l -b -e '.L TrackRecon.C++O' 2>/dev/null
+rm -rf dither_scan/*
 
 process_run() {
     local wrun=$(printf "%03d" "$1")
@@ -19,7 +20,7 @@ process_run() {
     # Pass the variable to C++
     export DITHER_SIGMA="$dither"
 
-    root -q -l -b -x "../../ANASEN_analysis/data/${DATASET}_Data/${PREFIX}${wrun}_mapped.root" \
+    root -q -l -b -x "../ANASEN_analysis/data/${DATASET}_Data/${PREFIX}${wrun}_mapped.root" \
          -e "tree->Process(\"TrackRecon.C+\", \"${out}\")" > /dev/null 2>&1
          
     [ -f "$out" ] && echo "  run $wrun dither $dither OK" || echo "  run $wrun dither $dither FAILED"
@@ -29,7 +30,8 @@ export -f process_run
 export SCAN_DIR
 
 # Loop through the dither amounts (in mm) you want to test
-for dither in 0.0 2.0 3.0 4.0 5.0 6.0 7.0 8.0 9.0 10.0; do
+# for dither in 2.0 3.0 4.0 5.0 6.0 7.0 8.0 9.0 10.0 12.0 13.0 14.0 15.0 16.0 17.0 18.0 19.0 20.0 22.0 23.0 24.0 25.0 26.0 27.0 28.0 29.0 30.0 32.0 33.0 34.0 35.0 36.0 37.0 38.0; do
+for dither in 8.0 12.0 16.0 20.0 24.0 28.0 32.0 36.0 40.0; do
     echo "=== Scanning Dither Sigma = ${dither} mm ==="
     
     # 27Al alpha+gas runs (9, 12)

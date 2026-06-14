@@ -50,6 +50,7 @@ const double qqq_z = 105.0;
 double z_entrance = -174.3 - 9.7 - 100.0;
 const double anode_gain = 1.5146e-5; // channels --> MeV
 double dither_sigma = 8.0;
+double dither_sigma_c0 = dither_sigma;
 std::string dataset;
 int CO2percent;
 bool reactiondata = false;
@@ -181,6 +182,7 @@ void TrackRecon::Begin(TTree * /*tree*/)
   if (getenv("DITHER_SIGMA"))
   {
     dither_sigma = std::atof(getenv("DITHER_SIGMA"));
+    dither_sigma_c0 = dither_sigma;
     std::cout << "Dither Sigma set to " << dither_sigma << " mm" << std::endl;
   }
 
@@ -1510,18 +1512,17 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, s
         plotter->Fill1D("PCZ_sx3", 800, -200, 200, pcevent.pos.Z(), "Z_Reconstruction");
       }
 
-      //-----------------------Benchmarking Method for Source Runs------------------------//
-
+      //-----------------------Benchmarking Method for Source Runs (SX3)------------------------//
       if (BenchMark && aClusters.size() == 1 && cClusters.size() == 1)
       {
         const auto &aCl = aClusters.front();
         const auto &cCl = cClusters.front();
 
-        auto vertexFromPCPoint = [&x1](const TVector3 &x2f)
+        auto vertexFrom = [](const TVector3 &si, const TVector3 &pcpoint)
         {
-          TVector3 vf = x2f - x1;
-          double tm = -1.0 * (x1.X() * vf.X() + x1.Y() * vf.Y()) / (vf.X() * vf.X() + vf.Y() * vf.Y());
-          return TVector3(x1 + tm * vf);
+          TVector3 vf = pcpoint - si;
+          double tm = -1.0 * (si.X() * vf.X() + si.Y() * vf.Y()) / (vf.X() * vf.X() + vf.Y() * vf.Y());
+          return TVector3(si + tm * vf);
         };
 
         auto fillSuite = [&](const std::string &tag, double pcz_method, const TVector3 &vtx)
@@ -1530,58 +1531,93 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, s
           plotter->Fill1D("Benchmark_SX3_VertexZ_" + tag + "_TC" + std::to_string(PCSX3TimeCut) + "_PC" + std::to_string(phicut), 800, -400, 400, vtx.Z(), "Benchmark_SX3");
           plotter->Fill2D("Benchmark_SX3_VertexXY_" + tag, 200, -100, 100, 200, -100, 100, vtx.X(), vtx.Y(), "Benchmark_SX3");
           plotter->Fill1D("Benchmark_SX3_PCZ_" + tag, 600, -200, 200, pcz_method, "Benchmark_SX3");
-          plotter->Fill2D("Benchmark_SX3_PCZ_vs_sx3pczguess_" + tag, 600, -200, 200, 600, -200, 200, pcz_guess_int, pcz_method, "Benchmark_SX3");
-          plotter->Fill2D("Benchmark_SX3_PCZresidual_vs_pczguess_" + tag, 600, -200, 200, 200, -100, 100, pczguess, pcz_method - pczguess, "Benchmark_SX3");
-          plotter->Fill1D("Benchmark_SX3_PCZ-sx3pczguess_" + tag, 200, -100, 100, pcz_method - pczguess, "Benchmark_SX3");
-          plotter->Fill1D("Benchmark_SX3_PCZ-sx3pczint_" + tag, 200, -100, 100, pcz_method - pcz_guess_int, "Benchmark_SX3");
         };
 
         auto fillVsRef = [&](const std::string &tag, double pcz_method, const TVector3 &vtx, double pcz_ref, const TVector3 &vtx_ref)
         {
           plotter->Fill2D("Benchmark_SX3_PCZ_" + tag + "_vs_ref", 400, -200, 200, 400, -200, 200, pcz_ref, pcz_method, "Benchmark_SX3_ref");
           plotter->Fill1D("Benchmark_SX3_PCZ_" + tag + "_minus_ref", 400, -100, 100, pcz_method - pcz_ref, "Benchmark_SX3_ref");
-          plotter->Fill2D("Benchmark_SX3_VertexZ_" + tag + "_vs_ref", 400, -200, 200, 400, -200, 200, vtx_ref.Z(), vtx.Z(), "Benchmark_SX3_ref");
-          plotter->Fill1D("Benchmark_SX3_VertexZ_" + tag + "_minus_ref", 400, -100, 100, vtx.Z() - vtx_ref.Z(), "Benchmark_SX3_ref");
+          plotter->Fill2D("Benchmark_SX3_PCZ_" + tag + "_vs_sx3pczguess", 400, -200, 200, 400, -200, 200, pczguess, pcz_method, "Benchmark_SX3_ref");
+          plotter->Fill1D("Benchmark_SX3_PCZ_" + tag + "_minus_sx3pczguess", 400, -100, 100, pcz_method - pczguess, "Benchmark_SX3_ref");
         };
 
-        // cathode charge-division reference on this event (the A1C2 recipe)
         double pcz_ref = pcfix_func.Eval(pcevent.pos.Z());
-        TVector3 vtx_ref = vertexFromPCPoint(TVector3(pcevent.pos.X(), pcevent.pos.Y(), pcz_ref));
+        TVector3 vtx_ref = vertexFrom(sx3event.pos, TVector3(pcevent.pos.X(), pcevent.pos.Y(), pcz_ref));
 
-        // anode-only PC point, oneWire method: pseudo-wire interpolated to the
-        // SX3 hit's phi, with the same quality cuts as miscHistograms_oneWire
-        auto [apwire_bm, apSumE_bm, apMaxE_bm, apTSMaxE_bm] = pwinstance.GetPseudoWire(aCl, "ANODE");
-        TVector3 pc_anodeOnly = pwinstance.getClosestWirePosAtWirePhi(apwire_bm, sx3event.pos.Phi());
-        pc_anodeOnly.SetZ(rand.Gaus(pc_anodeOnly.Z(), dither_sigma));
-        TVector3 vtx_anodeOnly = vertexFromPCPoint(pc_anodeOnly);
-        bool anodeOnlyGood = vtx_anodeOnly.Perp() <= 6.0 && vtx_anodeOnly.Z() >= -173.6 && vtx_anodeOnly.Z() <= 100 && phicut;
+        auto pw_tuple = pwinstance.GetPseudoWire(aCl, "ANODE");
+        std::pair<TVector3, TVector3> apwire_bm = std::get<0>(pw_tuple);
 
-        if (pcevent.multi1 == 1 && pcevent.multi2 == 2)
+        auto cMaxWire = *std::max_element(cCl.begin(), cCl.end(), [](const auto &a, const auto &b)
+                                          { return std::get<1>(a) < std::get<1>(b); });
+        std::vector<std::tuple<int, double, double>> cOne = {cMaxWire};
+
+        auto xo_tuple = pwinstance.FindCrossoverProperties(aCl, cOne);
+        TVector3 xo_a1c1 = std::get<0>(xo_tuple);
+        double alpha_a1c1 = std::get<1>(xo_tuple);
+        bool a1c1Good = (alpha_a1c1 != 9999999 && std::get<2>(xo_tuple) != -1);
+
+        // --- A1C1 charge-ratio diagnostic ---
+        // Only one cathode in A1C1, so the z-sensitive variable is cathode-vs-anode
+        // charge, not cathode/cathode. Use pseudo-wire sums for consistent gains.
+        double aSumE_bm = std::get<1>(pw_tuple); // anode sum (reuse pw_tuple)
+        auto cpw_tuple = pwinstance.GetPseudoWire(cOne, "CATHODE");
+        double cSumE_bm = std::get<1>(cpw_tuple); // single-cathode sum
+        double ac_sum = aSumE_bm + cSumE_bm;
+        double cfrac = (ac_sum > 0.0) ? cSumE_bm / ac_sum : -1.0; // bounded [0,1]
+
+        // Smearing Setup
+        double sx3_phi_pitch = 6.5 * (M_PI / 180.0);
+        double smeared_phi = sx3event.pos.Phi() + rand.Uniform(-sx3_phi_pitch / 2.0, sx3_phi_pitch / 2.0);
+        TVector3 smeared_sx3_pos(sx3event.pos.Perp() * TMath::Cos(smeared_phi), sx3event.pos.Perp() * TMath::Sin(smeared_phi), sx3event.pos.Z());
+
+        auto doA1C1 = [&](const std::string &tag, const TVector3 &si_point, bool dither, bool hybrid)
         {
-          fillSuite("A1C2", pcz_ref, vtx_ref); // baseline with identical binning
+          if (!a1c1Good)
+            return;
+          // double sigma = hybrid ? (dither_sigma_c0 / 2.0) : dither_sigma_c0;
+          // double pcz = dither ? rand.Gaus(xo_a1c1.Z(), sigma) : xo_a1c1.Z();
+          double pcz = dither ? rand.Gaus(xo_a1c1.Z(), dither_sigma) : xo_a1c1.Z();
+          // double pcz = dither ? rand.Uniform(xo_a1c1.Z(), dither_sigma) : xo_a1c1.Z();
+          TVector3 vtx = vertexFrom(si_point, TVector3(xo_a1c1.X(), xo_a1c1.Y(), pcz));
+          fillSuite(tag, pcz, vtx);
+          fillVsRef(tag, pcz, vtx, pcz_ref, vtx_ref);
+        };
 
-          double pcz_dith = rand.Gaus(pcevent.pos.Z(), dither_sigma);
-
-          TVector3 vtx_a1c1 = vertexFromPCPoint(TVector3(pcevent.pos.X(), pcevent.pos.Y(), pcz_dith));
-          fillSuite("A1C1", pcz_dith, vtx_a1c1);
-          fillVsRef("A1C1", pcz_dith, vtx_a1c1, pcz_ref, vtx_ref);
-
-          // ---- A1C0 emulation: oneWire method, cathodes ignored ----
-          if (anodeOnlyGood)
-          {
-            fillSuite("A1C0", pc_anodeOnly.Z(), vtx_anodeOnly);
-            fillVsRef("A1C0", pc_anodeOnly.Z(), vtx_anodeOnly, pcz_ref, vtx_ref);
-          }
-        }
-
-        // ---- A2C0 emulation: 2-wire anode pseudo-wire, oneWire method ----
-        if (pcevent.multi1 == 2 && pcevent.multi2 == 2)
+        auto doAnodeOnly = [&](const std::string &tag, double phi_use, const TVector3 &si_point, bool dither, bool hybrid)
         {
-          fillSuite("A2C2", pcz_ref, vtx_ref); // reference population for A2C0
-          if (anodeOnlyGood)
+          TVector3 pc = pwinstance.getClosestWirePosAtWirePhi(apwire_bm, phi_use);
+          TVector3 vtx0 = vertexFrom(si_point, pc);
+          if (!(vtx0.Perp() <= 6.0 && vtx0.Z() >= -173.6))
+            return;
+          // double sigma = hybrid ? (dither_sigma_c0 / 2.0) : dither_sigma_c0;
+          double pcz = dither ? rand.Gaus(pc.Z(), dither_sigma) : pc.Z();
+          TVector3 vtx = vertexFrom(si_point, TVector3(pc.X(), pc.Y(), pcz));
+          fillSuite(tag, pcz, vtx);
+          fillVsRef(tag, pcz, vtx, pcz_ref, vtx_ref);
+        };
+
+        if (phicut && PCSX3TimeCut)
+        {
+          if (pcevent.multi1 == 1 && pcevent.multi2 == 2)
           {
-            fillSuite("A2C0", pc_anodeOnly.Z(), vtx_anodeOnly);
-            fillVsRef("A2C0", pc_anodeOnly.Z(), vtx_anodeOnly, pcz_ref, vtx_ref);
+            fillSuite("A1C2", pcz_ref, vtx_ref);
+            doA1C1("A1C1", sx3event.pos, true, false);
+            doAnodeOnly("A1C0", sx3event.pos.Phi(), sx3event.pos, true, false);
+            doA1C1("A1C1_Si", smeared_sx3_pos, false, false);
+            doAnodeOnly("A1C0_Si", smeared_phi, smeared_sx3_pos, false, false);
+            doA1C1("A1C1_Hyb", smeared_sx3_pos, true, true);
+            doAnodeOnly("A1C0_Hyb", smeared_phi, smeared_sx3_pos, true, true);
+
+            // --- A1C1 charge-fraction diagnostics ---
+            // Decides whether the single cathode carries any sub-cell z information.
+            if (a1c1Good && cfrac >= 0.0)
+            {
+              plotter->Fill1D("Benchmark_SX3_A1C1_cfrac", 220, -0.05, 1.05, cfrac, "Benchmark_SX3_ref");
+              plotter->Fill2D("Benchmark_SX3_A1C1_cfrac_vs_ref", 400, -200, 200, 220, -0.05, 1.05,
+                              pcz_ref, cfrac, "Benchmark_SX3_ref");
+              plotter->Fill2D("Benchmark_SX3_A1C1_cfrac_vs_sx3pczguess", 400, -200, 200, 220, -0.05, 1.05,
+                              pczguess, cfrac, "Benchmark_SX3_ref");
+            }
           }
         }
       }
@@ -1719,18 +1755,17 @@ void PCQQQClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, s
           plotter->Fill2D("dE3_Ef_CathodeQQQR_TC1PC" + std::to_string(phicut) + "_pidlow" + std::to_string(lowercut_cath), 600, 0, 15, 800, 0, 10000, qqqEfix, pcevent.Energy2 * sinTheta_customV, "PID_dE_E");
         }
 
-        //-----------------------Benchmarking Method for Source Runs------------------------//
-
+        //-----------------------Benchmarking Method for Source Runs (QQQ)------------------------//
         if (BenchMark && aClusters.size() == 1 && cClusters.size() == 1)
         {
           const auto &aCl = aClusters.front();
           const auto &cCl = cClusters.front();
 
-          auto vertexFromPCPoint = [&x1](const TVector3 &x2f)
+          auto vertexFrom = [](const TVector3 &si, const TVector3 &pcpoint)
           {
-            TVector3 vf = x2f - x1;
-            double tm = -1.0 * (x1.X() * vf.X() + x1.Y() * vf.Y()) / (vf.X() * vf.X() + vf.Y() * vf.Y());
-            return TVector3(x1 + tm * vf);
+            TVector3 vf = pcpoint - si;
+            double tm = -1.0 * (si.X() * vf.X() + si.Y() * vf.Y()) / (vf.X() * vf.X() + vf.Y() * vf.Y());
+            return TVector3(si + tm * vf);
           };
 
           auto fillSuite = [&](const std::string &tag, double pcz_method, const TVector3 &vtx)
@@ -1739,69 +1774,75 @@ void PCQQQClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, s
             plotter->Fill1D("Benchmark_QQQ_VertexZ_" + tag + "_TC" + std::to_string(timecut) + "_PC" + std::to_string(phicut), 800, -400, 400, vtx.Z(), "Benchmark_QQQ");
             plotter->Fill2D("Benchmark_QQQ_VertexXY_" + tag, 200, -100, 100, 200, -100, 100, vtx.X(), vtx.Y(), "Benchmark_QQQ");
             plotter->Fill1D("Benchmark_QQQ_PCZ_" + tag, 600, -200, 200, pcz_method, "Benchmark_QQQ");
-            plotter->Fill2D("Benchmark_QQQ_PCZ_vs_qqqpczguess_" + tag, 600, -200, 200, 600, -200, 200, pcz_guess_int, pcz_method, "Benchmark_QQQ");
-            plotter->Fill2D("Benchmark_QQQ_PCZresidual_vs_pczguess_" + tag, 600, -200, 200, 200, -100, 100, pcz_guess_37, pcz_method - pcz_guess_37, "Benchmark_QQQ");
-            plotter->Fill1D("Benchmark_QQQ_PCZ-qqqpczguess_" + tag, 200, -100, 100, pcz_method - pcz_guess_37, "Benchmark_QQQ");
-            plotter->Fill1D("Benchmark_QQQ_PCZ-qqqpczint_" + tag, 200, -100, 100, pcz_method - pcz_guess_int, "Benchmark_QQQ");
           };
 
           auto fillVsRef = [&](const std::string &tag, double pcz_method, const TVector3 &vtx, double pcz_ref, const TVector3 &vtx_ref)
           {
             plotter->Fill2D("Benchmark_QQQ_PCZ_" + tag + "_vs_ref", 400, -200, 200, 400, -200, 200, pcz_ref, pcz_method, "Benchmark_QQQ_ref");
             plotter->Fill1D("Benchmark_QQQ_PCZ_" + tag + "_minus_ref", 400, -100, 100, pcz_method - pcz_ref, "Benchmark_QQQ_ref");
-            plotter->Fill2D("Benchmark_QQQ_VertexZ_" + tag + "_vs_ref", 400, -200, 200, 400, -200, 200, vtx_ref.Z(), vtx.Z(), "Benchmark_QQQ_ref");
-            plotter->Fill1D("Benchmark_QQQ_VertexZ_" + tag + "_minus_ref", 400, -100, 100, vtx.Z() - vtx_ref.Z(), "Benchmark_QQQ_ref");
           };
 
-          // cathode charge-division reference on this event (the A1C2 recipe)
           double pcz_ref = pcfix_func.Eval(pcevent.pos.Z());
-          TVector3 vtx_ref = vertexFromPCPoint(TVector3(pcevent.pos.X(), pcevent.pos.Y(), pcz_ref));
+          TVector3 vtx_ref = vertexFrom(qqqevent.pos, TVector3(pcevent.pos.X(), pcevent.pos.Y(), pcz_ref));
 
-          // anode-only PC point, oneWire method: pseudo-wire interpolated to the
-          // QQQ hit's phi, with the same quality cuts as miscHistograms_oneWire
-          auto [apwire_bm, apSumE_bm, apMaxE_bm, apTSMaxE_bm] = pwinstance.GetPseudoWire(aCl, "ANODE");
-          TVector3 pc_anodeOnly = pwinstance.getClosestWirePosAtWirePhi(apwire_bm, qqqevent.pos.Phi());
-          pc_anodeOnly.SetZ(rand.Gaus(pc_anodeOnly.Z(), dither_sigma));
-          TVector3 vtx_anodeOnly = vertexFromPCPoint(pc_anodeOnly);
-          bool anodeOnlyGood = vtx_anodeOnly.Perp() <= 6.0 && vtx_anodeOnly.Z() >= -173.6 && vtx_anodeOnly.Z() <= 100 && phicut;
+          auto pw_tuple = pwinstance.GetPseudoWire(aCl, "ANODE");
+          std::pair<TVector3, TVector3> apwire_bm = std::get<0>(pw_tuple);
 
-          if (pcevent.multi1 == 1 && pcevent.multi2 == 2)
+          auto cMaxWire = *std::max_element(cCl.begin(), cCl.end(), [](const auto &a, const auto &b)
+                                            { return std::get<1>(a) < std::get<1>(b); });
+          std::vector<std::tuple<int, double, double>> cOne = {cMaxWire};
+
+          auto xo_tuple = pwinstance.FindCrossoverProperties(aCl, cOne);
+          TVector3 xo_a1c1 = std::get<0>(xo_tuple);
+          double alpha_a1c1 = std::get<1>(xo_tuple);
+          bool a1c1Good = (alpha_a1c1 != 9999999 && std::get<2>(xo_tuple) != -1);
+
+          // Smearing Setup
+          double qqq_wedge_pitch = (87.0 / 16.0) * (M_PI / 180.0);
+          double qqq_ring_pitch = 48.0 / 16.0;
+          double smeared_phi = qqqevent.pos.Phi() + rand.Uniform(-qqq_wedge_pitch / 2.0, qqq_wedge_pitch / 2.0);
+          double smeared_rho = qqqevent.pos.Perp() + rand.Uniform(-qqq_ring_pitch / 2.0, qqq_ring_pitch / 2.0);
+
+          TVector3 smeared_qqq_pos(smeared_rho * TMath::Cos(smeared_phi), smeared_rho * TMath::Sin(smeared_phi), qqqevent.pos.Z());
+
+          auto doA1C1 = [&](const std::string &tag, const TVector3 &si_point, bool dither, bool hybrid)
           {
-            fillSuite("A1C2", pcz_ref, vtx_ref); // baseline with identical binning
+            if (!a1c1Good)
+              return;
+            // double sigma = hybrid ? (dither_sigma / 2.0) : dither_sigma;
+            double pcz = dither ? rand.Gaus(xo_a1c1.Z(), dither_sigma) : xo_a1c1.Z();
+            TVector3 vtx = vertexFrom(si_point, TVector3(xo_a1c1.X(), xo_a1c1.Y(), pcz));
+            fillSuite(tag, pcz, vtx);
+            fillVsRef(tag, pcz, vtx, pcz_ref, vtx_ref);
+          };
 
-            // ---- A1C1 emulation: crossover with only the max-E cathode wire (Cmax),
-            //      used directly with no z-model ----
-            if (!phicut)
-              continue;
-            if (pcevent.Time1 - qqqevent.Time1 < -150 || pcevent.Time1 - qqqevent.Time1 > 850)
-              continue;
-
-            double pcz_dith = rand.Gaus(pcevent.pos.Z(), dither_sigma);
-
-            TVector3 vtx_a1c1 = vertexFromPCPoint(TVector3(pcevent.pos.X(), pcevent.pos.Y(), pcz_dith));
-            fillSuite("A1C1", pcz_dith, vtx_a1c1);
-            fillVsRef("A1C1", pcz_dith, vtx_a1c1, pcz_ref, vtx_ref);
-
-            // ---- A1C0 emulation: oneWire method, cathodes ignored ----
-            if (anodeOnlyGood)
-            {
-              fillSuite("A1C0", pc_anodeOnly.Z(), vtx_anodeOnly);
-              fillVsRef("A1C0", pc_anodeOnly.Z(), vtx_anodeOnly, pcz_ref, vtx_ref);
-            }
-          }
-
-          // ---- A2C0 emulation: 2-wire anode pseudo-wire, oneWire method ----
-          if (pcevent.multi1 == 2 && pcevent.multi2 == 2)
+          auto doAnodeOnly = [&](const std::string &tag, double phi_use, const TVector3 &si_point, bool dither, bool hybrid)
           {
-            fillSuite("A2C2", pcz_ref, vtx_ref); // reference population for A2C0
-            if (anodeOnlyGood)
+            TVector3 pc = pwinstance.getClosestWirePosAtWirePhi(apwire_bm, phi_use);
+            TVector3 vtx0 = vertexFrom(si_point, pc);
+            if (!(vtx0.Perp() <= 6.0 && vtx0.Z() >= -173.6))
+              return;
+            double sigma = hybrid ? (dither_sigma_c0 / 2.0) : dither_sigma_c0;
+            double pcz = dither ? rand.Gaus(pc.Z(), sigma) : pc.Z();
+            TVector3 vtx = vertexFrom(si_point, TVector3(pc.X(), pc.Y(), pcz));
+            fillSuite(tag, pcz, vtx);
+            fillVsRef(tag, pcz, vtx, pcz_ref, vtx_ref);
+          };
+
+          if (phicut && timecut)
+          {
+            if (pcevent.multi1 == 1 && pcevent.multi2 == 2)
             {
-              fillSuite("A2C0", pc_anodeOnly.Z(), vtx_anodeOnly);
-              fillVsRef("A2C0", pc_anodeOnly.Z(), vtx_anodeOnly, pcz_ref, vtx_ref);
+              fillSuite("A1C2", pcz_ref, vtx_ref);
+              doA1C1("A1C1", qqqevent.pos, true, false);
+              doAnodeOnly("A1C0", qqqevent.pos.Phi(), qqqevent.pos, true, false);
+              doA1C1("A1C1_Si", smeared_qqq_pos, false, false);
+              doAnodeOnly("A1C0_Si", smeared_phi, smeared_qqq_pos, false, false);
+              doA1C1("A1C1_Hyb", smeared_qqq_pos, true, true);
+              doAnodeOnly("A1C0_Hyb", smeared_phi, smeared_qqq_pos, true, true);
             }
           }
         }
-
         double qqqrho = qqqevent.pos.Perp();
         double qqqz = (qqqevent.pos - TVector3(0, 0, source_vertex)).Z();
         double tan_theta = qqqrho / qqqz;
