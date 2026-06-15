@@ -71,7 +71,7 @@ double a1c1_slope = 1.0; // parabola staircase stretch (1.0 = off)
 // --- A1C1 linear centre-fold calibration (cfrac = cfmin[cell] + k*f) ---
 const double a1c1_k_1 = 0.075; // from cfrac_vs_fold candle medians
 const double a1c1_cfmin_1[7] = {0.40, 0.40, 0.40, 0.40, 0.40, 0.40, 0.40};
-const double a1c1_k_2= 0.06; // confirm with a 350-gain candle
+const double a1c1_k_2 = 0.06; // confirm with a 350-gain candle
 const double a1c1_cfmin_2[7] = {0.18, 0.18, 0.18, 0.18, 0.18, 0.18, 0.18};
 
 double a1c1_k = a1c1_k_1;
@@ -771,7 +771,7 @@ Bool_t TrackRecon::Process(Long64_t entry)
     {
       cathodeT = static_cast<double>(pc.t[i]);
       cathodeIndex = pc.index[i] - 24;
-      cWireEvents[pc.index[i] - 24] = std::tuple(pc.index[i] - 24, pc.e[i], static_cast<double>(pc.t[i]));
+      cWireEvents[pc.index[i] - 24] = std::tuple(pc.index[i] - 24, 4*pc.e[i], static_cast<double>(pc.t[i]));
     }
 
     if (anodeT != -99999 && cathodeT != 99999)
@@ -1655,7 +1655,7 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, s
 
         if (phicut && PCSX3TimeCut)
         {
-          if (pcevent.multi1 == 1 && pcevent.multi2 == 2)
+          if (pcevent.multi1 == 1 && pcevent.multi2 >= 1)
           {
             fillSuite("A1C2", pcz_ref, vtx_ref);
             doA1C1("A1C1", sx3event.pos, true, false);
@@ -1676,12 +1676,17 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, s
                               pcz_ref, cfrac, "Benchmark_SX3_ref");
               plotter->Fill2D("Benchmark_SX3_A1C1_cfrac_vs_sx3pczguess", 400, -200, 200, 220, -0.05, 1.05,
                               pczguess, cfrac, "Benchmark_SX3_ref");
+              if (pcevent.multi2 == 1)
+              {
+                plotter->Fill2D("Benchmark_SX3_A1C1_cfrac_vs_sx3pczguess_a1c1", 400, -200, 200, 220, -0.05, 1.05,
+                                pczguess, cfrac, "Benchmark_SX3_ref");
+              }
 
               static const double zg[8] = {147.998, 101.946, 59.7634, 19.6965, -19.6965, -59.7634, -101.946, -147.998};
               double zp = xo_a1c1.Z();
-              auto fillCfracS = [&](const char *name, double truth)
+              auto fillCfracS = [&](const char *name, double val)
               {
-                double sgn = (truth >= zp) ? 1.0 : -1.0;
+                double sgn = (val >= zp) ? 1.0 : -1.0;
                 double znb = (sgn > 0) ? 1.0e30 : -1.0e30;
                 for (int i = 0; i < 8; ++i)
                 {
@@ -1692,7 +1697,7 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, s
                 }
                 if (TMath::Abs(znb) < 1e8 && TMath::Abs(znb - zp) > 0.0)
                   plotter->Fill2D(name, 240, -1.2, 1.2, 220, -0.05, 1.05,
-                                  (truth - zp) / TMath::Abs(znb - zp), cfrac, "Benchmark_SX3_ref");
+                                  (val - zp) / TMath::Abs(znb - zp), cfrac, "Benchmark_SX3_ref");
               };
               fillCfracS("Benchmark_SX3_A1C1_cfrac_vs_s", pcz_ref);
               fillCfracS("Benchmark_SX3_A1C1_cfrac_vs_s_sx3pczguess", pczguess);
@@ -1942,9 +1947,11 @@ void PCQQQClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, s
             if (!a1c1Good || cfrac < 0.0)
               return;
             bool ok = false;
+            // anchor on the A1C0 anode-only z (independent of the Si geometric guess) to avoid circularity
+            double z_a1c0 = pwinstance.getClosestWirePosAtWirePhi(apwire_bm, si_point.Phi()).Z();
             double pcz = a1c1_use_linear
-                             ? model_invert_a1c1_linear(cfrac, pcz_guess_int, xo_a1c1.Z(), a1c1_k, a1c1_cfmin, ok)
-                             : model_invert_a1c1(cfrac, pcz_guess_int, xo_a1c1.Z(), a1c1_C, a1c1_c0, ok, a1c1_slope);
+                             ? model_invert_a1c1_linear(cfrac, z_a1c0, xo_a1c1.Z(), a1c1_k, a1c1_cfmin, ok)
+                             : model_invert_a1c1(cfrac, z_a1c0, xo_a1c1.Z(), a1c1_C, a1c1_c0, ok, a1c1_slope);
             TVector3 vtx = vertexFrom(si_point, TVector3(xo_a1c1.X(), xo_a1c1.Y(), pcz));
             fillSuite(tag, pcz, vtx);
             fillVsRef(tag, pcz, vtx, pcz_ref, vtx_ref);

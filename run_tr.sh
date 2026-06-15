@@ -56,7 +56,7 @@ if [[ 1 -eq 1 ]]; then
 fi
 
 # --- Block 3: 27Al Protons+Gas Runs (15, 17-22) ---
-if [[ 1 -eq 1 ]]; then
+if [[ 1 -eq 0 ]]; then
     export DATASET="27Al"
     export PREFIX="Run_"
     export OUT_DIR="Output_p"   
@@ -84,7 +84,7 @@ if [[ 1 -eq 0 ]]; then
 fi
 
 # --- Block 5: 17F Alpha Run with Gas (18-21) ---
-if [[ 1 -eq 1 ]]; then
+if [[ 1 -eq 0 ]]; then
     export DATASET="17F"
     export PREFIX="SourceRun_"
     export OUT_DIR="Output_a"
