@@ -42,7 +42,7 @@ bool process_alpha_proton_scattering = false;
 bool doMiscHistograms = false;
 bool doPCSX3ClusterAnalysis = true;
 bool doPCQQQClusterAnalysis = true;
-bool doOldAnalysis = false;
+bool doOldAnalysis = true;
 bool do27AlapAnalysis = false;
 bool BenchMark = true;
 double source_vertex = 53; // 53
@@ -50,12 +50,34 @@ const double qqq_z = 105.0;
 double z_entrance = -174.3 - 9.7 - 100.0;
 const double anode_gain = 1.5146e-5; // channels --> MeV
 double dither_sigma = 8.0;
-double dither_sigma_c0 = dither_sigma;
+double dither_sigma_c0 = 16.0;
+double Gain = 1;
 std::string dataset;
 int CO2percent;
 bool reactiondata = false;
 
 TF1 pcfix_func("func", model_invert, -200, 200);
+
+// --- A1C1 parabola calibration (cfrac = c0[cell] - C*s^2), gain-selected ---
+const double a1c1_C_1 = 0.22;
+const double a1c1_c0_1[7] = {0.46, 0.46, 0.46, 0.46, 0.45, 0.45, 0.45};
+const double a1c1_C_2 = 0.20;
+const double a1c1_c0_2[7] = {0.24, 0.24, 0.24, 0.24, 0.24, 0.24, 0.24};
+
+double a1c1_C = a1c1_C_1;
+double a1c1_c0[7] = {0.46, 0.46, 0.46, 0.46, 0.45, 0.45, 0.45};
+double a1c1_slope = 1.0; // parabola staircase stretch (1.0 = off)
+
+// --- A1C1 linear centre-fold calibration (cfrac = cfmin[cell] + k*f) ---
+const double a1c1_k_1 = 0.075; // from cfrac_vs_fold candle medians
+const double a1c1_cfmin_1[7] = {0.40, 0.40, 0.40, 0.40, 0.40, 0.40, 0.40};
+const double a1c1_k_2= 0.06; // confirm with a 350-gain candle
+const double a1c1_cfmin_2[7] = {0.18, 0.18, 0.18, 0.18, 0.18, 0.18, 0.18};
+
+double a1c1_k = a1c1_k_1;
+double a1c1_cfmin[7] = {0.40, 0.40, 0.40, 0.40, 0.40, 0.40, 0.40};
+bool a1c1_use_linear = true; // linear vs parabola toggle
+
 TGraph *MeV_to_cm = NULL, *cm_to_MeV = NULL;
 TGraph *MeV_to_cm_p = NULL, *cm_to_MeVp = NULL;
 TGraph *MeV_to_cm_27Al = NULL, *cm_to_MeV_27Al = NULL;
@@ -185,6 +207,30 @@ void TrackRecon::Begin(TTree * /*tree*/)
     dither_sigma_c0 = dither_sigma;
     std::cout << "Dither Sigma set to " << dither_sigma << " mm" << std::endl;
   }
+
+  if (getenv("Gain"))
+    Gain = std::atof(getenv("Gain"));
+  bool highP = (Gain >= 2);
+
+  a1c1_C = highP ? a1c1_C_2 : a1c1_C_1; // parabola set
+  for (int i = 0; i < 7; ++i)
+    a1c1_c0[i] = highP ? a1c1_c0_2[i] : a1c1_c0_1[i];
+  if (getenv("a1c1_C"))
+    a1c1_C = std::atof(getenv("a1c1_C"));
+  if (getenv("a1c1_slope"))
+    a1c1_slope = std::atof(getenv("a1c1_slope"));
+
+  a1c1_k = highP ? a1c1_k_2 : a1c1_k_1; // linear set
+  for (int i = 0; i < 7; ++i)
+    a1c1_cfmin[i] = highP ? a1c1_cfmin_2[i] : a1c1_cfmin_1[i];
+  if (getenv("a1c1_k"))
+    a1c1_k = std::atof(getenv("a1c1_k"));
+  if (getenv("a1c1_use_linear"))
+    a1c1_use_linear = std::atoi(getenv("a1c1_use_linear"));
+
+  std::cout << "A1C1 cfrac model: gain=" << Gain << (a1c1_use_linear ? "LINEAR centre-fold (k=" : "parabola (C=")
+            << (a1c1_use_linear ? a1c1_k : a1c1_C) << ", cf/c0[3]="
+            << (a1c1_use_linear ? a1c1_cfmin[3] : a1c1_c0[3]) << "), slope=" << a1c1_slope << std::endl;
 
   pwinstance.ConstructGeo();
 
@@ -1556,16 +1602,14 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, s
         double alpha_a1c1 = std::get<1>(xo_tuple);
         bool a1c1Good = (alpha_a1c1 != 9999999 && std::get<2>(xo_tuple) != -1);
 
-        // --- A1C1 charge-ratio diagnostic ---
-        // Only one cathode in A1C1, so the z-sensitive variable is cathode-vs-anode
-        // charge, not cathode/cathode. Use pseudo-wire sums for consistent gains.
-        double aSumE_bm = std::get<1>(pw_tuple); // anode sum (reuse pw_tuple)
+        // --- A1C1 charge fraction (single max-E cathode vs anode, pseudo-wire sums) ---
+        double aSumE_bm = std::get<1>(pw_tuple);
         auto cpw_tuple = pwinstance.GetPseudoWire(cOne, "CATHODE");
-        double cSumE_bm = std::get<1>(cpw_tuple); // single-cathode sum
+        double cSumE_bm = std::get<1>(cpw_tuple);
         double ac_sum = aSumE_bm + cSumE_bm;
-        double cfrac = (ac_sum > 0.0) ? cSumE_bm / ac_sum : -1.0; // bounded [0,1]
+        double cfrac = (ac_sum > 0.0) ? cSumE_bm / ac_sum : -1.0;
 
-        // Smearing Setup
+        // Smearing setup
         double sx3_phi_pitch = 6.5 * (M_PI / 180.0);
         double smeared_phi = sx3event.pos.Phi() + rand.Uniform(-sx3_phi_pitch / 2.0, sx3_phi_pitch / 2.0);
         TVector3 smeared_sx3_pos(sx3event.pos.Perp() * TMath::Cos(smeared_phi), sx3event.pos.Perp() * TMath::Sin(smeared_phi), sx3event.pos.Z());
@@ -1574,10 +1618,7 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, s
         {
           if (!a1c1Good)
             return;
-          // double sigma = hybrid ? (dither_sigma_c0 / 2.0) : dither_sigma_c0;
-          // double pcz = dither ? rand.Gaus(xo_a1c1.Z(), sigma) : xo_a1c1.Z();
           double pcz = dither ? rand.Gaus(xo_a1c1.Z(), dither_sigma) : xo_a1c1.Z();
-          // double pcz = dither ? rand.Uniform(xo_a1c1.Z(), dither_sigma) : xo_a1c1.Z();
           TVector3 vtx = vertexFrom(si_point, TVector3(xo_a1c1.X(), xo_a1c1.Y(), pcz));
           fillSuite(tag, pcz, vtx);
           fillVsRef(tag, pcz, vtx, pcz_ref, vtx_ref);
@@ -1589,9 +1630,25 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, s
           TVector3 vtx0 = vertexFrom(si_point, pc);
           if (!(vtx0.Perp() <= 6.0 && vtx0.Z() >= -173.6))
             return;
-          // double sigma = hybrid ? (dither_sigma_c0 / 2.0) : dither_sigma_c0;
           double pcz = dither ? rand.Gaus(pc.Z(), dither_sigma) : pc.Z();
           TVector3 vtx = vertexFrom(si_point, TVector3(pc.X(), pc.Y(), pcz));
+          fillSuite(tag, pcz, vtx);
+          fillVsRef(tag, pcz, vtx, pcz_ref, vtx_ref);
+        };
+
+        // --- A1C1 with the cfrac sub-cell model (toggle linear/parabola) ---
+        // pivot = xo_a1c1.Z() (fired max-E cathode crossover). LINEAR: side from
+        // the fired cathode, |d| from cfrac about the cell centre. PARABOLA: side
+        // from the Si guess about the pivot. Both fall back to pczguess.
+        auto doA1C1Model = [&](const std::string &tag, const TVector3 &si_point)
+        {
+          if (!a1c1Good || cfrac < 0.0)
+            return;
+          bool ok = false;
+          double pcz = a1c1_use_linear
+                           ? model_invert_a1c1_linear(cfrac, pczguess, xo_a1c1.Z(), a1c1_k, a1c1_cfmin, ok)
+                           : model_invert_a1c1(cfrac, pczguess, xo_a1c1.Z(), a1c1_C, a1c1_c0, ok, a1c1_slope);
+          TVector3 vtx = vertexFrom(si_point, TVector3(xo_a1c1.X(), xo_a1c1.Y(), pcz));
           fillSuite(tag, pcz, vtx);
           fillVsRef(tag, pcz, vtx, pcz_ref, vtx_ref);
         };
@@ -1608,8 +1665,10 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, s
             doA1C1("A1C1_Hyb", smeared_sx3_pos, true, true);
             doAnodeOnly("A1C0_Hyb", smeared_phi, smeared_sx3_pos, true, true);
 
+            // cfrac-model-corrected A1C1, directly comparable to A1C1 / A1C2
+            doA1C1Model("A1C1_Cfrac", sx3event.pos);
+
             // --- A1C1 charge-fraction diagnostics ---
-            // Decides whether the single cathode carries any sub-cell z information.
             if (a1c1Good && cfrac >= 0.0)
             {
               plotter->Fill1D("Benchmark_SX3_A1C1_cfrac", 220, -0.05, 1.05, cfrac, "Benchmark_SX3_ref");
@@ -1617,6 +1676,40 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, s
                               pcz_ref, cfrac, "Benchmark_SX3_ref");
               plotter->Fill2D("Benchmark_SX3_A1C1_cfrac_vs_sx3pczguess", 400, -200, 200, 220, -0.05, 1.05,
                               pczguess, cfrac, "Benchmark_SX3_ref");
+
+              static const double zg[8] = {147.998, 101.946, 59.7634, 19.6965, -19.6965, -59.7634, -101.946, -147.998};
+              double zp = xo_a1c1.Z();
+              auto fillCfracS = [&](const char *name, double truth)
+              {
+                double sgn = (truth >= zp) ? 1.0 : -1.0;
+                double znb = (sgn > 0) ? 1.0e30 : -1.0e30;
+                for (int i = 0; i < 8; ++i)
+                {
+                  if (sgn > 0 && zg[i] > zp + 1e-6 && zg[i] < znb)
+                    znb = zg[i];
+                  if (sgn < 0 && zg[i] < zp - 1e-6 && zg[i] > znb)
+                    znb = zg[i];
+                }
+                if (TMath::Abs(znb) < 1e8 && TMath::Abs(znb - zp) > 0.0)
+                  plotter->Fill2D(name, 240, -1.2, 1.2, 220, -0.05, 1.05,
+                                  (truth - zp) / TMath::Abs(znb - zp), cfrac, "Benchmark_SX3_ref");
+              };
+              fillCfracS("Benchmark_SX3_A1C1_cfrac_vs_s", pcz_ref);
+              fillCfracS("Benchmark_SX3_A1C1_cfrac_vs_s_sx3pczguess", pczguess);
+
+              // folded about the cell CENTRE: f = |ref - z_center|/halfcell in [0,1]
+              for (int i = 0; i < 7; ++i)
+              {
+                if (pcz_ref <= zg[i] && pcz_ref > zg[i + 1])
+                {
+                  double zc = 0.5 * (zg[i] + zg[i + 1]);
+                  double half = 0.5 * (zg[i] - zg[i + 1]);
+                  if (half > 0.0)
+                    plotter->Fill2D("Benchmark_SX3_A1C1_cfrac_vs_fold", 120, 0, 1.2, 220, -0.05, 1.05,
+                                    TMath::Abs(pcz_ref - zc) / half, cfrac, "Benchmark_SX3_ref");
+                  break;
+                }
+              }
             }
           }
         }
@@ -1647,7 +1740,7 @@ void PCQQQClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, s
       TVector3 r_rhoMin = x1 + t_minimum * v;
 
       bool timecut = (qqqevent.Time1 - pcevent.Time1 < 150);
-      bool lowercut_cath = pcevent.Energy2 * sinTheta < 250 && (qqqevent.Energy2 < 5.0 || qqqevent.Energy1 < 5.0);
+      bool lowercut_cath = pcevent.Energy2 * sinTheta < 1 && (qqqevent.Energy2 < 5.0 || qqqevent.Energy1 < 5.0);
       bool phicut = qqqevent.pos.Phi() <= pcevent.pos.Phi() + TMath::Pi() / 4. && qqqevent.pos.Phi() >= pcevent.pos.Phi() - TMath::Pi() / 4.;
 
       if (lowercut_cath && phicut)
@@ -1797,6 +1890,16 @@ void PCQQQClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, s
           double alpha_a1c1 = std::get<1>(xo_tuple);
           bool a1c1Good = (alpha_a1c1 != 9999999 && std::get<2>(xo_tuple) != -1);
 
+          // --- A1C1 charge-fraction diagnostic ---
+          // One cathode in A1C1, so the z-sensitive variable is cathode-vs-anode
+          // charge (the V across each cell), not cathode/cathode. Use pseudo-wire
+          // sums for gain-consistent energies.
+          double aSumE_bm = std::get<1>(pw_tuple); // anode sum (reuse pw_tuple)
+          auto cpw_tuple = pwinstance.GetPseudoWire(cOne, "CATHODE");
+          double cSumE_bm = std::get<1>(cpw_tuple); // single-cathode sum
+          double ac_sum = aSumE_bm + cSumE_bm;
+          double cfrac = (ac_sum > 0.0) ? cSumE_bm / ac_sum : -1.0; // bounded [0,1]
+
           // Smearing Setup
           double qqq_wedge_pitch = (87.0 / 16.0) * (M_PI / 180.0);
           double qqq_ring_pitch = 48.0 / 16.0;
@@ -1809,7 +1912,6 @@ void PCQQQClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, s
           {
             if (!a1c1Good)
               return;
-            // double sigma = hybrid ? (dither_sigma / 2.0) : dither_sigma;
             double pcz = dither ? rand.Gaus(xo_a1c1.Z(), dither_sigma) : xo_a1c1.Z();
             TVector3 vtx = vertexFrom(si_point, TVector3(xo_a1c1.X(), xo_a1c1.Y(), pcz));
             fillSuite(tag, pcz, vtx);
@@ -1829,6 +1931,25 @@ void PCQQQClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, s
             fillVsRef(tag, pcz, vtx, pcz_ref, vtx_ref);
           };
 
+          // --- A1C1 with the cfrac sub-cell model (QQQ) ---
+          // pivot = xo_a1c1.Z() (fired max-E cathode crossover). The active model
+          // is chosen by a1c1_use_linear: LINEAR centre-fold (side from the fired
+          // cathode, |d| from cfrac, scaled by the local cell) or the PARABOLA
+          // (side from the Si guess about the pivot). Both fall back to the Si
+          // guess on rails / out-of-band / inconsistency.
+          auto doA1C1Model = [&](const std::string &tag, const TVector3 &si_point)
+          {
+            if (!a1c1Good || cfrac < 0.0)
+              return;
+            bool ok = false;
+            double pcz = a1c1_use_linear
+                             ? model_invert_a1c1_linear(cfrac, pcz_guess_int, xo_a1c1.Z(), a1c1_k, a1c1_cfmin, ok)
+                             : model_invert_a1c1(cfrac, pcz_guess_int, xo_a1c1.Z(), a1c1_C, a1c1_c0, ok, a1c1_slope);
+            TVector3 vtx = vertexFrom(si_point, TVector3(xo_a1c1.X(), xo_a1c1.Y(), pcz));
+            fillSuite(tag, pcz, vtx);
+            fillVsRef(tag, pcz, vtx, pcz_ref, vtx_ref);
+          };
+
           if (phicut && timecut)
           {
             if (pcevent.multi1 == 1 && pcevent.multi2 == 2)
@@ -1840,6 +1961,54 @@ void PCQQQClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, s
               doAnodeOnly("A1C0_Si", smeared_phi, smeared_qqq_pos, false, false);
               doA1C1("A1C1_Hyb", smeared_qqq_pos, true, true);
               doAnodeOnly("A1C0_Hyb", smeared_phi, smeared_qqq_pos, true, true);
+
+              // --- Execute the cfrac-model for QQQ ---
+              doA1C1Model("A1C1_Cfrac", qqqevent.pos);
+
+              // --- A1C1 charge-fraction diagnostics ---
+              if (a1c1Good && cfrac >= 0.0)
+              {
+                plotter->Fill1D("Benchmark_QQQ_A1C1_cfrac", 220, -0.05, 1.05, cfrac, "Benchmark_QQQ_ref");
+                plotter->Fill2D("Benchmark_QQQ_A1C1_cfrac_vs_ref", 400, -200, 200, 220, -0.05, 1.05,
+                                pcz_ref, cfrac, "Benchmark_QQQ_ref");
+                plotter->Fill2D("Benchmark_QQQ_A1C1_cfrac_vs_qqqpczguess", 400, -200, 200, 220, -0.05, 1.05,
+                                pcz_guess_37, cfrac, "Benchmark_QQQ_ref");
+
+                // --- cfrac vs normalized cell position (collapses all cells) ---
+                static const double zg[8] = {147.998, 101.946, 59.7634, 19.6965, -19.6965, -59.7634, -101.946, -147.998};
+                double zp = xo_a1c1.Z();
+                auto fillCfracS = [&](const char *name, double truth)
+                {
+                  double sgn = (truth >= zp) ? 1.0 : -1.0;
+                  double znb = (sgn > 0) ? 1.0e30 : -1.0e30;
+                  for (int i = 0; i < 8; ++i)
+                  {
+                    if (sgn > 0 && zg[i] > zp + 1e-6 && zg[i] < znb)
+                      znb = zg[i];
+                    if (sgn < 0 && zg[i] < zp - 1e-6 && zg[i] > znb)
+                      znb = zg[i];
+                  }
+                  if (TMath::Abs(znb) < 1e8 && TMath::Abs(znb - zp) > 0.0)
+                    plotter->Fill2D(name, 240, -1.2, 1.2, 220, -0.05, 1.05,
+                                    (truth - zp) / TMath::Abs(znb - zp), cfrac, "Benchmark_QQQ_ref");
+                };
+                fillCfracS("Benchmark_QQQ_A1C1_cfrac_vs_s", pcz_ref);
+                fillCfracS("Benchmark_QQQ_A1C1_cfrac_vs_s_qqqpczguess", pcz_guess_37);
+
+                // --- cfrac vs cell-centre fold: f = |ref - z_center|/halfcell in [0,1] ---
+                for (int i = 0; i < 7; ++i)
+                {
+                  if (pcz_ref <= zg[i] && pcz_ref > zg[i + 1])
+                  {
+                    double zc = 0.5 * (zg[i] + zg[i + 1]);
+                    double half = 0.5 * (zg[i] - zg[i + 1]);
+                    if (half > 0.0)
+                      plotter->Fill2D("Benchmark_QQQ_A1C1_cfrac_vs_fold", 120, 0, 1.2, 220, -0.05, 1.05,
+                                      TMath::Abs(pcz_ref - zc) / half, cfrac, "Benchmark_QQQ_ref");
+                    break;
+                  }
+                }
+              }
             }
           }
         }
@@ -2235,6 +2404,24 @@ void TrackRecon::OldAnalysis()
     plotter->Fill2D("AnodeSumE_Vs_Cathode_Max_Energy_TC" + std::to_string(PCQQQTimeCut) + "_PC" + std::to_string(PCQQQPhiCut), 800, 0, 20000, 800, 0, 10000, aESum, cEMax, "hGMPC");
     // plotter->Fill2D("AnodeSumE_Vs_Cathode_Max_Energy_path_corrected"+std::to_string(PCQQQTimeCut)+"_PC"+std::to_string(PCQQQPhiCut), 800, 0, 20000, 800, 0, 10000, aESum*sinTheta, cEMax*sinTheta, "hGMPC");
     // plotter->Fill2D("AnodeSumE_Vs_Cathode_Max_Energy_path_corrected", 800, 0, 20000, 800, 0, 10000, aESum*sinTheta, cEMax*sinTheta, "hGMPC");
+    if (aEMax > 0)
+    {
+      double ratio = cEMax / aEMax;
+      std::string folder = "Diagnostics_CMax";
+
+      // 1. Summary 2D Plots
+      plotter->Fill2D("CMax_over_Anode_vs_Z", 600, -300, 300, 200, 0, 2.0, anodeIntersection.Z(), ratio, folder);
+      plotter->Fill2D("CMax_over_Anode_vs_AnodeID", 24, 0, 24, 200, 0, 2.0, aIDMax, ratio, folder);
+      plotter->Fill2D("CMax_over_Anode_vs_CathodeID", 24, 0, 24, 200, 0, 2.0, cIDMax, ratio, folder);
+
+      // 2. Individual 1D Histogram for this SPECIFIC Anode-Cathode Pair
+      std::string pairName = "Ratio_A" + std::to_string(aIDMax) + "_C" + std::to_string(cIDMax);
+      plotter->Fill1D(pairName, 200, 0, 2.0, ratio, folder + "/Pairs");
+
+      // (Optional) If you also still want the independent ones:
+      plotter->Fill1D("Ratio_A" + std::to_string(aIDMax), 200, 0, 2.0, ratio, folder + "/PerAnode");
+      plotter->Fill1D("Ratio_C" + std::to_string(cIDMax), 200, 0, 2.0, ratio, folder + "/PerCathode");
+    }
 
     if (PCQQQTimeCut && PCQQQPhiCut)
     {
@@ -2274,11 +2461,11 @@ void miscHistograms_oneWire(HistPlotter *plotter, std::vector<Event> QQQ_Events,
   TRandom3 rand;
   rand.SetSeed(); // random seed setW
   double initial_energy = 7.0;
-  if (dataset == "27Al") /// m3 is alpha, 6.79 MeV is 7.0 MeV proton energy after kapton+100mm 4He gas (molar mass 5.6, 250 torr)
+  if (dataset == "27Al") /// m3 is alpha, 6.79 MeV is 7.0 MeV proton energy after kapton+100mm 4He gas (molar mass 5.6, 1 gain)
     initial_energy = 6.79;
   if (dataset == "17F")
-    initial_energy = 6.78; // m3 is alpha, 6.79 MeV is 7.0 MeV proton energy after kapton+100mm 4He gas (molar mass 5.6, 350 torr)
-  // initial_energy = 6.32; // m3 is alpha, 6.411 MeV is 7.0 MeV proton energy after havar+mylar+kapton+100mm 4He gas (molar mass 5.3, 250 torr)
+    initial_energy = 6.78; // m3 is alpha, 6.79 MeV is 7.0 MeV proton energy after kapton+100mm 4He gas (molar mass 5.6, 350 gain)
+  // initial_energy = 6.32; // m3 is alpha, 6.411 MeV is 7.0 MeV proton energy after havar+mylar+kapton+100mm 4He gas (molar mass 5.3, 1 gain)
 
   Kinematics apkin_a(1.008664916, 4.002603254, 4.002603254, 1.008664916, initial_energy);
   for (auto qqqevent : QQQ_Events)
@@ -2368,9 +2555,9 @@ void protonMiscHistograms(HistPlotter *plotter, std::vector<Event> QQQ_Events, s
   rand.SetSeed(); // random seed set
   double initial_energy = 7.0;
   if (dataset == "27Al")
-    initial_energy = 6.79; // m3 is alpha, 6.79 MeV is 7.0 MeV proton energy after kapton+100mm 4He gas (molar mass 5.2, 250 torr)
+    initial_energy = 6.79; // m3 is alpha, 6.79 MeV is 7.0 MeV proton energy after kapton+100mm 4He gas (molar mass 5.2, 1 gain)
   if (dataset == "17F")
-    initial_energy = 6.32; // m3 is alpha, 6.411 MeV is 7.0 MeV proton energy after Havar+kapton+100mm 4He gas (molar mass 5.2, 250 torr)
+    initial_energy = 6.32; // m3 is alpha, 6.411 MeV is 7.0 MeV proton energy after Havar+kapton+100mm 4He gas (molar mass 5.2, 1 gain)
 
   Kinematics apkin_a(1.008664916, 4.002603254, 4.002603254, 1.008664916, initial_energy); // m3 is alpha
 

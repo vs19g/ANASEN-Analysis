@@ -1,34 +1,51 @@
-rm results_run*.root
+#!/bin/bash
 export DATASET="17F"
 export reactiondata=1
 
-#17F reaction data
-#declare -i run=231 #49
-#while [[ $run -lt 258 ]]; do #392
-#    wrun=$(printf "%03d" $run)
-#    file_exists=$(test -f ../ANASEN_analysis/data/17F_Data/Run_"$wrun"_mapped.root)
-#    if [[ $file_exists -ne 0 ]]; then continue; fi
-#    root -q -l -b -x ../ANASEN_analysis/data/17F_Data/Run_"$wrun"_mapped.root -e 'tree->Process("MakeVertex.C+O")'; mv Analyzer_SX3.root results_run$wrun.root;
-#    run=run+1
-#done
+run_once() {
+    local wrun=$(printf "%03d" "$1")
+    local prefix="${PREFIX:-Run_}"
+    local outdir="${OUT_DIR:-Output_default}"
+    local infile="../ANASEN_analysis/data/${DATASET}_Data/${prefix}${wrun}_mapped.root"
+    local out="${outdir}/results_run${wrun}.root"
 
-function run_once() {
-    wrun=$(printf "%03d" $1)
-    file_exists=$(test -f ../ANASEN_analysis/data/17F_Data/Run_"$wrun"_mapped.root)
-    if [[ $file_exists -ne 0 ]]; then continue; fi
-    root -q -l -b -x ../ANASEN_analysis/data/17F_Data/Run_"$wrun"_mapped.root -e 'tree->Process("TrackRecon.C+O","Analyzer_17F.root")'; mv Analyzer_17F.root Output_17F/results_run$wrun.root;
+    # Skip if the input file doesn't exist (return, not continue — this is a function)
+    if [ ! -f "$infile" ]; then
+        echo "SKIP: input $infile not found"
+        return
+    fi
+
+    # Ensure the directory exists so ROOT doesn't fail silently
+    mkdir -p "$outdir"
+
+    root -q -l -b -x "$infile" \
+         -e "tree->Process(\"TrackRecon.C+\", \"${out}\")" > /dev/null 2>&1
+
+    if [ -f "$out" ]; then
+        echo "Run $wrun completed successfully in $outdir."
+    else
+        echo "ERROR: Run $wrun failed to generate $out"
+    fi
 }
 
 export -f run_once
-# run_once 350
-# parallel -j 6 --ctag run_once {1} ::: {325..400}
-parallel -j 6 --ctag run_once {1} ::: {351,353,355,358,359,360,362,367}
-rm output_17F.root
-hadd -j 4 -k output_17F.root Output_17F/results_run3*.root
 
-unset souce_vertex
+export DATASET="17F"
+export PREFIX="Run_"
+export OUT_DIR="Output_17F"
+export source_vertex=-57.28
+export Gain=1
+rm -f ${OUT_DIR}/*.root
+
+# Pre-compile TrackRecon.C ONCE on a single core so parallel jobs don't race on ACLiC
+echo "Pre-compiling TrackRecon.C..."
+root -q -l -b -e '.L TrackRecon.C++O'
+
+# 3% CO2
+# parallel --bar -j 6 run_once ::: {325..400}
+parallel --bar -j 6 run_once ::: 351 353 355 358 359 360 362 367
+hadd -j 4 -k ${OUT_DIR}/Output_17F.root ${OUT_DIR}/results_run*.root
+
+unset source_vertex
 unset DATASET
-unset flip180
-unset flipa
-unset anode_offset
 unset reactiondata

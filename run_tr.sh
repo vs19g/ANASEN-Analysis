@@ -46,25 +46,31 @@ if [[ 1 -eq 1 ]]; then
     export DATASET="27Al"
     export PREFIX="Run_"
     export OUT_DIR="Output_a"
+    export pressure_torr=350
     echo "Processing 27Al alpha+gas runs..."
     export source_vertex=-5.36; export timecut_low=12.0; export timecut_high=119.0; process_run 9 "$slope"
     unset timecut_high
     export source_vertex=53.44; export timecut_low=400.0; process_run 12 "$slope"
-    
+    unset pressuer_torr
     unset timecut_low
 fi
 
 # --- Block 3: 27Al Protons+Gas Runs (15, 17-22) ---
-if [[ 1 -eq 0 ]]; then
+if [[ 1 -eq 1 ]]; then
     export DATASET="27Al"
     export PREFIX="Run_"
-    export OUT_DIR="Output_p"
+    export OUT_DIR="Output_p"   
+    export pressure_torr=350
+ 
+    rm -f ${OUT_DIR}/Al_protons.root
     export source_vertex=-200.0 # Source on the entrance window
     echo "Starting parallel processing for 27Al proton runs..."
 
-    process_run 17
-    # parallel --bar -j 6 process_run ::: 15 {17..22}
+    # process_run 17
+    parallel --bar -j 6 process_run ::: 15 {17..22}
     hadd -j 4 -k ${OUT_DIR}/Al_protons.root ${OUT_DIR}/results_run0{17..22}.root
+    unset pressuer_torr
+
 fi
 
 # --- Block 4: 17F Source Runs (5-14) ---
@@ -96,10 +102,11 @@ if [[ 1 -eq 0 ]]; then
     export DATASET="17F"
     export PREFIX="ProtonRun_"
     export OUT_DIR="Output_p"
+    rm -f ${OUT_DIR}/*pc*.root 
     export source_vertex=-57.28
     
-    # parallel --bar -j 6 process_run ::: {44..48} #3% CO2 
-    # hadd -j 4 -k ${OUT_DIR}/3pc.root ${OUT_DIR}/results_run0{44..48}.root
+    parallel --bar -j 6 process_run ::: {44..48} #3% CO2 
+    hadd -j 4 -k ${OUT_DIR}/3pc.root ${OUT_DIR}/results_run0{44..48}.root
     
     export CO2percent=4
     parallel --bar -j 6 process_run ::: {38..42} #4% CO2
