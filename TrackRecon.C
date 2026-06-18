@@ -1949,8 +1949,8 @@ void PCQQQClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, s
           plotter->Fill2D("dE3_E_CathodeQQQW_A1C2_TC1_PC" + std::to_string(phicut), 400, 0, 30, 800, 0, 10000, qqqevent.Energy2, pcevent.Energy2 * sinTheta_customV, "PID_dE_E");
           plotter->Fill2D("dE3_E_AnodeQQQR_A1C2_TC1_PC" + std::to_string(phicut), 400, 0, 30, 800, 0, 10000, qqqevent.Energy1, pcevent.Energy1 * sinTheta_customV, "PID_dE_E");
 
-          plotter->Fill1D("VertexRecon_pczfix_qqq", 800, -400, 400, r_rhoMin_fix.Z(), "Vertex_Reconstruction");
-          plotter->Fill1D("VertexRecon_pczfix", 800, -400, 400, r_rhoMin_fix.Z(), "Vertex_Reconstruction");
+          plotter->Fill1D("VertexRecon_pczfix_qqq", 800, -300, 300, r_rhoMin_fix.Z(), "Vertex_Reconstruction");
+          plotter->Fill1D("VertexRecon_pczfix", 800, -300, 300, r_rhoMin_fix.Z(), "Vertex_Reconstruction");
           plotter->Fill1D("VertexRecon_pczfix_qqq_PC" + std::to_string(phicut) + "_pidlow" + std::to_string(lowercut_cath), 800, -400, 400, r_rhoMin_fix.Z(), "Vertex_Reconstruction");
 
           if (TMath::Abs(r_rhoMin_fix.Z()) < 200.0)
