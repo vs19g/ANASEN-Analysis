@@ -30,47 +30,6 @@ export -f process_run
 
 export CO2percent=3
 
-if [[ 1 -eq 0 ]]; then
-    export DATASET=27Al Gain=2 a1c1_calibrate=1
-    # root -q -l -b -e '
-    #     TChain *t = new TChain("tree");
-    #     t->Add("../ANASEN_analysis/data/27Al_Data/Run_015_mapped.root");
-    #     t->Add("../ANASEN_analysis/data/27Al_Data/Run_017_mapped.root");
-    #     t->Add("../ANASEN_analysis/data/27Al_Data/Run_018_mapped.root");
-    #     t->Add("../ANASEN_analysis/data/27Al_Data/Run_019_mapped.root");
-    #     t->Add("../ANASEN_analysis/data/27Al_Data/Run_020_mapped.root");
-    #     t->Add("../ANASEN_analysis/data/27Al_Data/Run_021_mapped.root");
-    #     t->Add("../ANASEN_analysis/data/27Al_Data/Run_022_mapped.root");
-    #     t->Process("TrackRecon.C+", "Output_cal/calib_27Al.root");
-        # '
-    export DATASET=17F Gain=1 
-    root -q -l -b -e '
-        TChain *t = new TChain("tree");
-        // proton runs, 3% CO2
-        t->Add("../ANASEN_analysis/data/17F_Data/ProtonRun_044_mapped.root");
-        t->Add("../ANASEN_analysis/data/17F_Data/ProtonRun_045_mapped.root");
-        t->Add("../ANASEN_analysis/data/17F_Data/ProtonRun_046_mapped.root");
-        t->Add("../ANASEN_analysis/data/17F_Data/ProtonRun_047_mapped.root");
-        t->Add("../ANASEN_analysis/data/17F_Data/ProtonRun_048_mapped.root");
-        // proton runs, 4% CO2
-        t->Add("../ANASEN_analysis/data/17F_Data/ProtonRun_038_mapped.root");
-        t->Add("../ANASEN_analysis/data/17F_Data/ProtonRun_039_mapped.root");
-        t->Add("../ANASEN_analysis/data/17F_Data/ProtonRun_040_mapped.root");
-        t->Add("../ANASEN_analysis/data/17F_Data/ProtonRun_041_mapped.root");
-        t->Add("../ANASEN_analysis/data/17F_Data/ProtonRun_042_mapped.root");
-        // source runs (extra stats; same Gain=1)
-        t->Add("../ANASEN_analysis/data/17F_Data/SourceRun_018_mapped.root");
-        t->Add("../ANASEN_analysis/data/17F_Data/SourceRun_019_mapped.root");
-        t->Add("../ANASEN_analysis/data/17F_Data/SourceRun_020_mapped.root");
-        t->Add("../ANASEN_analysis/data/17F_Data/SourceRun_021_mapped.root");
-        t->Process("TrackRecon.C+", "Output_cal/calib_17F.root");
-        '
-    unset a1c1_calibrate
-    unset DATASET
-    unset Gain
-    exit
-fi
-
 # --- Block 1: 27Al Source Runs No Gas (1-8) ---
 if [[ 1 -eq 0 ]]; then
     export DATASET="27Al"
@@ -83,7 +42,7 @@ if [[ 1 -eq 0 ]]; then
 fi
 
 # --- Block 2: 27Al Alpha+Gas Runs (9, 12) ---
-if [[ 1 -eq 1 ]]; then
+if [[ 1 -eq 0 ]]; then
     export DATASET="27Al"
     export PREFIX="Run_"
     export OUT_DIR="Output_a"
@@ -97,7 +56,7 @@ if [[ 1 -eq 1 ]]; then
 fi
 
 # --- Block 3: 27Al Protons+Gas Runs (15, 17-22) ---
-if [[ 1 -eq 0 ]]; then
+if [[ 1 -eq 1 ]]; then
     export DATASET="27Al"
     export PREFIX="Run_"
     export OUT_DIR="Output_p"       
@@ -125,7 +84,7 @@ if [[ 1 -eq 0 ]]; then
 fi
 
 # --- Block 5: 17F Alpha Run with Gas (18-21) ---
-if [[ 1 -eq 1 ]]; then
+if [[ 1 -eq 0 ]]; then
     export DATASET="17F"
     export PREFIX="SourceRun_"
     export OUT_DIR="Output_a"

@@ -39,7 +39,7 @@ Int_t colors[40] = {
 #include <algorithm>
 
 bool process_alpha_proton_scattering = false;
-bool doMiscHistograms = false;
+bool doMiscHistograms = true;
 bool doPCSX3ClusterAnalysis = true;
 bool doPCQQQClusterAnalysis = true;
 bool doOldAnalysis = true;
@@ -65,10 +65,10 @@ TF1 pcfix_func("func", model_invert, -200, 200);
 // results below; Begin() selects the active set by dataset.
 const double a1c1_zg[8] = {147.998, 101.946, 59.7634, 19.6965, -19.6965, -59.7634, -101.946, -147.998};
 
-static const double a1c1_cfmin_17F[7]  = {0.557612, 0.400000, 0.400000, 0.342771, 0.400000, 0.682479, 0.400000};
-static const double a1c1_k_17F[7]      = {0.0688469, 0.075000, 0.075000, 0.160131, 0.075000, 0.273423, 0.075000};
+static const double a1c1_cfmin_17F[7] = {0.557612, 0.400000, 0.400000, 0.342771, 0.400000, 0.682479, 0.400000};
+static const double a1c1_k_17F[7] = {0.0688469, 0.075000, 0.075000, 0.160131, 0.075000, 0.273423, 0.075000};
 static const double a1c1_cfmin_27Al[7] = {0.18, 0.18, 0.18, 0.18, 0.18, 0.18, 0.18}; // TODO: optimise on 27Al data
-static const double a1c1_k_27Al[7]     = {0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06};
+static const double a1c1_k_27Al[7] = {0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06};
 
 // active per-cell set, populated by dataset in Begin()
 double a1c1_cfmin_cell[7] = {0.40, 0.40, 0.40, 0.40, 0.40, 0.40, 0.40};
@@ -80,10 +80,10 @@ double a1c1_k_cell[7] = {0.075, 0.075, 0.075, 0.075, 0.075, 0.075, 0.075};
 // so it gets its own per-cell cfmin/k. Events with cfrac below a1c1_cfrac_split
 // are reconstructed with this set instead of being rejected. a1c1_cfrac_split<=0
 // disables the low band (e.g. 27Al, which shows no second band).
-static const double a1c1_cfmin2_17F[7]  = {0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10};
-static const double a1c1_k2_17F[7]      = {0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05};
+static const double a1c1_cfmin2_17F[7] = {0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10};
+static const double a1c1_k2_17F[7] = {0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05};
 static const double a1c1_cfmin2_27Al[7] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}; // no low band
-static const double a1c1_k2_27Al[7]     = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+static const double a1c1_k2_27Al[7] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 
 double a1c1_cfmin2_cell[7] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 double a1c1_k2_cell[7] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
@@ -96,7 +96,16 @@ double a1c1_cfrac_split = 0.0; // cfrac below this uses the low band; <=0 disabl
 // MAIN band (band=0). Callers apply their own acceptance via the returned flags:
 //   inband  : f in [0,1]            (cfrac within the calibrated band)
 //   pitchok : |pcz - zf| <= pitch   (consistent with the fired wire)
-struct A1C1Sol { double pcz; double f; int cell; double pitch; bool inband; bool pitchok; int band; };
+struct A1C1Sol
+{
+  double pcz;
+  double f;
+  int cell;
+  double pitch;
+  bool inband;
+  bool pitchok;
+  int band;
+};
 inline A1C1Sol a1c1_solve(double cfrac, double zf, double z_a1c0)
 {
   A1C1Sol s{zf, 0.0, 0, 0.0, false, false, 0};
@@ -111,10 +120,13 @@ inline A1C1Sol a1c1_solve(double cfrac, double zf, double z_a1c0)
   }
   int wf = 0;
   for (int i = 1; i < 8; ++i)
-    if (TMath::Abs(a1c1_zg[i] - zf) < TMath::Abs(a1c1_zg[wf] - zf)) wf = i;
+    if (TMath::Abs(a1c1_zg[i] - zf) < TMath::Abs(a1c1_zg[wf] - zf))
+      wf = i;
   int cell = (z_a1c0 >= a1c1_zg[wf]) ? (wf - 1) : wf;
-  if (cell < 0) cell = 0;
-  if (cell > 6) cell = 6;
+  if (cell < 0)
+    cell = 0;
+  if (cell > 6)
+    cell = 6;
   s.cell = cell;
   double zc = 0.5 * (a1c1_zg[cell] + a1c1_zg[cell + 1]);
   double half = 0.5 * (a1c1_zg[cell] - a1c1_zg[cell + 1]);
@@ -817,18 +829,20 @@ Bool_t TrackRecon::Process(Long64_t entry)
       pc.e[i] = pcSlope[pc.index[i]] * pc.e[i] + pcIntercept[pc.index[i]];
       plotter->Fill2D("PC_Index_VS_GainMatched_Energy", 48, 0, 48, 2000, 0, 30000, pc.index[i], pc.e[i], "hGMPC");
     }
-
-    if (pc.index[i] < 24)
+    if (pc.e[i] > 5)
     {
-      anodeT = static_cast<double>(pc.t[i]);
-      anodeIndex = pc.index[i];
-      aWireEvents[pc.index[i]] = std::tuple(pc.index[i], pc.e[i], static_cast<double>(pc.t[i]));
-    }
-    else
-    {
-      cathodeT = static_cast<double>(pc.t[i]);
-      cathodeIndex = pc.index[i] - 24;
-      cWireEvents[pc.index[i] - 24] = std::tuple(pc.index[i] - 24, pc.e[i], static_cast<double>(pc.t[i]));
+      if (pc.index[i] < 24)
+      {
+        anodeT = static_cast<double>(pc.t[i]);
+        anodeIndex = pc.index[i];
+        aWireEvents[pc.index[i]] = std::tuple(pc.index[i], pc.e[i], static_cast<double>(pc.t[i]));
+      }
+      else
+      {
+        cathodeT = static_cast<double>(pc.t[i]);
+        cathodeIndex = pc.index[i] - 24;
+        cWireEvents[pc.index[i] - 24] = std::tuple(pc.index[i] - 24, pc.e[i], static_cast<double>(pc.t[i]));
+      }
     }
 
     if (anodeT != -99999 && cathodeT != 99999)
@@ -1772,7 +1786,6 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, s
                   break;
                 }
               }
-
             }
           }
 
@@ -1806,6 +1819,7 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, s
               // reference-free per-cell cfrac (cell from geometry, no A1C2 ref): the
               // offline fitter reads per-cell edges/percentiles to gain-match cfmin/k.
               plotter->Fill2D("Benchmark_SX3_trueA1C1_cfrac_vs_cell", 7, 0, 7, 220, -0.05, 1.05, cell + 0.5, cfrac, "Benchmark_SX3_trueA1C1");
+              plotter->Fill2D("Benchmark_SX3_trueA1C1_f_vs_cell", 7, 0, 7, 260, -1.5, 2.5, cell + 0.5, f, "Benchmark_SX3_trueA1C1");
               plotter->Fill1D("Benchmark_SX3_trueA1C1_f", 260, -1.5, 2.5, f, "Benchmark_SX3_trueA1C1");
               plotter->Fill1D("Benchmark_SX3_trueA1C1_valid", 2, 0, 2, valid ? 1.0 : 0.0, "Benchmark_SX3_trueA1C1");
               // failure-reason breakdown (why the cfrac estimate is / isn't usable):
@@ -1816,11 +1830,16 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, s
               //   4 invalid: f > 3       cfrac far above band (cfmin too low / cathode high?)
               //   5 cell k<=0            cell not autocalibrated
               int reason;
-              if (a1c1_k_cell[cell] <= 0.0) reason = 5;
-              else if (!valid)              reason = (f < 0.0) ? 3 : 4;
-              else if (f < 0.0)             reason = 1;
-              else if (f > 1.0)             reason = 2;
-              else                          reason = 0;
+              if (a1c1_k_cell[cell] <= 0.0)
+                reason = 5;
+              else if (!valid)
+                reason = (f < 0.0) ? 3 : 4;
+              else if (f < 0.0)
+                reason = 1;
+              else if (f > 1.0)
+                reason = 2;
+              else
+                reason = 0;
               plotter->Fill1D("Benchmark_SX3_trueA1C1_failreason", 6, 0, 6, reason + 0.5, "Benchmark_SX3_trueA1C1");
               // valid-only breakdown (reason is 0/1/2 here): how clean the accepted
               // sample is -- 0 ideal (f in [0,1]), 1 below-band, 2 above-band marginal.
@@ -2032,8 +2051,7 @@ void PCQQQClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, s
           // charge (the V across each cell), not cathode/cathode. Use pseudo-wire
           // sums for gain-consistent energies.
           double aSumE_bm = std::get<1>(pw_tuple); // anode sum (reuse pw_tuple)
-          auto cpw_tuple = pwinstance.GetPseudoWire(cOne, "CATHODE");
-          double cSumE_bm = std::get<1>(cpw_tuple); // single-cathode sum
+          double cSumE_bm = std::get<1>(cMaxWire); // Extract the energy directly!
           double ac_sum = aSumE_bm + cSumE_bm;
           double cfrac = (ac_sum > 0.0) ? cSumE_bm / ac_sum : -1.0; // bounded [0,1]
 
@@ -2150,7 +2168,6 @@ void PCQQQClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, s
                     break;
                   }
                 }
-
               }
             }
           }
@@ -2182,6 +2199,7 @@ void PCQQQClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, s
               TVector3 vtx_cf = vertexFrom(qqqevent.pos, TVector3(xo_a1c1.X(), xo_a1c1.Y(), pcz_cf));
               fillSuite(valid ? "trueA1C1_Cfrac" : "trueA1C1_Cfrac_invalid", pcz_cf, vtx_cf);
               plotter->Fill1D("Benchmark_QQQ_trueA1C1_cfrac", 220, -0.05, 1.05, cfrac, "Benchmark_QQQ_trueA1C1");
+              // plotter->Fill1D("Benchmark_QQQ_trueA1C1_cfrac_cathode" + std::to_string(pcevent.Cathodech), 220, -0.05, 1.05, cfrac, "Benchmark_trueA1C1_cathode");
               // reference-free per-cell cfrac (cell from geometry, no A1C2 ref): the
               // offline fitter reads per-cell edges/percentiles to gain-match cfmin/k.
               plotter->Fill2D("Benchmark_QQQ_trueA1C1_cfrac_vs_cell", 7, 0, 7, 220, -0.05, 1.05, cell + 0.5, cfrac, "Benchmark_QQQ_trueA1C1");
@@ -2195,11 +2213,16 @@ void PCQQQClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, s
               //   4 invalid: f > 3       cfrac far above band (cfmin too low / cathode high?)
               //   5 cell k<=0            cell not autocalibrated
               int reason;
-              if (a1c1_k_cell[cell] <= 0.0) reason = 5;
-              else if (!valid)              reason = (f < 0.0) ? 3 : 4;
-              else if (f < 0.0)             reason = 1;
-              else if (f > 1.0)             reason = 2;
-              else                          reason = 0;
+              if (a1c1_k_cell[cell] <= 0.0)
+                reason = 5;
+              else if (!valid)
+                reason = (f < 0.0) ? 3 : 4;
+              else if (f < 0.0)
+                reason = 1;
+              else if (f > 1.0)
+                reason = 2;
+              else
+                reason = 0;
               plotter->Fill1D("Benchmark_QQQ_trueA1C1_failreason", 6, 0, 6, reason + 0.5, "Benchmark_QQQ_trueA1C1");
               // valid-only breakdown (reason is 0/1/2 here): how clean the accepted
               // sample is -- 0 ideal (f in [0,1]), 1 below-band, 2 above-band marginal.
