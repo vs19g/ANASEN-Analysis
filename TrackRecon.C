@@ -74,6 +74,46 @@ static const double a1c1_k_27Al[7] = {0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06};
 double a1c1_cfmin_cell[7] = {0.40, 0.40, 0.40, 0.40, 0.40, 0.40, 0.40};
 double a1c1_k_cell[7] = {0.075, 0.075, 0.075, 0.075, 0.075, 0.075, 0.075};
 
+// --- Dead / missing PC wires -------------------------------------------------
+// Some channels are unresponsive in a run (the white vertical gaps in
+// PC_Index_Vs_Energy). A genuine two-wire track that straddles a dead wire
+// collapses to a single fired wire: a "pseudo-1-wire" event. We still treat it
+// as A1C1, but flag it so the excitation function can be split three ways:
+//   _all       : every A1C1 event (unchanged from before)
+//   _true1w    : neither neighbour of the fired anode/cathode is dead (genuine single)
+//   _missingw  : a neighbouring wire is dead (suspected masked two-wire event)
+// Index 0-23 within EACH plane; 1 = dead. Read the dead channels off the gaps
+// in PC_Index_Vs_Energy (anode = index 0-23, cathode = index 24-47 -> w = idx-24)
+// and fill the per-dataset arrays. Default all-alive => everything is _true1w
+// and _missingw stays empty (no behaviour change until channels are entered).
+
+// static std::vector<int> a1c1_dead_anode_17F = {};   // 1 can be recovered
+// static std::vector<int> a1c1_dead_cathode_17F = {}; // 0,13,15 gain-matched to 0
+// static std::vector<int> a1c1_dead_anode_27Al = {};
+// static std::vector<int> a1c1_dead_cathode_27Al = {};
+
+static std::vector<int> a1c1_dead_anode_17F = {9, 12};        // 1 can be recovered
+static std::vector<int> a1c1_dead_cathode_17F = {}; // 0,13,15 can be recovered
+static std::vector<int> a1c1_dead_anode_27Al = {0, 9, 12, 19};
+static std::vector<int> a1c1_dead_cathode_27Al = {13};
+std::vector<int> *a1c1_dead_anode = &a1c1_dead_anode_17F; // active set, chosen in Begin()
+std::vector<int> *a1c1_dead_cathode = &a1c1_dead_cathode_17F;
+
+// True if a neighbouring wire (index +/-1) of the fired anode OR cathode is
+// dead -- i.e. this single-wire event may actually be a masked two-wire one.
+inline bool a1c1_missing_neighbor(int awire, int cwire)
+{
+  auto deadAdj = [](const std::vector<int> &dead, int w)
+  {
+    if (w < 0 || w >= 24)
+      return false;
+    auto isDead = [&](int x)
+    { return std::find(dead.begin(), dead.end(), x) != dead.end(); };
+    return isDead(w - 1) || isDead(w + 1);
+  };
+  return deadAdj(*a1c1_dead_anode, awire) || deadAdj(*a1c1_dead_cathode, cwire);
+}
+
 // --- A1C1 LOW BAND (incomplete charge integration) -----------------------------
 // 17F shows a second, parallel cfrac band (~0.10 -> 0.15 over the fold) where the
 // cathode charge is only partially integrated. It still tracks z (real physics),
@@ -87,7 +127,8 @@ static const double a1c1_k2_27Al[7] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 
 double a1c1_cfmin2_cell[7] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 double a1c1_k2_cell[7] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
-double a1c1_cfrac_split = 0.0; // cfrac below this uses the low band; <=0 disables
+double a1c1_cfrac_split = 0.0;  // cfrac below this uses the low band; <=0 disables
+double a1c1_missing_fmax = 2.0; // f-ceiling when a neighbouring wire is dead (1.0 = no extension)
 
 // Sub-cell A1C1 z from cfrac (linear centre-fold). zf = crossover z (fired
 // cathode, on the grid), z_a1c0 = anode-only z (side reference). Anchors on the
@@ -98,7 +139,8 @@ double a1c1_cfrac_split = 0.0; // cfrac below this uses the low band; <=0 disabl
 //   pitchok : |pcz - zf| <= pitch   (consistent with the fired wire)
 struct A1C1Sol
 {
-  double pcz;
+  double pcz;         // raw inversion (can fall outside the cell if f<0 or f>1)
+  double pcz_clamped; // f clamped to [0,1] -> always inside the cell (no events lost)
   double f;
   int cell;
   double pitch;
@@ -106,10 +148,14 @@ struct A1C1Sol
   bool pitchok;
   int band;
 };
-inline A1C1Sol a1c1_solve(double cfrac, double zf, double z_a1c0)
+inline A1C1Sol a1c1_solve(double cfrac, double zf, double z_a1c0, int cwire = -1, int awire = -1)
 {
-  A1C1Sol s{zf, 0.0, 0, 0.0, false, false, 0};
-  // band select: incomplete-integration low band uses its own per-cell cfmin/k
+  // Result structure.
+  // By default return the fired-wire position (zf) and mark the solution invalid.
+  A1C1Sol s{zf, zf, 0.0, 0, 0.0, false, false, 0};
+  // Two independent calibrations are supported:
+  //   band 0 : nominal integration
+  //   band 1 : low-cfrac / incomplete-integration events
   const double *cfmin = a1c1_cfmin_cell;
   const double *kk = a1c1_k_cell;
   if (a1c1_cfrac_split > 0.0 && cfrac >= 0.0 && cfrac < a1c1_cfrac_split)
@@ -118,25 +164,52 @@ inline A1C1Sol a1c1_solve(double cfrac, double zf, double z_a1c0)
     kk = a1c1_k2_cell;
     s.band = 1;
   }
+
+  // Identify the fired cathode wire from the measured cathode position zf
+  // which is assumed to lie on one side of the calibrated cathode wire positions a1c1_zg[].
+
   int wf = 0;
   for (int i = 1; i < 8; ++i)
     if (TMath::Abs(a1c1_zg[i] - zf) < TMath::Abs(a1c1_zg[wf] - zf))
       wf = i;
+
+  // Determine the side of the fired cathode wire the event occurred onfrom teh anode only recon z_a1c0
+  // Cells are indexed: wire0 --- cell0 --- wire1 --- cell1 --- ... --- wire7 giving seven physical drift cells.
+
   int cell = (z_a1c0 >= a1c1_zg[wf]) ? (wf - 1) : wf;
   if (cell < 0)
     cell = 0;
   if (cell > 6)
     cell = 6;
   s.cell = cell;
+
+  // Cell geometry.
+  // zc   : cell centre  half : half-cell width pitch: full wire-to-wire spacing
+
   double zc = 0.5 * (a1c1_zg[cell] + a1c1_zg[cell + 1]);
   double half = 0.5 * (a1c1_zg[cell] - a1c1_zg[cell + 1]);
   s.pitch = a1c1_zg[cell] - a1c1_zg[cell + 1];
   if (half <= 0.0 || kk[cell] <= 0.0)
     return s;
+
+  // Convert cfrac into a normalized position coordinate f, with f = 0  -> cell centre and f = 1  -> fired wire
+  // Values outside [0,1] indicate an event outside the calibrated cfrac band.
+
   s.f = (cfrac - cfmin[cell]) / kk[cell];
+  // Determine whether the fired wire is above or below the cell centre.
+  // The sign maps increasing f toward the appropriate cathode wire.
   double sgn = (a1c1_zg[wf] >= zc) ? +1.0 : -1.0;
   s.pcz = zc + sgn * s.f * half;
-  s.inband = (s.f >= 0.0 && s.f <= 1.0);
+  // A dead neighbouring wire means the fired wire also collects the charge it
+  // would normally share, so cfrac (hence f) runs past the usual cfmin+k ceiling.
+  // Lift the upper limit toward the dead wire's cell so these events land there
+  // instead of being pinned to the fired-wire edge (f=1).
+  double fmax = a1c1_missing_neighbor(awire, cwire) ? a1c1_missing_fmax : 1.0;
+  double fc = (s.f < 0.0) ? 0.0 : (s.f > fmax ? fmax : s.f);
+  s.pcz_clamped = zc + sgn * fc * half;
+  s.inband = (s.f >= 0.0 && s.f <= fmax);
+  // Consistency check:reconstructed position should remain within one cell pitch of
+  // originally fired cathode wire.
   s.pitchok = (TMath::Abs(s.pcz - zf) <= s.pitch);
   return s;
 }
@@ -283,6 +356,8 @@ void TrackRecon::Begin(TTree * /*tree*/)
   const double *cfmin2_src = a1c1_cfmin2_17F;
   const double *k2_src = a1c1_k2_17F;
   a1c1_cfrac_split = 0.25; // 17F: split off the incomplete-integration low band
+  a1c1_dead_anode = &a1c1_dead_anode_17F;
+  a1c1_dead_cathode = &a1c1_dead_cathode_17F;
   if (dataset == "27Al")
   {
     cfmin_src = a1c1_cfmin_27Al;
@@ -290,6 +365,8 @@ void TrackRecon::Begin(TTree * /*tree*/)
     cfmin2_src = a1c1_cfmin2_27Al;
     k2_src = a1c1_k2_27Al;
     a1c1_cfrac_split = 0.0; // 27Al: no second band, low band disabled
+    a1c1_dead_anode = &a1c1_dead_anode_27Al;
+    a1c1_dead_cathode = &a1c1_dead_cathode_27Al;
   }
   for (int i = 0; i < 7; ++i)
   {
@@ -1721,7 +1798,7 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, s
           if (!a1c1Good || cfrac < 0.0)
             return;
           double z_a1c0 = pwinstance.getClosestWirePosAtWirePhi(apwire_bm, si_point.Phi()).Z();
-          A1C1Sol s = a1c1_solve(cfrac, xo_a1c1.Z(), z_a1c0);
+          A1C1Sol s = a1c1_solve(cfrac, xo_a1c1.Z(), z_a1c0, std::get<0>(cMaxWire));
           if (!(s.inband && s.pitchok))
             return;
           TVector3 vtx = vertexFrom(si_point, TVector3(xo_a1c1.X(), xo_a1c1.Y(), s.pcz));
@@ -1807,7 +1884,7 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, s
             if (cfrac >= 0.0)
             {
               double z_a1c0 = pwinstance.getClosestWirePosAtWirePhi(apwire_bm, sx3event.pos.Phi()).Z();
-              A1C1Sol s = a1c1_solve(cfrac, xo_a1c1.Z(), z_a1c0);
+              A1C1Sol s = a1c1_solve(cfrac, xo_a1c1.Z(), z_a1c0, std::get<0>(cMaxWire));
               int cell = s.cell;
               double f = s.f;
               double pcz_cf = s.pcz;
@@ -2102,7 +2179,7 @@ void PCQQQClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, s
             if (!a1c1Good || cfrac < 0.0)
               return;
             double z_a1c0 = pwinstance.getClosestWirePosAtWirePhi(apwire_bm, si_point.Phi()).Z();
-            A1C1Sol s = a1c1_solve(cfrac, xo_a1c1.Z(), z_a1c0);
+            A1C1Sol s = a1c1_solve(cfrac, xo_a1c1.Z(), z_a1c0, std::get<0>(cMaxWire));
             if (!(s.inband && s.pitchok))
               return;
             TVector3 vtx = vertexFrom(si_point, TVector3(xo_a1c1.X(), xo_a1c1.Y(), s.pcz));
@@ -2190,7 +2267,7 @@ void PCQQQClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, s
             if (cfrac >= 0.0)
             {
               double z_a1c0 = pwinstance.getClosestWirePosAtWirePhi(apwire_bm, qqqevent.pos.Phi()).Z();
-              A1C1Sol s = a1c1_solve(cfrac, xo_a1c1.Z(), z_a1c0);
+              A1C1Sol s = a1c1_solve(cfrac, xo_a1c1.Z(), z_a1c0, std::get<0>(cMaxWire));
               int cell = s.cell;
               double f = s.f;
               double pcz_cf = s.pcz;
@@ -2348,7 +2425,7 @@ void TrackRecon::OldAnalysis()
             cESum += cE;
           }
         }*/
-        if ((aIDMax + cID) % 24 == 22 || (aIDMax + cID) % 24 == 23 || (aIDMax + cID) % 24 >= 0 || (aIDMax + cID) % 24 <= 3)
+        if (((aIDMax + cID) % 24) >= 20 || ((aIDMax + cID) % 24) <= 3)
         {
           corrcatMax.push_back(std::pair<int, double>(cID, cE));
           cESum += cE;
@@ -2568,10 +2645,10 @@ void TrackRecon::OldAnalysis()
         else
           continue;
 
-        if (qqqCalibValid[qqq.id[i]][chRing][chWedge])
+        if (qqqCalibValid[qqq.id[i]][chWedge][chRing])
         {
-          eWedgeMeV = eWedge * qqqCalib[qqq.id[i]][chRing][chWedge] / 1000;
-          eRingMeV = eRing * qqqCalib[qqq.id[i]][chRing][chWedge] / 1000;
+          eWedgeMeV = eWedge * qqqCalib[qqq.id[i]][chWedge][chRing] / 1000;
+          eRingMeV = eRing * qqqCalib[qqq.id[i]][chWedge][chRing] / 1000;
         }
         else
           continue;
@@ -2835,6 +2912,9 @@ void protonMiscHistograms(HistPlotter *plotter, std::vector<Event> QQQ_Events, s
       // cathode, side from the anode-only z, offset from the per-cell autocal.
       if (pcevent.multi2 == 1 && pcevent.Energy2 > 1400)
       {
+        // wire-topology category: _true1w (no dead neighbour) vs _missingw
+        // (a neighbouring wire is dead -> possible masked two-wire event).
+        const std::string wcat = a1c1_missing_neighbor(pcevent.Anodech, pcevent.Cathodech) ? "_missingw" : "_true1w";
         auto fillCmp = [&](double pcz, const std::string &m)
         {
           TVector3 x2(pcevent.pos.X(), pcevent.pos.Y(), pcz);
@@ -2846,12 +2926,17 @@ void protonMiscHistograms(HistPlotter *plotter, std::vector<Event> QQQ_Events, s
           double th = (qqqevent.pos - rv).Theta();
           double pl = (qqqevent.pos - rv).Mag() * 0.1;
           double Ef = cm_to_MeV->Eval(MeV_to_cm->Eval(qqqevent.Energy1) - pl);
+          double Ex = apkin_a.getExc(Ef, th * 180 / M_PI);
           std::string lbl = "proton+misc_a1c1cmp";
-          plotter->Fill1D("pmisc_a1c1cmp_pcz_" + m, 600, -300, 300, pcz, lbl);
-          plotter->Fill1D("pmisc_a1c1cmp_Ex_" + m, 200, -10, 10, apkin_a.getExc(Ef, th * 180 / M_PI), lbl);
-          plotter->Fill1D("pmisc_a1c1cmp_VertexZ_" + m, 800, -400, 400, rv.Z(), lbl);
-          plotter->Fill2D("pmisc_a1c1cmp_VertexZ_vs_Ef_" + m, 800, -400, 400, 800, 0, 20, rv.Z(), Ef, lbl);
-          plotter->Fill2D("pmisc_a1c1cmp_Ef_vs_theta_" + m, 100, 0, 180, 800, 0, 20, th * 180 / M_PI, Ef, lbl);
+          // fill "all" (existing names) plus the wire-topology split (_true1w/_missingw)
+          for (const std::string &w : {std::string(""), wcat})
+          {
+            plotter->Fill1D("pmisc_a1c1cmp_pcz_" + m + w, 600, -300, 300, pcz, lbl);
+            plotter->Fill1D("pmisc_a1c1cmp_Ex_" + m + w, 200, -10, 10, Ex, lbl);
+            plotter->Fill1D("pmisc_a1c1cmp_VertexZ_" + m + w, 800, -400, 400, rv.Z(), lbl);
+            plotter->Fill2D("pmisc_a1c1cmp_VertexZ_vs_Ef_" + m + w, 800, -400, 400, 800, 0, 20, rv.Z(), Ef, lbl);
+            plotter->Fill2D("pmisc_a1c1cmp_Ef_vs_theta_" + m + w, 100, 0, 180, 800, 0, 20, th * 180 / M_PI, Ef, lbl);
+          }
         };
 
         fillCmp(pcz_dith, "dither"); // method 1: Gaussian dither (main-flow value)
@@ -2865,7 +2950,10 @@ void protonMiscHistograms(HistPlotter *plotter, std::vector<Event> QQQ_Events, s
           std::vector<std::tuple<int, double, double>> aOne = {std::make_tuple(pcevent.Anodech, 1.0, 0.0)};
           auto apw = pwinstance.GetPseudoWire(aOne, "ANODE");
           double z_a1c0 = pwinstance.getClosestWirePosAtWirePhi(std::get<0>(apw), qqqevent.pos.Phi()).Z();
-          A1C1Sol s = a1c1_solve(cfrac, pcevent.pos.Z(), z_a1c0);
+          A1C1Sol s = a1c1_solve(cfrac, pcevent.pos.Z(), z_a1c0, pcevent.Cathodech);
+          // ungated: every alpha A1C1 event, f clamped to the cell (same stats as
+          // dither) -- shows the cfrac method without the acceptance cut.
+          fillCmp(s.pcz_clamped, "cfrac_all");
           if (s.inband && s.pitchok)
           {
             fillCmp(s.pcz, "cfrac");
@@ -3051,6 +3139,9 @@ void protonMiscHistograms_sx3(HistPlotter *plotter, std::vector<Event> QQQ_Event
       if (!(pcevent.Energy2 > 1400))
         continue;
 
+      // wire-topology category: _true1w (no dead neighbour) vs _missingw
+      // (a neighbouring wire is dead -> possible masked two-wire event).
+      const std::string wcat = a1c1_missing_neighbor(pcevent.Anodech, pcevent.Cathodech) ? "_missingw" : "_true1w";
       auto fillCmp = [&](double pcz, const std::string &m)
       {
         TVector3 x2(pcevent.pos.X(), pcevent.pos.Y(), pcz);
@@ -3063,10 +3154,14 @@ void protonMiscHistograms_sx3(HistPlotter *plotter, std::vector<Event> QQQ_Event
         double pl = (sx3event.pos - rv).Mag() * 0.1;
         double Ef = cm_to_MeVp->Eval(MeV_to_cm_p->Eval(sx3event.Energy1) - pl);
         std::string lbl = "proton+miscsx3_a1c1cmp";
-        plotter->Fill1D("pmiscs_a1c1cmp_pcz_" + m, 600, -300, 300, pcz, lbl);
-        plotter->Fill1D("pmiscs_a1c1cmp_VertexZ_" + m, 800, -400, 400, rv.Z(), lbl);
-        plotter->Fill2D("pmiscs_a1c1cmp_VertexZ_vs_Ef_" + m, 800, -400, 400, 800, 0, 20, rv.Z(), Ef, lbl);
-        plotter->Fill2D("pmiscs_a1c1cmp_Ef_vs_theta_" + m, 100, 0, 180, 800, 0, 20, th * 180 / M_PI, Ef, lbl);
+        // fill "all" (existing names) plus the wire-topology split (_true1w/_missingw)
+        for (const std::string &w : {std::string(""), wcat})
+        {
+          plotter->Fill1D("pmiscs_a1c1cmp_pcz_" + m + w, 600, -300, 300, pcz, lbl);
+          plotter->Fill1D("pmiscs_a1c1cmp_VertexZ_" + m + w, 800, -400, 400, rv.Z(), lbl);
+          plotter->Fill2D("pmiscs_a1c1cmp_VertexZ_vs_Ef_" + m + w, 800, -400, 400, 800, 0, 20, rv.Z(), Ef, lbl);
+          plotter->Fill2D("pmiscs_a1c1cmp_Ef_vs_theta_" + m + w, 100, 0, 180, 800, 0, 20, th * 180 / M_PI, Ef, lbl);
+        }
       };
 
       fillCmp(rand.Gaus(pcevent.pos.Z(), 8.0), "dither"); // method 1: Gaussian dither baseline
@@ -3080,7 +3175,10 @@ void protonMiscHistograms_sx3(HistPlotter *plotter, std::vector<Event> QQQ_Event
         std::vector<std::tuple<int, double, double>> aOne = {std::make_tuple(pcevent.Anodech, 1.0, 0.0)};
         auto apw = pwinstance.GetPseudoWire(aOne, "ANODE");
         double z_a1c0 = pwinstance.getClosestWirePosAtWirePhi(std::get<0>(apw), sx3event.pos.Phi()).Z();
-        A1C1Sol s = a1c1_solve(cfrac, pcevent.pos.Z(), z_a1c0);
+        A1C1Sol s = a1c1_solve(cfrac, pcevent.pos.Z(), z_a1c0, pcevent.Cathodech);
+        // ungated: every alpha A1C1 event, f clamped to the cell (same stats as
+        // dither) -- shows the cfrac method without the acceptance cut.
+        fillCmp(s.pcz_clamped, "cfrac_all");
         if (s.inband && s.pitchok)
           fillCmp(s.pcz, "cfrac");
       }
