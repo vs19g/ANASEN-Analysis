@@ -65,8 +65,8 @@ TF1 pcfix_func("func", model_invert, -200, 200);
 // results below; Begin() selects the active set by dataset.
 const double a1c1_zg[8] = {147.998, 101.946, 59.7634, 19.6965, -19.6965, -59.7634, -101.946, -147.998};
 
-static const double a1c1_cfmin_17F[7] = {0.557612, 0.400000, 0.400000, 0.342771, 0.400000, 0.682479, 0.400000};
-static const double a1c1_k_17F[7] = {0.0688469, 0.075000, 0.075000, 0.160131, 0.075000, 0.273423, 0.075000};
+static const double a1c1_cfmin_17F[7] =  {0.40, 0.40, 0.40, 0.40, 0.40, 0.40, 0.40};
+static const double a1c1_k_17F[7] = {0.075, 0.075, 0.075, 0.075, 0.075, 0.075, 0.075};
 static const double a1c1_cfmin_27Al[7] = {0.18, 0.18, 0.18, 0.18, 0.18, 0.18, 0.18}; // TODO: optimise on 27Al data
 static const double a1c1_k_27Al[7] = {0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06};
 
@@ -87,13 +87,8 @@ double a1c1_k_cell[7] = {0.075, 0.075, 0.075, 0.075, 0.075, 0.075, 0.075};
 // and fill the per-dataset arrays. Default all-alive => everything is _true1w
 // and _missingw stays empty (no behaviour change until channels are entered).
 
-// static std::vector<int> a1c1_dead_anode_17F = {};   // 1 can be recovered
-// static std::vector<int> a1c1_dead_cathode_17F = {}; // 0,13,15 gain-matched to 0
-// static std::vector<int> a1c1_dead_anode_27Al = {};
-// static std::vector<int> a1c1_dead_cathode_27Al = {};
-
-static std::vector<int> a1c1_dead_anode_17F = {9, 12};        // 1 can be recovered
-static std::vector<int> a1c1_dead_cathode_17F = {}; // 0,13,15 can be recovered
+static std::vector<int> a1c1_dead_anode_17F = {9, 12}; // 1 can be recovered
+static std::vector<int> a1c1_dead_cathode_17F = {};    // 0,13,15 can be recovered
 static std::vector<int> a1c1_dead_anode_27Al = {0, 9, 12, 19};
 static std::vector<int> a1c1_dead_cathode_27Al = {13};
 std::vector<int> *a1c1_dead_anode = &a1c1_dead_anode_17F; // active set, chosen in Begin()
@@ -139,8 +134,7 @@ double a1c1_missing_fmax = 2.0; // f-ceiling when a neighbouring wire is dead (1
 //   pitchok : |pcz - zf| <= pitch   (consistent with the fired wire)
 struct A1C1Sol
 {
-  double pcz;         // raw inversion (can fall outside the cell if f<0 or f>1)
-  double pcz_clamped; // f clamped to [0,1] -> always inside the cell (no events lost)
+  double pcz; // raw inversion (can fall outside the cell if f<0 or f>1)
   double f;
   int cell;
   double pitch;
@@ -148,11 +142,12 @@ struct A1C1Sol
   bool pitchok;
   int band;
 };
+
 inline A1C1Sol a1c1_solve(double cfrac, double zf, double z_a1c0, int cwire = -1, int awire = -1)
 {
   // Result structure.
   // By default return the fired-wire position (zf) and mark the solution invalid.
-  A1C1Sol s{zf, zf, 0.0, 0, 0.0, false, false, 0};
+  A1C1Sol s{zf, 0.0, 0, 0.0, false, false, 0};
   // Two independent calibrations are supported:
   //   band 0 : nominal integration
   //   band 1 : low-cfrac / incomplete-integration events
@@ -202,14 +197,13 @@ inline A1C1Sol a1c1_solve(double cfrac, double zf, double z_a1c0, int cwire = -1
   s.pcz = zc + sgn * s.f * half;
   // A dead neighbouring wire means the fired wire also collects the charge it
   // would normally share, so cfrac (hence f) runs past the usual cfmin+k ceiling.
-  // Lift the upper limit toward the dead wire's cell so these events land there
-  // instead of being pinned to the fired-wire edge (f=1).
+  // Lift the in-band ceiling toward the dead wire's cell so these events are
+  // still accepted instead of rejected at f=1. The position (s.pcz) is never
+  // clamped -- callers gate acceptance on inband/pitchok.
   double fmax = a1c1_missing_neighbor(awire, cwire) ? a1c1_missing_fmax : 1.0;
-  double fc = (s.f < 0.0) ? 0.0 : (s.f > fmax ? fmax : s.f);
-  s.pcz_clamped = zc + sgn * fc * half;
   s.inband = (s.f >= 0.0 && s.f <= fmax);
-  // Consistency check:reconstructed position should remain within one cell pitch of
-  // originally fired cathode wire.
+  // Consistency check: reconstructed position should remain within one cell pitch
+  // of the originally fired cathode wire.
   s.pitchok = (TMath::Abs(s.pcz - zf) <= s.pitch);
   return s;
 }
@@ -895,7 +889,7 @@ Bool_t TrackRecon::Process(Long64_t entry)
   {
     // std::cout << pc.index[i] << " " << pc.e[i] << " " << std::endl;
 #ifdef RAW_HISTOS
-    if (pc.e[i] > 10)
+    if (pc.e[i] > 50)
     {
       plotter->Fill2D("PC_Index_Vs_Energy", 48, 0, 48, 2000, 0, 30000, pc.index[i], static_cast<double>(pc.e[i]), "hRawPC");
     }
@@ -904,9 +898,10 @@ Bool_t TrackRecon::Process(Long64_t entry)
     if (pc.index[i] < 48)
     {
       pc.e[i] = pcSlope[pc.index[i]] * pc.e[i] + pcIntercept[pc.index[i]];
-      plotter->Fill2D("PC_Index_VS_GainMatched_Energy", 48, 0, 48, 2000, 0, 30000, pc.index[i], pc.e[i], "hGMPC");
+      if (pc.e[i] > 50)
+        plotter->Fill2D("PC_Index_VS_GainMatched_Energy", 48, 0, 48, 2000, 0, 30000, pc.index[i], pc.e[i], "hGMPC");
     }
-    if (pc.e[i] > 5)
+    if (pc.e[i] > 50)
     {
       if (pc.index[i] < 24)
       {
@@ -1752,7 +1747,7 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, s
 
         // --- A1C1 charge fraction (single max-E cathode vs anode, pseudo-wire sums) ---
         double aSumE_bm = std::get<1>(pw_tuple);
-        double cSumE_bm = std::get<1>(cMaxWire); // Extract the energy directly!
+        double cSumE_bm = std::get<1>(cMaxWire);
         double ac_sum = aSumE_bm + cSumE_bm;
         double cfrac = (ac_sum > 0.0) ? cSumE_bm / ac_sum : -1.0;
 
@@ -2951,10 +2946,11 @@ void protonMiscHistograms(HistPlotter *plotter, std::vector<Event> QQQ_Events, s
           auto apw = pwinstance.GetPseudoWire(aOne, "ANODE");
           double z_a1c0 = pwinstance.getClosestWirePosAtWirePhi(std::get<0>(apw), qqqevent.pos.Phi()).Z();
           A1C1Sol s = a1c1_solve(cfrac, pcevent.pos.Z(), z_a1c0, pcevent.Cathodech);
-          // ungated: every alpha A1C1 event, f clamped to the cell (same stats as
-          // dither) -- shows the cfrac method without the acceptance cut.
-          fillCmp(s.pcz_clamped, "cfrac_all");
-          if (s.inband && s.pitchok)
+          // raw cfrac z (never clamped); accept only events whose f is inside the
+          // band (fmax-extended for missing wires) AND consistent with the fired
+          // wire. Out-of-band / inconsistent events are rejected, not pinned.
+          fillCmp(s.pcz, "cfrac_all");
+          if (s.pitchok)
           {
             fillCmp(s.pcz, "cfrac");
             plotter->Fill2D("pmisc_a1c1cmp_pcz_cfrac_vs_dither", 600, -300, 300, 600, -300, 300, pcz_dith, s.pcz, "proton+misc_a1c1cmp");
@@ -3176,10 +3172,11 @@ void protonMiscHistograms_sx3(HistPlotter *plotter, std::vector<Event> QQQ_Event
         auto apw = pwinstance.GetPseudoWire(aOne, "ANODE");
         double z_a1c0 = pwinstance.getClosestWirePosAtWirePhi(std::get<0>(apw), sx3event.pos.Phi()).Z();
         A1C1Sol s = a1c1_solve(cfrac, pcevent.pos.Z(), z_a1c0, pcevent.Cathodech);
-        // ungated: every alpha A1C1 event, f clamped to the cell (same stats as
-        // dither) -- shows the cfrac method without the acceptance cut.
-        fillCmp(s.pcz_clamped, "cfrac_all");
-        if (s.inband && s.pitchok)
+        // raw cfrac z (never clamped); accept only events whose f is inside the
+        // band (fmax-extended for missing wires) AND consistent with the fired
+        // wire. Out-of-band / inconsistent events are rejected, not pinned.
+        fillCmp(s.pcz, "cfrac_all");
+        if (s.pitchok)
           fillCmp(s.pcz, "cfrac");
       }
     } // end A1C1 comparison loop
