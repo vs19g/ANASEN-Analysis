@@ -229,40 +229,65 @@ inline void PW::ConstructGeo()
   cathodeLength = TMath::Sqrt(zLen * zLen + TMath::Power(2 * radiusC * TMath::Sin(dAngle / 2), 2)); // chord length subtending an angle alpha is 2rsin(alpha/2)
 }
 
-inline TVector3 PW::getClosestWirePosAtWirePhi(std::pair<TVector3, TVector3> awire, double sx3phi_radian)
+// inline TVector3 PW::getClosestWirePosAtWirePhi(std::pair<TVector3, TVector3> awire, double sx3phi_radian)
+// {
+//   // 1. Get wire geometry
+//   TVector3 a1 = awire.first;  // Top of the wire
+//   TVector3 a2 = awire.second; // Bottom of the wire
+//   TVector3 wireVec = a2 - a1; // Vector pointing down the wire
+
+//   // Variables to track our minimums during the scan
+//   double min_delta_phi = 9999.0;
+//   double best_t = -1.0;
+//   TVector3 best_pcz_intersect;
+
+//   // 2. THE SCAN: Walk down the wire in 1000 tiny steps
+//   // (For a 380mm wire, this is checking every 0.38 mm)
+//   int num_steps = 1000;
+//   for (int i = 0; i <= num_steps; ++i)
+//   {
+//     double t_test = (double)i / num_steps;    // Ranges from 0.0 to 1.0
+//     TVector3 test_pt = a1 + t_test * wireVec; // The 3D point at this step
+
+//     // Calculate absolute Delta Phi between Si hit and this specific point on the wire
+//     if (TMath::IsNaN(sx3phi_radian - test_pt.Phi()))
+//       continue;
+//     double dPhi = TMath::Abs(TVector2::Phi_mpi_pi(sx3phi_radian - test_pt.Phi())); // Phi_mpi_pi just puts the angle in the range -180 to 180
+
+//     // If this is the smallest Delta Phi we've seen so far, save it!
+//     if (dPhi < min_delta_phi)
+//     {
+//       min_delta_phi = dPhi;
+//       best_t = t_test;
+//       best_pcz_intersect = test_pt;
+//     }
+//   }
+//   return best_pcz_intersect;
+// }
+
+inline TVector3 PW::getClosestWirePosAtWirePhi(std::pair<TVector3, TVector3> awire, double phi)
 {
-  // 1. Get wire geometry
-  TVector3 a1 = awire.first;  // Top of the wire
-  TVector3 a2 = awire.second; // Bottom of the wire
-  TVector3 wireVec = a2 - a1; // Vector pointing down the wire
+  const TVector3& a1 = awire.first;
+  const TVector3& a2 = awire.second;
+  const double s = TMath::Sin(phi), c = TMath::Cos(phi);
+  const double dx = a2.X() - a1.X(), dy = a2.Y() - a1.Y();
+  const double t = (a1.Y()*c - a1.X()*s) / (dx*s - dy*c);
 
-  // Variables to track our minimums during the scan
-  double min_delta_phi = 9999.0;
-  double best_t = -1.0;
-  TVector3 best_pcz_intersect;
+  auto nearerEndpoint = [&]() -> TVector3 {
+    auto dphi = [&](const TVector3& p) {
+      return TMath::Abs(TVector2::Phi_mpi_pi(phi - p.Phi()));
+    };
+    return dphi(a1) <= dphi(a2) ? a1 : a2;
+  };
 
-  // 2. THE SCAN: Walk down the wire in 1000 tiny steps
-  // (For a 380mm wire, this is checking every 0.38 mm)
-  int num_steps = 1000;
-  for (int i = 0; i <= num_steps; ++i)
-  {
-    double t_test = (double)i / num_steps;    // Ranges from 0.0 to 1.0
-    TVector3 test_pt = a1 + t_test * wireVec; // The 3D point at this step
+  if (t < 0.0 || t > 1.0)
+    return nearerEndpoint();
 
-    // Calculate absolute Delta Phi between Si hit and this specific point on the wire
-    if (TMath::IsNaN(sx3phi_radian - test_pt.Phi()))
-      continue;
-    double dPhi = TMath::Abs(TVector2::Phi_mpi_pi(sx3phi_radian - test_pt.Phi())); // Phi_mpi_pi just puts the angle in the range -180 to 180
+  const TVector3 hit = a1 + t * (a2 - a1);
+  if (hit.X()*c + hit.Y()*s <= 0.0)  // wrong half-plane (anti-phi side)
+    return nearerEndpoint();
 
-    // If this is the smallest Delta Phi we've seen so far, save it!
-    if (dPhi < min_delta_phi)
-    {
-      min_delta_phi = dPhi;
-      best_t = t_test;
-      best_pcz_intersect = test_pt;
-    }
-  }
-  return best_pcz_intersect;
+  return hit;
 }
 
 inline std::vector<std::vector<std::tuple<int, double, double>>>

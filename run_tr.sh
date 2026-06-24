@@ -42,7 +42,7 @@ if [[ 1 -eq 0 ]]; then
 fi
 
 # --- Block 2: 27Al Alpha+Gas Runs (9, 12) ---
-if [[ 1 -eq 0 ]]; then
+if [[ 1 -eq 1 ]]; then
     export DATASET="27Al"
     export PREFIX="Run_"
     export OUT_DIR="Output_a"
@@ -55,8 +55,35 @@ if [[ 1 -eq 0 ]]; then
     unset timecut_low
 fi
 
+# --- Block 4: 17F Source Runs (5-14) ---
+if [[ 1 -eq 0 ]]; then
+    export DATASET="17F"
+    export PREFIX="Source_"
+    export OUT_DIR="Output_av"
+    echo "Starting parallel processing for 17F source runs..."
+    
+    parallel --bar -j 6 process_run ::: {5..13}
+fi
+
+# --- Block 5: 17F Alpha Run with Gas (18-21) ---
+if [[ 1 -eq 1 ]]; then
+    export DATASET="17F"
+    export PREFIX="SourceRun_"
+    export OUT_DIR="Output_a"
+    echo "Processing 17F alpha runs with dynamic source vertices..."
+    
+    # Running sequentially since the source_vertex variable changes per run
+    export source_vertex=53.44;  process_run 18
+    export source_vertex=14.24;  process_run 19
+    export source_vertex=-24.96; process_run 20
+    export source_vertex=-73.96; process_run 21
+    exit
+fi
+
 # --- Block 3: 27Al Protons+Gas Runs (15, 17-22) ---
 if [[ 1 -eq 1 ]]; then
+
+    # export CO2percent=4
     export DATASET="27Al"
     export PREFIX="Run_"
     export OUT_DIR="Output_p"       
@@ -71,30 +98,6 @@ if [[ 1 -eq 1 ]]; then
     hadd -j 4 -k ${OUT_DIR}/Al_protons.root ${OUT_DIR}/results_run0{15..22}.root
     unset Gain
 
-fi
-
-# --- Block 4: 17F Source Runs (5-14) ---
-if [[ 1 -eq 0 ]]; then
-    export DATASET="17F"
-    export PREFIX="Source_"
-    export OUT_DIR="Output_av"
-    echo "Starting parallel processing for 17F source runs..."
-    
-    parallel --bar -j 6 process_run ::: {5..13}
-fi
-
-# --- Block 5: 17F Alpha Run with Gas (18-21) ---
-if [[ 1 -eq 0 ]]; then
-    export DATASET="17F"
-    export PREFIX="SourceRun_"
-    export OUT_DIR="Output_a"
-    echo "Processing 17F alpha runs with dynamic source vertices..."
-    
-    # Running sequentially since the source_vertex variable changes per run
-    export source_vertex=53.44;  process_run 18
-    export source_vertex=14.24;  process_run 19
-    export source_vertex=-24.96; process_run 20
-    export source_vertex=-73.96; process_run 21
 fi
 
 # --- Block 6: 17F Proton Data  ---
