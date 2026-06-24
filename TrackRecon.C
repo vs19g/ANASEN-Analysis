@@ -65,7 +65,7 @@ TF1 pcfix_func("func", model_invert, -200, 200);
 // results below; Begin() selects the active set by dataset.
 const double a1c1_zg[8] = {147.998, 101.946, 59.7634, 19.6965, -19.6965, -59.7634, -101.946, -147.998};
 
-static const double a1c1_cfmin_17F[7] =  {0.20, 0.20, 0.20, 0.20, 0.20, 0.20, 0.20};
+static const double a1c1_cfmin_17F[7] = {0.20, 0.20, 0.20, 0.20, 0.20, 0.20, 0.20};
 static const double a1c1_k_17F[7] = {0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25};
 static const double a1c1_cfmin_27Al[7] = {0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15};
 static const double a1c1_k_27Al[7] = {0.20, 0.20, 0.20, 0.20, 0.20, 0.20, 0.20};
@@ -143,9 +143,9 @@ double a1c1_lowband_rfactor = 0.0; // r-space gain applied to low-band cfrac; <=
 // From source-run fits: QQQ y=0.0607x+40.442, SX3 y=0.0599x+1.196.
 // Correction: z_corr = z_a1c0 * (1 - scale) - offset_det
 // Env: A1C1_Z_SCALE, A1C1_Z_OFF_QQQ, A1C1_Z_OFF_SX3.
-double a1c1_z_scale = 0.06;        // fractional z scaling error (REFIT)
-double a1c1_z_off_qqq = 40.4;      // QQQ constant offset mm (REFIT)
-double a1c1_z_off_sx3 = 1.2;       // SX3 constant offset mm (REFIT)
+double a1c1_z_scale = 0.06;   // fractional z scaling error (REFIT)
+double a1c1_z_off_qqq = 40.4; // QQQ constant offset mm (REFIT)
+double a1c1_z_off_sx3 = 1.2;  // SX3 constant offset mm (REFIT)
 inline double a1c1_zcorr(double z_a1c0, bool isQQQ)
 {
   double off = isQQQ ? a1c1_z_off_qqq : a1c1_z_off_sx3;
@@ -389,13 +389,13 @@ bool PCSX3TimeCut = false, PCASX3TimeCut = false, PCCSX3TimeCut = false;
 double anodeT = -99999, cathodeT = 99999;
 int anodeIndex = -1, cathodeIndex = -1;
 
-void protonAlphaHistograms(HistPlotter *plotter, std::vector<Event> QQQ_Events, std::vector<Event> SX3_Events, std::vector<Event> PC_Events);
-void miscHistograms_oneWire(HistPlotter *plotter, std::vector<Event> QQQ_Events, std::vector<std::vector<std::tuple<int, double, double>>> aClusters);
-void protonMiscHistograms(HistPlotter *plotter, std::vector<Event> QQQ_Events, std::vector<Event> SX3_Events, std::vector<Event> PC_Events);
-void protonMiscHistograms_sx3(HistPlotter *plotter, std::vector<Event> QQQ_Events, std::vector<Event> SX3_Events, std::vector<Event> PC_Events);
-void PCSX3ClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, std::vector<Event> SX3_Events, std::vector<Event> PC_Events,
+void protonAlphaHistograms(HistPlotter *plotter, const std::vector<Event> &QQQ_Events, const std::vector<Event> &SX3_Events, const std::vector<Event> &PC_Events);
+void miscHistograms_oneWire(HistPlotter *plotter, const std::vector<Event> &QQQ_Events, const std::vector<std::vector<std::tuple<int, double, double>>> &aClusters);
+void protonMiscHistograms(HistPlotter *plotter, const std::vector<Event> &QQQ_Events, const std::vector<Event> &SX3_Events, const std::vector<Event> &PC_Events);
+void protonMiscHistograms_sx3(HistPlotter *plotter, const std::vector<Event> &QQQ_Events, const std::vector<Event> &SX3_Events, const std::vector<Event> &PC_Events);
+void PCSX3ClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Events, const std::vector<Event> &SX3_Events, const std::vector<Event> &PC_Events,
                           const std::vector<std::vector<std::tuple<int, double, double>>> &aClusters, const std::vector<std::vector<std::tuple<int, double, double>>> &cClusters);
-void PCQQQClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, std::vector<Event> SX3_Events, std::vector<Event> PC_Events,
+void PCQQQClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Events, const std::vector<Event> &SX3_Events, const std::vector<Event> &PC_Events,
                           const std::vector<std::vector<std::tuple<int, double, double>>> &aClusters, const std::vector<std::vector<std::tuple<int, double, double>>> &cClusters);
 
 void TrackRecon::Begin(TTree * /*tree*/)
@@ -444,14 +444,14 @@ void TrackRecon::Begin(TTree * /*tree*/)
   const double *k_src = a1c1_k_17F;
   const double *cfmin2_src = a1c1_cfmin2_17F;
   const double *k2_src = a1c1_k2_17F;
-  a1c1_cfrac_split = 0.15;     // 17F: split in the valley between low/main bands (cfrac<0.15 = low band)
-  a1c1_lowband_rfactor = 7.0;  // 17F: fold low band onto the main band (r-space).
-                               // From the source-run cfrac_vs_sx3E (both bands at the
-                               // alpha energy): g = r_main/r_low = (0.44/0.56)/(0.10/0.90)
-                               // ~ 7.0, i.e. r_low*7 -> cfrac 0.10 maps to ~0.44.
-  a1c1_z_scale = 1;          // 17F: A1C0 z scaling error (REFIT)
-  a1c1_z_off_qqq = 40.4;        // 17F: QQQ constant offset mm (REFIT)
-  a1c1_z_off_sx3 = 1.2;         // 17F: SX3 constant offset mm (REFIT)
+  a1c1_cfrac_split = 0.15;    // 17F: split in the valley between low/main bands (cfrac<0.15 = low band)
+  a1c1_lowband_rfactor = 7.0; // 17F: fold low band onto the main band (r-space).
+                              // From the source-run cfrac_vs_sx3E (both bands at the
+                              // alpha energy): g = r_main/r_low = (0.44/0.56)/(0.10/0.90)
+                              // ~ 7.0, i.e. r_low*7 -> cfrac 0.10 maps to ~0.44.
+  a1c1_z_scale = 1;           // 17F: A1C0 z scaling error (REFIT)
+  a1c1_z_off_qqq = 40.4;      // 17F: QQQ constant offset mm (REFIT)
+  a1c1_z_off_sx3 = 1.2;       // 17F: SX3 constant offset mm (REFIT)
   a1c1_dead_anode = &a1c1_dead_anode_17F;
   a1c1_dead_cathode = &a1c1_dead_cathode_17F;
   if (dataset == "27Al")
@@ -460,11 +460,11 @@ void TrackRecon::Begin(TTree * /*tree*/)
     k_src = a1c1_k_27Al;
     cfmin2_src = a1c1_cfmin2_27Al;
     k2_src = a1c1_k2_27Al;
-    a1c1_cfrac_split = 0.0;    // 27Al: no second band, low band disabled
+    a1c1_cfrac_split = 0.0;     // 27Al: no second band, low band disabled
     a1c1_lowband_rfactor = 0.0; // 27Al: nothing to fold
-    a1c1_z_scale = 0.06;         // 27Al: A1C0 z scaling error (REFIT)
-    a1c1_z_off_qqq = 40.4;       // 27Al: QQQ constant offset mm (REFIT)
-    a1c1_z_off_sx3 = 1.2;        // 27Al: SX3 constant offset mm (REFIT)
+    a1c1_z_scale = 0.06;        // 27Al: A1C0 z scaling error (REFIT)
+    a1c1_z_off_qqq = 40.4;      // 27Al: QQQ constant offset mm (REFIT)
+    a1c1_z_off_sx3 = 1.2;       // 27Al: SX3 constant offset mm (REFIT)
     a1c1_dead_anode = &a1c1_dead_anode_27Al;
     a1c1_dead_cathode = &a1c1_dead_cathode_27Al;
   }
@@ -1051,7 +1051,7 @@ Bool_t TrackRecon::Process(Long64_t entry)
         plotter->Fill2D("PC_Time_vs_AIndex_sx3", 200, -2000, 2000, 24, 0, 24, anodeT - cathodeT, anodeIndex, "hTiming");
         plotter->Fill2D("PC_Time_vs_CIndex_sx3", 200, -2000, 2000, 24, 0, 24, anodeT - cathodeT, cathodeIndex, "hTiming");
       }
-      for (auto sx3event : SX3_Events)
+      for (const auto &sx3event : SX3_Events)
       {
         bool TCC = sx3event.Time1 - cathodeT < 0;
         bool TCA = sx3event.Time1 - anodeT < 0;
@@ -1101,9 +1101,9 @@ Bool_t TrackRecon::Process(Long64_t entry)
   std::vector<std::vector<std::tuple<int, double, double>>> cClusters = pwinstance.Make_Clusters(cWireEvents);
 
   std::vector<std::pair<double, double>> sumE_AC;
-  for (auto aCluster : aClusters)
+  for (const auto &aCluster : aClusters)
   {
-    for (auto cCluster : cClusters)
+    for (const auto &cCluster : cClusters)
     {
       if (aCluster.size() == 0)
         continue;
@@ -1132,13 +1132,11 @@ Bool_t TrackRecon::Process(Long64_t entry)
   }
 
   //////Timing stuff for F data
-
-  TRandom3 rnd;
-  rnd.SetSeed(); // random seed set
+  static TRandom3 rnd(0);
   if (dataset == "17F" && reactiondata)
   {
     int ctr = 0;
-    for (auto qqqevent : QQQ_Events)
+    for (const auto &qqqevent : QQQ_Events)
     {
       double ts_rf = -987654321;
       double ts_needle = -987654321;
@@ -1185,7 +1183,7 @@ Bool_t TrackRecon::Process(Long64_t entry)
       ctr += 1;
     }
 
-    for (auto sx3event : SX3_Events)
+    for (const auto &sx3event : SX3_Events)
     {
       double ts_rf = -987654321;
       double ts_needle = -987654321;
@@ -1234,8 +1232,7 @@ Bool_t TrackRecon::Process(Long64_t entry)
 
   if (process_alpha_proton_scattering)
   {
-    protonAlphaHistograms(plotter, QQQ_Events, SX3_Events, PC_Events);
-    // return kTRUE;
+    protonAlphaHistograms(plotter, QQQ_Events, SX3_Events, PC_Events); // return kTRUE;
   } // end if(process_alpha_proton_scattering)
 
   if (doMiscHistograms)
@@ -1251,11 +1248,11 @@ Bool_t TrackRecon::Process(Long64_t entry)
     plotter->Fill2D("PCEv_vs_QQQEv", 20, 0, 20, 20, 0, 20, QQQ_Events.size(), PC_Events.size());
 
   plotter->Fill2D("ac_vs_cc", 20, 0, 20, 20, 0, 20, aClusters.size(), cClusters.size(), "wiremult");
-  for (auto cluster : aClusters)
+  for (const auto &cluster : aClusters)
   {
     plotter->Fill1D("aClusters" + std::to_string(aClusters.size()), 20, -5, 15, cluster.size(), "wiremult");
   }
-  for (auto cluster : cClusters)
+  for (const auto &cluster : cClusters)
   {
     plotter->Fill1D("cClusters" + std::to_string(cClusters.size()), 20, -5, 15, cluster.size(), "wiremult");
   }
@@ -1266,7 +1263,7 @@ Bool_t TrackRecon::Process(Long64_t entry)
   }
 #endif
 
-  for (auto sx3event : SX3_Events)
+  for (const auto &sx3event : SX3_Events)
   {
     for (int i = 0; i < 24; i++)
     {
@@ -1295,7 +1292,7 @@ Bool_t TrackRecon::Process(Long64_t entry)
       }
     } // for 'i' loop
 
-    for (const auto acluster : aClusters)
+    for (const  auto &acluster : aClusters)
     {
       auto [apwire, apSumE, apMaxE, apTSMaxE] = pwinstance.GetPseudoWire(acluster, "ANODE");
       int a_number = acluster.size();
@@ -1315,13 +1312,13 @@ Bool_t TrackRecon::Process(Long64_t entry)
     }
   }
 
-  for (auto qqqevent : QQQ_Events)
+  for (const auto &qqqevent : QQQ_Events)
   {
     for (int i = 0; i < 24; i++)
     {
       if (aWireEvents.find(i) != aWireEvents.end())
       {
-        auto awire = aWireEvents[i];
+        const auto &awire = aWireEvents[i];
         if (qqqevent.Time1 - (double)std::get<2>(awire) < 150)
         {
           plotter->Fill2D("onewire_dEa_Eqqq_TC1_fullev" + std::to_string(PC_Events.size() > 0), 400, 0, 10, 800, 0, 40000, qqqevent.Energy1, std::get<1>(awire), "1wire");
@@ -1357,7 +1354,7 @@ Bool_t TrackRecon::Process(Long64_t entry)
     // ---------------------------------------------------------
     // PROTON LOOP (SX3 BARREL)
     // ---------------------------------------------------------
-    for (auto sx3event : SX3_Events)
+    for (const auto &sx3event : SX3_Events)
     {
       // Pick the anode cluster closest in phi to this SX3 hit
       const std::vector<std::tuple<int, double, double>> *bestCluster = &aClusters[0];
@@ -1455,7 +1452,7 @@ Bool_t TrackRecon::Process(Long64_t entry)
     // ---------------------------------------------------------
     // PROTON LOOP (QQQ ENDCAP)
     // ---------------------------------------------------------
-    for (auto qqqevent : QQQ_Events)
+    for (const auto &qqqevent : QQQ_Events)
     {
       const std::vector<std::tuple<int, double, double>> *bestCluster = nullptr;
       double bestDphi = 9999.0;
@@ -1566,7 +1563,7 @@ void TrackRecon::Terminate()
       while(can2->WaitPrimitive());*/
 }
 
-void protonAlphaHistograms(HistPlotter *plotter, std::vector<Event> QQQ_Events, std::vector<Event> SX3_Events, std::vector<Event> PC_Events)
+void protonAlphaHistograms(HistPlotter *plotter, const std::vector<Event> &QQQ_Events, const std::vector<Event> &SX3_Events, const std::vector<Event> &PC_Events)
 {
 
   // Sidetrack for a(p,p)
@@ -1580,9 +1577,9 @@ void protonAlphaHistograms(HistPlotter *plotter, std::vector<Event> QQQ_Events, 
   Kinematics apkin_p(1.008664916, 4.002603254, 1.008664916, 4.002603254, initial_energy); // m3 is proton
   Kinematics apkin_a(1.008664916, 4.002603254, 4.002603254, 1.008664916, initial_energy); // m3 is alpha
 
-  for (auto qqqevent : QQQ_Events)
+  for (const auto &qqqevent : QQQ_Events)
   {
-    for (auto sx3event : SX3_Events)
+    for (const auto &sx3event : SX3_Events)
     {
       plotter->Fill1D("ap_qqq_sx3_dt", 800, -2000, 2000, qqqevent.Time1 - sx3event.Time1, aplabel);
       if (TMath::Abs(qqqevent.Time1 - sx3event.Time1) > 300)
@@ -1593,7 +1590,7 @@ void protonAlphaHistograms(HistPlotter *plotter, std::vector<Event> QQQ_Events, 
       plotter->Fill2D("ap_qqq_sx3_dphi_vs_qqqphi", 180, -360, 360, 180, -360, 360, qqqevent.pos.Phi() * 180 / M_PI - sx3event.pos.Phi() * 180 / M_PI, qqqevent.pos.Phi() * 180 / M_PI, aplabel);
       plotter->Fill2D("ap_qqq_sx3_matrix", 400, 0, 10, 400, 0, 10, qqqevent.Energy1, sx3event.Energy1, aplabel);
 
-      for (auto pcevent : PC_Events)
+      for (const auto &pcevent : PC_Events)
       {
 
         double pcz_fix = pcfix_func.Eval(pcevent.pos.Z()) - 5.0;
@@ -1681,18 +1678,18 @@ void protonAlphaHistograms(HistPlotter *plotter, std::vector<Event> QQQ_Events, 
   return;
 }
 
-void PCSX3ClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, std::vector<Event> SX3_Events, std::vector<Event> PC_Events,
+void PCSX3ClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Events, const std::vector<Event> &SX3_Events, const std::vector<Event> &PC_Events,
                           const std::vector<std::vector<std::tuple<int, double, double>>> &aClusters, const std::vector<std::vector<std::tuple<int, double, double>>> &cClusters)
 {
 
   static TRandom3 rand(0);
 
-  for (auto pcevent : PC_Events)
+  for (const auto &pcevent : PC_Events)
   {
     bool PCSX3TimeCut = false;
     bool PCASX3TimeCut = false;
     bool PCCSX3TimeCut = false;
-    for (auto sx3event : SX3_Events)
+    for (const auto &sx3event : SX3_Events)
     {
       plotter->Fill1D("dt_pcA_sx3B" + std::to_string(sx3event.ch2), 640, -2000, 2000, sx3event.Time1 - pcevent.Time1, "Timing");
       plotter->Fill1D("dt_pcC_sx3B" + std::to_string(sx3event.ch2), 640, -2000, 2000, sx3event.Time1 - pcevent.Time2, "Timing");
@@ -2147,14 +2144,14 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, s
   }
 }
 
-void PCQQQClusterAnalysis(HistPlotter *plotter, std::vector<Event> QQQ_Events, std::vector<Event> SX3_Events, std::vector<Event> PC_Events,
+void PCQQQClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Events, const std::vector<Event> &SX3_Events, const std::vector<Event> &PC_Events,
                           const std::vector<std::vector<std::tuple<int, double, double>>> &aClusters, const std::vector<std::vector<std::tuple<int, double, double>>> &cClusters)
 {
   static TRandom3 rand(0);
 
-  for (auto pcevent : PC_Events)
+  for (const auto &pcevent : PC_Events)
   {
-    for (auto qqqevent : QQQ_Events)
+    for (const auto &qqqevent : QQQ_Events)
     {
       plotter->Fill1D("dt_pcA_qqqR", 640, -2000, 2000, qqqevent.Time1 - pcevent.Time1, "Timing");
       plotter->Fill2D("dt_pcA_qqqR_vs_qqqRE", 640, -2000, 2000, 400, 0, 30, qqqevent.Time1 - pcevent.Time1, qqqevent.Energy1, "Timing");
@@ -3022,26 +3019,25 @@ void TrackRecon::OldAnalysis()
     plotter->Fill1D("NoAnodeHits_CathodeHits", 6, 0, 5, cathodeHits.size(), "hGMPC");
   }
 
-  for (auto cwevent : cWireEvents)
+  for (const auto &cwevent : cWireEvents)
   {
     // plotter->Fill1D("cwdtqqq_vs_cw"+std::to_string(PCQQQTimeCut),800,-2000,2000,24,0,24,std::get<2>(cwevent)-qqqtimestamp,std::get<0>(cwevent));
-    for (auto awevent : aWireEvents)
+    for (const auto &awevent : aWireEvents)
     {
       plotter->Fill2D("aw_vs_cw", 24, 0, 24, 24, 0, 24, std::get<0>(awevent), std::get<0>(cwevent));
       plotter->Fill2D("aw_vs_cw_dtq" + std::to_string(PCQQQTimeCut), 24, 0, 24, 24, 0, 24, std::get<0>(awevent), std::get<0>(cwevent));
     }
   }
-  for (auto awevent : aWireEvents)
+  for (const auto &awevent : aWireEvents)
   {
     // plotter->Fill1D("awdtqqq_vs_aw"+std::to_string(PCQQQTimeCut),800,-2000,2000,24,0,24,std::get<2>(awevent)-qqqtimestamp,std::get<0>(awevent));
   }
 }
 
-void miscHistograms_oneWire(HistPlotter *plotter, std::vector<Event> QQQ_Events, std::vector<std::vector<std::tuple<int, double, double>>> aClusters)
+void miscHistograms_oneWire(HistPlotter *plotter, const std::vector<Event> &QQQ_Events, const std::vector<std::vector<std::tuple<int, double, double>>> &aClusters)
 {
   // consider the 'proton-like' QQQ branch seen in a,p data
-  TRandom3 rand;
-  rand.SetSeed(); // random seed setW
+  static TRandom3 rnd(0);
   double initial_energy = 7.0;
   if (dataset == "27Al") /// m3 is alpha, 6.79 MeV is 7.0 MeV proton energy after kapton+100mm 4He gas (molar mass 5.6, 1 gain)
     initial_energy = 6.79;
@@ -3050,12 +3046,12 @@ void miscHistograms_oneWire(HistPlotter *plotter, std::vector<Event> QQQ_Events,
   // initial_energy = 6.32; // m3 is alpha, 6.411 MeV is 7.0 MeV proton energy after havar+mylar+kapton+100mm 4He gas (molar mass 5.3, 1 gain)
 
   Kinematics apkin_a(1.008664916, 4.002603254, 4.002603254, 1.008664916, initial_energy);
-  for (auto qqqevent : QQQ_Events)
+  for (const auto &qqqevent : QQQ_Events)
   {
     if (qqqevent.Energy1 < 0.6)
       continue; // coarse gating
     // if(qqqevent.Energy1 > 5.0) continue; //coarse gating
-    for (const auto acluster : aClusters)
+    for (const  auto &acluster : aClusters)
     {
       auto [apwire, apSumE, apMaxE, apTSMaxE] = pwinstance.GetPseudoWire(acluster, "ANODE");
       // if(apSumE<6000) continue;
@@ -3130,11 +3126,10 @@ void miscHistograms_oneWire(HistPlotter *plotter, std::vector<Event> QQQ_Events,
   } // end QQQEvents loop
 }
 
-void protonMiscHistograms(HistPlotter *plotter, std::vector<Event> QQQ_Events, std::vector<Event> SX3_Events, std::vector<Event> PC_Events)
+void protonMiscHistograms(HistPlotter *plotter, const std::vector<Event> &QQQ_Events, const std::vector<Event> &SX3_Events, const std::vector<Event> &PC_Events)
 {
   // consider the 'proton-like' QQQ branch seen in a,p data
-  TRandom3 rand;
-  rand.SetSeed(); // random seed set
+  static TRandom3 rnd(0);
   double initial_energy = 7.0;
   if (dataset == "27Al")
     initial_energy = 6.79; // m3 is alpha, 6.79 MeV is 7.0 MeV proton energy after kapton+100mm 4He gas (molar mass 5.2, 1 gain)
@@ -3143,12 +3138,12 @@ void protonMiscHistograms(HistPlotter *plotter, std::vector<Event> QQQ_Events, s
 
   Kinematics apkin_a(1.008664916, 4.002603254, 4.002603254, 1.008664916, initial_energy); // m3 is alpha
 
-  for (auto qqqevent : QQQ_Events)
+  for (const auto &qqqevent : QQQ_Events)
   {
     if (qqqevent.Energy1 < 0.6)
       continue; // coarse gating
     // if(qqqevent.Energy1 > 5.0) continue; //coarse gating
-    for (auto pcevent : PC_Events)
+    for (const auto &pcevent : PC_Events)
     {
       if (!(pcevent.multi1 == 1 && pcevent.multi2 <= 2))
         continue;
@@ -3163,7 +3158,7 @@ void protonMiscHistograms(HistPlotter *plotter, std::vector<Event> QQQ_Events, s
         pcz_fix = pcfix_func.Eval(pcevent.pos.Z());
       else
       {
-        pcz_fix = rand.Gaus(pcevent.pos.Z(), 8.0); // dither for a1c1 events
+        pcz_fix = rnd.Gaus(pcevent.pos.Z(), 8.0); // dither for a1c1 events
         pcz_dith = pcz_fix;
       }
 
@@ -3312,17 +3307,16 @@ void protonMiscHistograms(HistPlotter *plotter, std::vector<Event> QQQ_Events, s
   } // end QQQEvents loop
 }
 
-void protonMiscHistograms_sx3(HistPlotter *plotter, std::vector<Event> QQQ_Events, std::vector<Event> SX3_Events, std::vector<Event> PC_Events)
+void protonMiscHistograms_sx3(HistPlotter *plotter, const std::vector<Event> &QQQ_Events, const std::vector<Event> &SX3_Events, const std::vector<Event> &PC_Events)
 {
   // consider the 'proton-like' QQQ branch seen in a,p data
-  TRandom3 rand;
-  rand.SetSeed(); // for the A1C1 dither baseline in the dither-vs-cfrac comparison
-  for (auto sx3event : SX3_Events)
+  static TRandom3 rnd(0);
+  for (const auto &sx3event : SX3_Events)
   {
     if (sx3event.Energy1 < 1.2)
       continue; // coarse gating
     // if(sx3event.Energy1 > 5.0) continue; //coarse gating
-    for (auto pcevent : PC_Events)
+    for (const auto &pcevent : PC_Events)
     {
       if (!(pcevent.multi1 == 1 && pcevent.multi2 == 2))
         continue;
@@ -3397,7 +3391,7 @@ void protonMiscHistograms_sx3(HistPlotter *plotter, std::vector<Event> QQQ_Event
     // dither is a Gaussian-smeared crossover z baseline; cfrac is the linear
     // centre-fold sub-cell model (cell anchored on the fired cathode, side from
     // the anode-only z at the SX3 phi, offset from the per-cell autocal).
-    for (auto pcevent : PC_Events)
+    for (const auto &pcevent : PC_Events)
     {
       if (!(pcevent.multi1 == 1 && pcevent.multi2 == 1))
         continue;
@@ -3432,7 +3426,7 @@ void protonMiscHistograms_sx3(HistPlotter *plotter, std::vector<Event> QQQ_Event
         }
       };
 
-      fillCmp(rand.Gaus(pcevent.pos.Z(), 8.0), "dither"); // method 1: Gaussian dither baseline
+      fillCmp(rnd.Gaus(pcevent.pos.Z(), 8.0), "dither"); // method 1: Gaussian dither baseline
 
       // method 2: cfrac sub-cell linear centre-fold (side ref = anode-only z
       // rebuilt from the fired anode wire)

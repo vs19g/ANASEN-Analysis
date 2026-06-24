@@ -71,7 +71,7 @@ public:
   FindCrossoverProperties(const std::vector<std::tuple<int, double, double>> &a_cluster, const std::vector<std::tuple<int, double, double>> &c_cluster);
 
   inline std::vector<std::vector<std::tuple<int, double, double>>>
-  Make_Clusters(std::unordered_map<int, std::tuple<int, double, double>> wireEvents);
+  Make_Clusters(const std::unordered_map<int, std::tuple<int, double, double>> &wireEvents);
 
   int GetNumWire() const { return nWire; }
   double GetDeltaAngle() const { return dAngle; }
@@ -267,14 +267,16 @@ inline void PW::ConstructGeo()
 
 inline TVector3 PW::getClosestWirePosAtWirePhi(std::pair<TVector3, TVector3> awire, double phi)
 {
-  const TVector3& a1 = awire.first;
-  const TVector3& a2 = awire.second;
+  const TVector3 &a1 = awire.first;
+  const TVector3 &a2 = awire.second;
   const double s = TMath::Sin(phi), c = TMath::Cos(phi);
   const double dx = a2.X() - a1.X(), dy = a2.Y() - a1.Y();
-  const double t = (a1.Y()*c - a1.X()*s) / (dx*s - dy*c);
+  const double t = (a1.Y() * c - a1.X() * s) / (dx * s - dy * c);
 
-  auto nearerEndpoint = [&]() -> TVector3 {
-    auto dphi = [&](const TVector3& p) {
+  auto nearerEndpoint = [&]() -> TVector3
+  {
+    auto dphi = [&](const TVector3 &p)
+    {
       return TMath::Abs(TVector2::Phi_mpi_pi(phi - p.Phi()));
     };
     return dphi(a1) <= dphi(a2) ? a1 : a2;
@@ -284,14 +286,15 @@ inline TVector3 PW::getClosestWirePosAtWirePhi(std::pair<TVector3, TVector3> awi
     return nearerEndpoint();
 
   const TVector3 hit = a1 + t * (a2 - a1);
-  if (hit.X()*c + hit.Y()*s <= 0.0)  // wrong half-plane (anti-phi side)
+  if (hit.X() * c + hit.Y() * s <= 0.0) // wrong half-plane (anti-phi side)
     return nearerEndpoint();
 
   return hit;
 }
 
 inline std::vector<std::vector<std::tuple<int, double, double>>>
-PW::Make_Clusters(std::unordered_map<int, std::tuple<int, double, double>> wireEvents)
+
+PW::Make_Clusters(const std::unordered_map<int, std::tuple<int, double, double>> &wireEvents)
 {
   std::vector<std::vector<std::tuple<int, double, double>>> wireClusters;
   std::vector<std::tuple<int, double, double>> wireCluster;
@@ -308,7 +311,7 @@ PW::Make_Clusters(std::unordered_map<int, std::tuple<int, double, double>> wireE
     int ctr2 = wirecount;
     do
     {
-      wireCluster.emplace_back(wireEvents[ctr2]);
+      wireCluster.emplace_back(wireEvents.at(ctr2));
       ctr2 += 1;
       if (ctr2 == 24 || ctr2 - wirecount == 7)
         break; // loose logic, needs to be looked at.
