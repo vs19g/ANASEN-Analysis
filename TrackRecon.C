@@ -141,10 +141,10 @@ double a1c1_lowband_rfactor = 0.0; // r-space gain applied to low-band cfrac; <=
 // => scale = 1 - 1/A,  off = B/A,  corrected = z_a1c0*(1-scale) - off
 // Per-detector because QQQ and SX3 see different slopes.
 // Env: A1C1_Z_SCALE_QQQ, A1C1_Z_SCALE_SX3, A1C1_Z_OFF_QQQ, A1C1_Z_OFF_SX3.
-double a1c1_z_scale_qqq = 0.0; // QQQ fractional z scaling (REFIT)
-double a1c1_z_scale_sx3 = 0.0; // SX3 fractional z scaling (REFIT)
-double a1c1_z_off_qqq = 0.0;   // QQQ constant offset mm (REFIT)
-double a1c1_z_off_sx3 = 0.0;   // SX3 constant offset mm (REFIT)
+double a1c1_z_scale_qqq = 0.0111081;
+double a1c1_z_off_qqq = 34.501;
+double a1c1_z_scale_sx3 = -0.0639365;
+double a1c1_z_off_sx3 = 2.52614;
 inline double a1c1_zcorr(double z_a1c0, bool isQQQ)
 {
   double scale = isQQQ ? a1c1_z_scale_qqq : a1c1_z_scale_sx3;
@@ -1720,7 +1720,18 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
         plotter->Fill2D("dE_E_Anodesx3B_a2c1", 400, 0, 30, 800, 0, 40000, sx3event.Energy1, pcevent.Energy1, "PID_dE_E");
       if (pcevent.multi1 == 2 && pcevent.multi2 == 1)
         plotter->Fill2D("dE_E_Cathodesx3B_a2c1", 400, 0, 30, 800, 0, 10000, sx3event.Energy1, pcevent.Energy2, "PID_dE_E");
+      if (pcevent.multi1 == 1 && pcevent.multi2 == 1)
+        plotter->Fill2D("dE_E_Anodesx3B_a1c1", 400, 0, 30, 800, 0, 40000, sx3event.Energy1, pcevent.Energy1, "PID_dE_E");
+      if (pcevent.multi1 == 1 && pcevent.multi2 == 1)
+        plotter->Fill2D("dE_E_Cathodesx3B_a1c1", 400, 0, 30, 800, 0, 10000, sx3event.Energy1, pcevent.Energy2, "PID_dE_E");
+      if (pcevent.multi1 == 1 && pcevent.multi2 == 0)
+        plotter->Fill2D("dE_E_Anodesx3B_a1c0", 400, 0, 30, 800, 0, 40000, sx3event.Energy1, pcevent.Energy1, "PID_dE_E");
+      if (pcevent.multi1 == 1 && pcevent.multi2 == 0)
+        plotter->Fill2D("dE_E_Cathodesx3B_a1c0", 400, 0, 30, 800, 0, 10000, sx3event.Energy1, pcevent.Energy2, "PID_dE_E");
+
       plotter->Fill2D("sx3phi_vs_pcphi" + std::to_string(sx3event.Time1 - pcevent.Time1 < -150), 100, -360, 360, 100, -360, 360, sx3event.pos.Phi() * 180 / M_PI, pcevent.pos.Phi() * 180 / M_PI, "Kinematics_Angles");
+      plotter->Fill1D("sx3phi_minus_pcphi" + std::to_string(sx3event.Time1 - pcevent.Time1 < -150), 100, -180, 180, (sx3event.pos.Phi() - pcevent.pos.Phi()) * 180 / M_PI, "Kinematics_Angles");
+
       if (PCSX3TimeCut)
       {
         plotter->Fill1D("dt_pcA_sx3B_timecut", 640, -2000, 2000, sx3event.Time1 - pcevent.Time1, "Timing");
@@ -1958,9 +1969,9 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
             {
               double phi_deg = sx3event.pos.Phi() * 180.0 / M_PI;
               double vz_resid = vtx_ref.Z() - source_vertex;
-              plotter->Fill2D("Diag_SX3_A1C2_vtxZ_resid_vs_phi", 180, -180, 180, 200, -50, 50,
+              plotter->Fill2D("Diag_SX3_A1C2_vtxZ_resid_vs_phi", 180, -180, 180, 400, -100, 100,
                               phi_deg, vz_resid, "Diag_XYoffset");
-              plotter->Fill2D("Diag_Combined_A1C2_vtxZ_resid_vs_phi", 180, -180, 180, 200, -50, 50,
+              plotter->Fill2D("Diag_Combined_A1C2_vtxZ_resid_vs_phi", 180, -180, 180, 400, -100, 100,
                               phi_deg, vz_resid, "Diag_XYoffset");
               plotter->Fill2D("Diag_SX3_A1C2_vtxXY", 200, -15, 15, 200, -15, 15,
                               vtx_ref.X(), vtx_ref.Y(), "Diag_XYoffset");
@@ -2210,6 +2221,8 @@ void PCQQQClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
       plotter->Fill2D("dt_pcA_qqqR_vs_qqqRE", 640, -2000, 2000, 400, 0, 30, qqqevent.Time1 - pcevent.Time1, qqqevent.Energy1, "Timing");
       plotter->Fill1D("dt_pcC_qqqW", 640, -2000, 2000, qqqevent.Time2 - pcevent.Time2, "Timing");
       plotter->Fill2D("phiPC_vs_phiQQQ", 180, -360, 360, 180, -360, 360, qqqevent.pos.Phi() * 180 / M_PI, pcevent.pos.Phi() * 180 / M_PI, "Kinematics_Angles");
+      plotter->Fill1D("phiQQQ_minus_phiPC", 180, -180, 180, (qqqevent.pos.Phi() - pcevent.pos.Phi()) * 180 / M_PI, "Kinematics_Angles");
+
       double sinTheta = TMath::Sin((qqqevent.pos - TVector3(0, 0, source_vertex)).Theta());
 
       TVector3 x2(pcevent.pos);
@@ -2240,6 +2253,14 @@ void PCQQQClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
           plotter->Fill2D("dE_E_AnodeQQQR_a2c1", 400, 0, 30, 800, 0, 40000, qqqevent.Energy1, pcevent.Energy1, "PID_dE_E");
         if (pcevent.multi1 == 2 && pcevent.multi2 == 1)
           plotter->Fill2D("dE_E_CathodeQQQR_a2c1", 400, 0, 30, 800, 0, 10000, qqqevent.Energy1, pcevent.Energy2, "PID_dE_E");
+        if (pcevent.multi1 == 1 && pcevent.multi2 == 1)
+          plotter->Fill2D("dE_E_Anodesx3B_a1c1", 400, 0, 30, 800, 0, 40000, qqqevent.Energy1, pcevent.Energy1, "PID_dE_E");
+        if (pcevent.multi1 == 1 && pcevent.multi2 == 1)
+          plotter->Fill2D("dE_E_Cathodesx3B_a1c1", 400, 0, 30, 800, 0, 10000, qqqevent.Energy1, pcevent.Energy2, "PID_dE_E");
+        if (pcevent.multi1 == 1 && pcevent.multi2 == 0)
+          plotter->Fill2D("dE_E_Anodesx3B_a1c0", 400, 0, 30, 800, 0, 40000, qqqevent.Energy1, pcevent.Energy1, "PID_dE_E");
+        if (pcevent.multi1 == 1 && pcevent.multi2 == 0)
+          plotter->Fill2D("dE_E_Cathodesx3B_a1c0", 400, 0, 30, 800, 0, 10000, qqqevent.Energy1, pcevent.Energy2, "PID_dE_E");
 
         if (phicut)
         {
@@ -2448,9 +2469,9 @@ void PCQQQClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
               {
                 double phi_deg = qqqevent.pos.Phi() * 180.0 / M_PI;
                 double vz_resid = vtx_ref.Z() - source_vertex;
-                plotter->Fill2D("Diag_QQQ_A1C2_vtxZ_resid_vs_phi", 180, -180, 180, 200, -50, 50,
+                plotter->Fill2D("Diag_QQQ_A1C2_vtxZ_resid_vs_phi", 180, -180, 180, 400, -100, 100,
                                 phi_deg, vz_resid, "Diag_XYoffset");
-                plotter->Fill2D("Diag_Combined_A1C2_vtxZ_resid_vs_phi", 180, -180, 180, 200, -50, 50,
+                plotter->Fill2D("Diag_Combined_A1C2_vtxZ_resid_vs_phi", 180, -180, 180, 400, -100, 100,
                                 phi_deg, vz_resid, "Diag_XYoffset");
                 plotter->Fill2D("Diag_QQQ_A1C2_vtxXY", 200, -15, 15, 200, -15, 15,
                                 vtx_ref.X(), vtx_ref.Y(), "Diag_XYoffset");

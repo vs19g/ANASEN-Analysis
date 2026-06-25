@@ -65,6 +65,7 @@ public:
   Coord Crossover[24][24][2];
 
   inline TVector3 getClosestWirePosAtWirePhi(std::pair<TVector3, TVector3>, double phi);
+  inline TVector3 getClosestWirePosAtWirePhiOld(std::pair<TVector3, TVector3>, double phi);
   inline std::tuple<std::pair<TVector3, TVector3>, double, double, double> GetPseudoWire(const std::vector<std::tuple<int, double, double>> &cluster, std::string type);
 
   inline std::tuple<TVector3, double, double, double, double, double, double, double>
