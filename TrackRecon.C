@@ -1871,7 +1871,7 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
       {
         const auto &aCl = aClusters.front();
         const auto &cCl = cClusters.front();
-
+        const std::string benchBranch = "Benchmark_SX3";
         auto vertexFrom = [](const TVector3 &si, const TVector3 &pcpoint)
         {
           TVector3 vf = pcpoint - si;
@@ -1879,12 +1879,12 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
           return TVector3(si + tm * vf);
         };
 
-        auto fillSuite = [&](const std::string &tag, double pcz_method, const TVector3 &vtx)
+        auto fillSuite = [&](const std::string &tag, double pcz_method, const TVector3 &vtx, const std::string &branch)
         {
-          plotter->Fill1D("Benchmark_SX3_VertexZ_" + tag, 800, -400, 400, vtx.Z(), "Benchmark_SX3");
-          plotter->Fill1D("Benchmark_SX3_VertexZ_" + tag + "_TC" + std::to_string(PCSX3TimeCut) + "_PC" + std::to_string(phicut), 800, -400, 400, vtx.Z(), "Benchmark_SX3");
-          plotter->Fill2D("Benchmark_SX3_VertexXY_" + tag, 200, -100, 100, 200, -100, 100, vtx.X(), vtx.Y(), "Benchmark_SX3");
-          plotter->Fill1D("Benchmark_SX3_PCZ_" + tag, 600, -200, 200, pcz_method, "Benchmark_SX3");
+          plotter->Fill1D("Benchmark_SX3_VertexZ_" + tag, 800, -400, 400, vtx.Z(), branch);
+          plotter->Fill1D("Benchmark_SX3_VertexZ_" + tag + "_TC" + std::to_string(PCSX3TimeCut) + "_PC" + std::to_string(phicut), 800, -400, 400, vtx.Z(), branch);
+          plotter->Fill2D("Benchmark_SX3_VertexXY_" + tag, 200, -100, 100, 200, -100, 100, vtx.X(), vtx.Y(), branch);
+          plotter->Fill1D("Benchmark_SX3_PCZ_" + tag, 600, -200, 200, pcz_method, branch);
         };
 
         auto fillVsRef = [&](const std::string &tag, double pcz_method, const TVector3 &vtx, double pcz_ref, const TVector3 &vtx_ref)
@@ -1938,7 +1938,7 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
             return;
           double pcz = dither ? rand.Gaus(xo_a1c1.Z(), dither_sigma) : xo_a1c1.Z();
           TVector3 vtx = vertexFrom(si_point, TVector3(xo_a1c1.X(), xo_a1c1.Y(), pcz));
-          fillSuite(tag, pcz, vtx);
+          fillSuite(tag, pcz, vtx, benchBranch);
           fillVsRef(tag, pcz, vtx, pcz_ref, vtx_ref);
         };
 
@@ -1951,7 +1951,7 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
             return;
           double pcz = dither ? rand.Gaus(pc.Z(), dither_sigma) : pc.Z();
           TVector3 vtx = vertexFrom(si_point, TVector3(pc.X(), pc.Y(), pcz));
-          fillSuite(tag, pcz, vtx);
+          fillSuite(tag, pcz, vtx, benchBranch);
           fillVsRef(tag, pcz, vtx, pcz_ref, vtx_ref);
         };
 
@@ -1991,7 +1991,7 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
           if (!(s.inband && side_status != 2))
             return;
           TVector3 vtx = vertexFrom(si_point, TVector3(xo_a1c1.X(), xo_a1c1.Y(), pcz_pick));
-          fillSuite(tag, pcz_pick, vtx);
+          fillSuite(tag, pcz, vtx, benchBranch);
           fillVsRef(tag, pcz_pick, vtx, pcz_ref, vtx_ref);
         };
 
@@ -1999,8 +1999,7 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
         {
           if (pcevent.multi1 == 1 && pcevent.multi2 == 2)
           {
-            fillSuite("A1C2", pcz_ref, vtx_ref);
-
+            fillSuite("A1C2", pcz_ref, vtx_ref, benchBranch);
             // XY-offset diagnostic: if the source/beam is off-axis, the vertex-z
             // residual modulates as cos(phi - phi0). A flat line = no XY offset.
             {
@@ -2158,9 +2157,9 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
           {
             double pcz_raw = xo_a1c1.Z();
             TVector3 vtx_raw = vertexFrom(sx3event.pos, TVector3(xo_a1c1.X(), xo_a1c1.Y(), pcz_raw));
-            fillSuite("trueA1C1", pcz_raw, vtx_raw);
-            plotter->Fill2D("Benchmark_SX3_PCZ_trueA1C1_vs_sx3pczguess", 400, -200, 200, 400, -200, 200, pczguess, pcz_raw, "A1C1true");
-            plotter->Fill1D("Benchmark_SX3_PCZ_trueA1C1_minus_sx3pczguess", 400, -100, 100, pcz_raw - pczguess, "A1C1true");
+            fillSuite("trueA1C1", pcz_raw, vtx_raw, "A1C1True");
+            plotter->Fill2D("Benchmark_SX3_PCZ_trueA1C1_vs_sx3pczguess", 400, -200, 200, 400, -200, 200, pczguess, pcz_raw, "A1C1True");
+            plotter->Fill1D("Benchmark_SX3_PCZ_trueA1C1_minus_sx3pczguess", 400, -100, 100, pcz_raw - pczguess, "A1C1True");
 
             // cfrac sub-cell reconstruction, anchored on the FIRED CATHODE.
             // Vertex-independent (no pczguess): the cell is the one adjacent to
@@ -2176,22 +2175,22 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
               int side_status;
               double pcz_cf = a1c1_pick_side(sx3event.pos, xo_a1c1.X(), xo_a1c1.Y(), s.pcz_lo, s.pcz_hi, side_status);
               bool valid = (side_status != 2); // accept if at least one side is beam-axis consistent
-              plotter->Fill1D("Benchmark_SX3_trueA1C1_sideStatus", 4, -1, 3, side_status + 0.5, "A1C1true");
+              plotter->Fill1D("Benchmark_SX3_trueA1C1_sideStatus", 4, -1, 3, side_status + 0.5, "A1C1True");
 
               TVector3 vtx_cf = vertexFrom(sx3event.pos, TVector3(xo_a1c1.X(), xo_a1c1.Y(), pcz_cf));
-              fillSuite(valid ? "trueA1C1_Cfrac" : "trueA1C1_Cfrac_invalid", pcz_cf, vtx_cf);
-              plotter->Fill1D("Benchmark_SX3_trueA1C1_cfrac", 220, -0.05, 1.05, cfrac, "A1C1true");
+              fillSuite(valid ? "trueA1C1_Cfrac" : "trueA1C1_Cfrac_invalid", pcz_cf, vtx_cf, "A1C1True");
+              plotter->Fill1D("Benchmark_SX3_trueA1C1_cfrac", 220, -0.05, 1.05, cfrac, "A1C1True");
               // item 2: cfrac vs anode E for genuine A1C1 (no A1C2 ref here)
-              plotter->Fill2D("Benchmark_SX3_trueA1C1_cfrac_vs_anodeE", 400, 0, 40000, 220, -0.05, 1.05, aSumE_bm, cfrac, "A1C1true");
+              plotter->Fill2D("Benchmark_SX3_trueA1C1_cfrac_vs_anodeE", 400, 0, 40000, 220, -0.05, 1.05, aSumE_bm, cfrac, "A1C1True");
               // r-space linearity test (r = c + C_off/anodeE should be a straight line)
               if (aSumE_bm > 0.0 && cfrac > 0.0 && cfrac < 1.0)
                 plotter->Fill2D("Benchmark_SX3_trueA1C1_r_vs_invAnodeE", 200, 0, 0.0004, 200, 0, 2.0,
-                                1.0 / aSumE_bm, cfrac / (1.0 - cfrac), "A1C1true");
+                                1.0 / aSumE_bm, cfrac / (1.0 - cfrac), "A1C1True");
               // reference-free per-cell cfrac (cell from geometry, no A1C2 ref): the
               // offline fitter reads per-cell edges/percentiles to gain-match cfmin/k.
-              plotter->Fill2D("Benchmark_SX3_trueA1C1_cfrac_vs_cell", 7, 0, 7, 220, -0.05, 1.05, cell + 0.5, cfrac, "A1C1true");
-              plotter->Fill2D("Benchmark_SX3_trueA1C1_f_vs_cell", 7, 0, 7, 260, -1.5, 2.5, cell + 0.5, f, "A1C1true");
-              plotter->Fill1D("Benchmark_SX3_trueA1C1_f", 260, -1.5, 2.5, f, "A1C1true");
+              plotter->Fill2D("Benchmark_SX3_trueA1C1_cfrac_vs_cell", 7, 0, 7, 220, -0.05, 1.05, cell + 0.5, cfrac, "A1C1True");
+              plotter->Fill2D("Benchmark_SX3_trueA1C1_f_vs_cell", 7, 0, 7, 260, -1.5, 2.5, cell + 0.5, f, "A1C1True");
+              plotter->Fill1D("Benchmark_SX3_trueA1C1_f", 260, -1.5, 2.5, f, "A1C1True");
               plotter->Fill1D("Benchmark_SX3_trueA1C1_valid", 2, 0, 2, valid ? 1.0 : 0.0, "Benchmark_SX3_trueA1C1");
               // failure-reason breakdown (why the cfrac estimate is / isn't usable):
               //   0 valid & f in [0,1]   ideal, inside the calibrated band
@@ -2234,8 +2233,8 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
               TVector3 vtx0 = vertexFrom(sx3event.pos, pc);
               if (vtx0.Perp() <= 6.0 && vtx0.Z() >= -173.6)
               {
-                fillSuite("A1C1asA1C0", pc.Z(), vtx0);
-                plotter->Fill2D("Benchmark_SX3_PCZ_A1C1asA1C0_vs_sx3pczguess", 400, -200, 200, 400, -200, 200, pczguess, pc.Z(), "Benchmark_SX3_trueA1C1");
+                fillSuite("A1C1asA1C0", pc.Z(), vtx0, "A1C1True");
+                plotter->Fill2D("Benchmark_SX3_PCZ_A1C1asA1C0_vs_sx3pczguess", 400, -200, 200, 400, -200, 200, pczguess, pc.Z(), "A1C1True");
               }
             }
           }
@@ -2277,12 +2276,12 @@ void PCQQQClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
       if (!(vtx0.Perp() <= 6.0 && vtx0.Z() >= -173.6))
         continue;
       double pcz_guess_37 = 37. / TMath::Tan((qqqevent.pos - TVector3(0, 0, source_vertex)).Theta()) + source_vertex;
-      plotter->Fill1D("Benchmark_QQQ_VertexZ_trueA1C0", 800, -400, 400, vtx0.Z(), "trueA1C0");
-      plotter->Fill1D("Benchmark_QQQ_VertexZ_trueA1C0_TC" + std::to_string(timecut) + "_PC" + std::to_string(phicut), 800, -400, 400, vtx0.Z(), "trueA1C0");
-      plotter->Fill2D("Benchmark_QQQ_VertexXY_trueA1C0", 200, -100, 100, 200, -100, 100, vtx0.X(), vtx0.Y(), "trueA1C0");
-      plotter->Fill1D("Benchmark_QQQ_PCZ_trueA1C0", 600, -200, 200, pc.Z(), "trueA1C0");
-      plotter->Fill2D("Benchmark_QQQ_PCZ_trueA1C0_vs_qqqpczguess", 400, -200, 200, 400, -200, 200, pcz_guess_37, pc.Z(), "trueA1C0");
-      plotter->Fill1D("Benchmark_QQQ_PCZ_trueA1C0_minus_qqqpczguess", 400, -100, 100, pc.Z() - pcz_guess_37, "trueA1C0");
+      plotter->Fill1D("Benchmark_QQQ_VertexZ_trueA1C0", 800, -400, 400, vtx0.Z(), "A1C0True");
+      plotter->Fill1D("Benchmark_QQQ_VertexZ_trueA1C0_TC" + std::to_string(timecut) + "_PC" + std::to_string(phicut), 800, -400, 400, vtx0.Z(), "A1C0True");
+      plotter->Fill2D("Benchmark_QQQ_VertexXY_trueA1C0", 200, -100, 100, 200, -100, 100, vtx0.X(), vtx0.Y(), "A1C0True");
+      plotter->Fill1D("Benchmark_QQQ_PCZ_trueA1C0", 600, -200, 200, pc.Z(), "A1C0True");
+      plotter->Fill2D("Benchmark_QQQ_PCZ_trueA1C0_vs_qqqpczguess", 400, -200, 200, 400, -200, 200, pcz_guess_37, pc.Z(), "A1C0True");
+      plotter->Fill1D("Benchmark_QQQ_PCZ_trueA1C0_minus_qqqpczguess", 400, -100, 100, pc.Z() - pcz_guess_37, "A1C0True");
     }
   }
 
@@ -2426,6 +2425,7 @@ void PCQQQClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
         {
           const auto &aCl = aClusters.front();
           const auto &cCl = cClusters.front();
+          const std::string benchBranch = "Benchmark_QQQ";
 
           auto vertexFrom = [](const TVector3 &si, const TVector3 &pcpoint)
           {
@@ -2434,12 +2434,12 @@ void PCQQQClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
             return TVector3(si + tm * vf);
           };
 
-          auto fillSuite = [&](const std::string &tag, double pcz_method, const TVector3 &vtx)
+          auto fillSuite = [&](const std::string &tag, double pcz_method, const TVector3 &vtx, const std::string &branch)
           {
-            plotter->Fill1D("Benchmark_QQQ_VertexZ_" + tag, 800, -400, 400, vtx.Z(), "Benchmark_QQQ");
-            plotter->Fill1D("Benchmark_QQQ_VertexZ_" + tag + "_TC" + std::to_string(timecut) + "_PC" + std::to_string(phicut), 800, -400, 400, vtx.Z(), "Benchmark_QQQ");
-            plotter->Fill2D("Benchmark_QQQ_VertexXY_" + tag, 200, -100, 100, 200, -100, 100, vtx.X(), vtx.Y(), "Benchmark_QQQ");
-            plotter->Fill1D("Benchmark_QQQ_PCZ_" + tag, 600, -200, 200, pcz_method, "Benchmark_QQQ");
+            plotter->Fill1D("Benchmark_QQQ_VertexZ_" + tag, 800, -400, 400, vtx.Z(), branch);
+            plotter->Fill1D("Benchmark_QQQ_VertexZ_" + tag + "_TC" + std::to_string(timecut) + "_PC" + std::to_string(phicut), 800, -400, 400, vtx.Z(), branch);
+            plotter->Fill2D("Benchmark_QQQ_VertexXY_" + tag, 200, -100, 100, 200, -100, 100, vtx.X(), vtx.Y(), branch);
+            plotter->Fill1D("Benchmark_QQQ_PCZ_" + tag, 600, -200, 200, pcz_method, branch);
           };
 
           auto fillVsRef = [&](const std::string &tag, double pcz_method, const TVector3 &vtx, double pcz_ref, const TVector3 &vtx_ref)
@@ -2497,7 +2497,7 @@ void PCQQQClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
               return;
             double pcz = dither ? rand.Gaus(xo_a1c1.Z(), dither_sigma) : xo_a1c1.Z();
             TVector3 vtx = vertexFrom(si_point, TVector3(xo_a1c1.X(), xo_a1c1.Y(), pcz));
-            fillSuite(tag, pcz, vtx);
+            fillSuite(tag, pcz, vtx, benchBranch);
             fillVsRef(tag, pcz, vtx, pcz_ref, vtx_ref);
           };
 
@@ -2510,7 +2510,7 @@ void PCQQQClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
               return;
             double pcz = dither ? rand.Gaus(pc.Z(), dither_sigma_c0 / 2.0) : pc.Z();
             TVector3 vtx = vertexFrom(si_point, TVector3(pc.X(), pc.Y(), pcz));
-            fillSuite(tag, pcz, vtx);
+            fillSuite(tag, pcz, vtx, benchBranch);
             fillVsRef(tag, pcz, vtx, pcz_ref, vtx_ref);
           };
 
@@ -2530,7 +2530,7 @@ void PCQQQClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
             if (!(s.inband && side_status != 2))
               return;
             TVector3 vtx = vertexFrom(si_point, TVector3(xo_a1c1.X(), xo_a1c1.Y(), pcz_pick));
-            fillSuite(tag, pcz_pick, vtx);
+            fillSuite(tag, pcz_pick, vtx, benchBranch);
             fillVsRef(tag, pcz_pick, vtx, pcz_ref, vtx_ref);
           };
 
@@ -2538,8 +2538,7 @@ void PCQQQClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
           {
             if (pcevent.multi1 == 1 && pcevent.multi2 == 2)
             {
-              fillSuite("A1C2", pcz_ref, vtx_ref);
-
+              fillSuite("A1C2", pcz_ref, vtx_ref, benchBranch);
               // XY-offset diagnostic (QQQ twin of SX3 block above)
               {
                 double phi_deg = qqqevent.pos.Phi() * 180.0 / M_PI;
@@ -2684,7 +2683,7 @@ void PCQQQClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
           {
             double pcz_raw = xo_a1c1.Z();
             TVector3 vtx_raw = vertexFrom(qqqevent.pos, TVector3(xo_a1c1.X(), xo_a1c1.Y(), pcz_raw));
-            fillSuite("trueA1C1", pcz_raw, vtx_raw);
+            fillSuite("trueA1C1", pcz_raw, vtx_raw, "A1C1True");
             plotter->Fill2D("Benchmark_QQQ_PCZ_trueA1C1_vs_qqqpczguess", 400, -200, 200, 400, -200, 200, pcz_guess_int, pcz_raw, "Benchmark_QQQ_trueA1C1");
             plotter->Fill1D("Benchmark_QQQ_PCZ_trueA1C1_minus_qqqpczguess", 400, -100, 100, pcz_raw - pcz_guess_int, "Benchmark_QQQ_trueA1C1");
 
@@ -2705,7 +2704,7 @@ void PCQQQClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
               plotter->Fill1D("Benchmark_QQQ_trueA1C1_sideStatus", 4, -1, 3, side_status + 0.5, "Benchmark_QQQ_trueA1C1");
 
               TVector3 vtx_cf = vertexFrom(qqqevent.pos, TVector3(xo_a1c1.X(), xo_a1c1.Y(), pcz_cf));
-              fillSuite(valid ? "trueA1C1_Cfrac" : "trueA1C1_Cfrac_invalid", pcz_cf, vtx_cf);
+              fillSuite(valid ? "trueA1C1_Cfrac" : "trueA1C1_Cfrac_invalid", pcz_cf, vtx_cf, "A1C1True");
               plotter->Fill1D("Benchmark_QQQ_trueA1C1_cfrac", 220, -0.05, 1.05, cfrac, "Benchmark_QQQ_trueA1C1");
               // item 2: cfrac vs anode E for genuine A1C1 (no A1C2 ref here)
               plotter->Fill2D("Benchmark_QQQ_trueA1C1_cfrac_vs_anodeE", 400, 0, 40000, 220, -0.05, 1.05, aSumE_bm, cfrac, "Benchmark_QQQ_trueA1C1");
@@ -2760,8 +2759,8 @@ void PCQQQClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
               TVector3 vtx0 = vertexFrom(qqqevent.pos, pc);
               if (vtx0.Perp() <= 6.0 && vtx0.Z() >= -173.6)
               {
-                fillSuite("A1C1asA1C0", pc.Z(), vtx0);
-                plotter->Fill2D("Benchmark_QQQ_PCZ_A1C1asA1C0_vs_qqqpczguess", 400, -200, 200, 400, -200, 200, pcz_guess_int, pc.Z(), "Benchmark_QQQ_trueA1C1");
+                fillSuite("A1C1asA1C0", pc.Z(), vtx0, "A1C1True");
+                plotter->Fill2D("Benchmark_QQQ_PCZ_A1C1asA1C0_vs_qqqpczguess", 400, -200, 200, 400, -200, 200, pcz_guess_int, pc.Z(), "A1C1True");
               }
             }
           }
