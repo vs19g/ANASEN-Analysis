@@ -59,10 +59,7 @@ bool reactiondata = false;
 TF1 pcfix_func("func", model_invert, -200, 200);
 
 // --- A1C1 linear centre-fold model: cfrac = cfmin[cell] + k[cell]*fold ----------
-// fold = |z - z_cellcentre| / halfcell in [0,1]. The raw cfrac pedestal floats
-// with the arbitrary anode/cathode gain, so cfmin/k are dataset-specific: fit
-// them OFFLINE with fit_a1c1_cfrac.C on prebuilt data and paste the per-cell
-// results below; Begin() selects the active set by dataset.
+// fold = |z - z_cellcentre| / halfcell in [0,1].
 const double a1c1_zg[8] = {147.998, 101.946, 59.7634, 19.6965, -19.6965, -59.7634, -101.946, -147.998};
 
 static const double a1c1_cfmin_17F[7] = {0.20, 0.20, 0.20, 0.20, 0.20, 0.20, 0.20};
@@ -111,7 +108,7 @@ inline bool a1c1_missing_neighbor(int awire, int cwire)
 
 // --- A1C1 LOW BAND (incomplete charge integration) -----------------------------
 // 17F shows a second, parallel cfrac band (~0.10 -> 0.15 over the fold) where the
-// cathode charge is only partially integrated. It still tracks z (real physics),
+// cathode charge is only partially integrated. It still tracks z
 // so it gets its own per-cell cfmin/k. Events with cfrac below a1c1_cfrac_split
 // are reconstructed with this set instead of being rejected. a1c1_cfrac_split<=0
 // disables the low band (e.g. 27Al, which shows no second band).
@@ -266,14 +263,15 @@ inline A1C1Sol a1c1_solve(double cfrac, double zf, double z_a1c0, int cwire = -1
 
 // Beam-axis 2-hypothesis side test. Given the two candidate PC z's (the cells either
 // side of the fired wire), reconstruct the vertex (closest approach to the beam axis)
-// for each and keep the one whose vertex Z is most consistent with the (assumed)
-// interaction point source_vertex -- i.e. nearest pczguess. Vertex Z is a far stronger,
-// UNBIASED side discriminator than vertex Perp (Perp is near-equal for both candidates
-// in the near-axial regime, so min-Perp flips the bias and over-rejects). Perp + the
-// z-window are kept only as a loose physical gate. status: 0 one side physical, 1 both
-// physical, 2 neither (reject). Gates are tunable (a1c1_side_perp_max/dz_max, env).
-double a1c1_side_perp_max = 20.0; // loose beam-axis Perp gate (mm)
-double a1c1_side_dz_max = 90.0;   // loose |vtx.Z - source_vertex| gate (mm, ~2 cells)
+// for each and keep the beam-axis-consistent one. Acceptance is PERP-ONLY: a candidate
+// is physical if its vertex sits within a1c1_side_perp_max of the beam axis.
+// The old |vtx.Z - source_vertex| window was removed: vertex-Z consistency only has
+// meaning for fixed-vertex SOURCE runs. For reaction/proton data the interaction
+// vertex is distributed along the beam, so a window anchored on source_vertex rejected
+// essentially every genuine event. status: 0 one side physical, 1 both physical,
+// 2 neither (reject). When both candidates are physical the side is genuinely
+// ambiguous without a vertex prior, so fall back to the smaller-Perp candidate.
+double a1c1_side_perp_max = 20.0; // beam-axis Perp gate (mm)
 inline double a1c1_pick_side(const TVector3 &si, double cx, double cy,
                              double pcz_lo, double pcz_hi, int &status)
 {
@@ -290,17 +288,14 @@ inline double a1c1_pick_side(const TVector3 &si, double cx, double cy,
   double zl, pl, zh, ph;
   vtxZP(pcz_lo, zl, pl);
   vtxZP(pcz_hi, zh, ph);
-  double dl = TMath::Abs(zl - source_vertex);
-  double dh = TMath::Abs(zh - source_vertex);
-  bool okl = (pl <= a1c1_side_perp_max && dl <= a1c1_side_dz_max);
-  bool okh = (ph <= a1c1_side_perp_max && dh <= a1c1_side_dz_max);
+  bool okl = (pl <= a1c1_side_perp_max);
+  bool okh = (ph <= a1c1_side_perp_max);
   status = (okl || okh) ? ((okl && okh) ? 1 : 0) : 2;
-  // among physical candidates choose the z-consistent (nearest-vertex) one
   if (okl && !okh)
     return pcz_lo;
   if (okh && !okl)
     return pcz_hi;
-  return (dl <= dh) ? pcz_lo : pcz_hi; // vertex-Z consistency (nearest source_vertex)
+  return (pl <= ph) ? pcz_lo : pcz_hi; // both physical: smaller-Perp side
 }
 
 TGraph *MeV_to_cm = NULL, *cm_to_MeV = NULL;
@@ -449,10 +444,10 @@ void TrackRecon::Begin(TTree * /*tree*/)
                               // From the source-run cfrac_vs_sx3E (both bands at the
                               // alpha energy): g = r_main/r_low = (0.44/0.56)/(0.10/0.90)
                               // ~ 7.0, i.e. r_low*7 -> cfrac 0.10 maps to ~0.44.
-  a1c1_z_scale_qqq = 0.0;     // 17F: QQQ z scaling (REFIT from source runs)
-  a1c1_z_scale_sx3 = 0.0;     // 17F: SX3 z scaling (REFIT from source runs)
-  a1c1_z_off_qqq = 0.0;       // 17F: QQQ constant offset mm (REFIT)
-  a1c1_z_off_sx3 = 0.0;       // 17F: SX3 constant offset mm (REFIT)
+  // a1c1_z_scale_qqq = 0.0;       // 17F: QQQ z scaling (REFIT from source runs)
+  // a1c1_z_scale_sx3 = 0.0;       // 17F: SX3 z scaling (REFIT from source runs)
+  // a1c1_z_off_qqq = 0.0;         // 17F: QQQ constant offset mm (REFIT)
+  // a1c1_z_off_sx3 = 0.0;         // 17F: SX3 constant offset mm (REFIT)
   a1c1_dead_anode = &a1c1_dead_anode_17F;
   a1c1_dead_cathode = &a1c1_dead_cathode_17F;
   if (dataset == "27Al")
@@ -463,10 +458,10 @@ void TrackRecon::Begin(TTree * /*tree*/)
     k2_src = a1c1_k2_27Al;
     a1c1_cfrac_split = 0.0;     // 27Al: no second band, low band disabled
     a1c1_lowband_rfactor = 0.0; // 27Al: nothing to fold
-    a1c1_z_scale_qqq = 0.0;     // 27Al: QQQ z scaling (REFIT from source runs)
-    a1c1_z_scale_sx3 = 0.0;     // 27Al: SX3 z scaling (REFIT from source runs)
-    a1c1_z_off_qqq = 0.0;       // 27Al: QQQ constant offset mm (REFIT)
-    a1c1_z_off_sx3 = 0.0;       // 27Al: SX3 constant offset mm (REFIT)
+    // a1c1_z_scale_qqq = 0.0;       // 27Al: QQQ z scaling (REFIT from source runs)
+    // a1c1_z_scale_sx3 = 0.0;       // 27Al: SX3 z scaling (REFIT from source runs)
+    // a1c1_z_off_qqq = 0.0;         // 27Al: QQQ constant offset mm (REFIT)
+    // a1c1_z_off_sx3 = 0.0;         // 27Al: SX3 constant offset mm (REFIT)
     a1c1_dead_anode = &a1c1_dead_anode_27Al;
     a1c1_dead_cathode = &a1c1_dead_cathode_27Al;
   }
@@ -1690,6 +1685,46 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
 
   static TRandom3 rand(0);
 
+  // --- GENUINE A1C0 events: one anode cluster and NO cathode cluster. These never
+  // form an anode-cathode crossover, so the builder produces no PC_Events for them
+  // and the pcevent loop below never sees them. Reconstruct them anode-only here, the
+  // same way the A1C1 benchmark does: pair each Si hit with the anode pseudo-wire and
+  // gate on anode-timestamp time coincidence + Si-anode phi + the beam-axis vertex.
+  // Reference is the Si-only geometric guess pczguess (no cathode crossover exists). ---
+  if (BenchMark && aClusters.size() == 1 && cClusters.size() == 0)
+  {
+    const auto &aCl = aClusters.front();
+    auto vertexFrom = [](const TVector3 &si, const TVector3 &pcpoint)
+    {
+      TVector3 vf = pcpoint - si;
+      double tm = -1.0 * (si.X() * vf.X() + si.Y() * vf.Y()) / (vf.X() * vf.X() + vf.Y() * vf.Y());
+      return TVector3(si + tm * vf);
+    };
+    auto aPw = pwinstance.GetPseudoWire(aCl, "ANODE");
+    auto apwire_bm = std::get<0>(aPw);
+    double anodeTS = std::get<3>(aPw);
+    for (const auto &sx3event : SX3_Events)
+    {
+      bool PCSX3TimeCut = (sx3event.Time1 - anodeTS < 0);
+      TVector3 pc = pwinstance.getClosestWirePosAtWirePhi(apwire_bm, sx3event.pos.Phi());
+      bool phicut = (sx3event.pos.Phi() <= pc.Phi() + TMath::Pi() / 4. &&
+                     sx3event.pos.Phi() >= pc.Phi() - TMath::Pi() / 4.);
+      if (!(phicut && PCSX3TimeCut))
+        continue;
+      TVector3 vtx0 = vertexFrom(sx3event.pos, pc);
+      if (!(vtx0.Perp() <= 6.0 && vtx0.Z() >= -173.6))
+        continue;
+      double sx3theta = TMath::ATan2(88.0, sx3event.pos.Z() - source_vertex);
+      double pczguess = 37.0 / TMath::Tan(sx3theta) + source_vertex;
+      plotter->Fill1D("Benchmark_SX3_VertexZ_trueA1C0", 800, -400, 400, vtx0.Z(), "A1C0true");
+      plotter->Fill1D("Benchmark_SX3_VertexZ_trueA1C0_TC" + std::to_string(PCSX3TimeCut) + "_PC" + std::to_string(phicut), 800, -400, 400, vtx0.Z(), "A1C0true");
+      plotter->Fill2D("Benchmark_SX3_VertexXY_trueA1C0", 200, -100, 100, 200, -100, 100, vtx0.X(), vtx0.Y(), "A1C0true");
+      plotter->Fill1D("Benchmark_SX3_PCZ_trueA1C0", 600, -200, 200, pc.Z(), "A1C0true");
+      plotter->Fill2D("Benchmark_SX3_PCZ_trueA1C0_vs_sx3pczguess", 400, -200, 200, 400, -200, 200, pczguess, pc.Z(), "A1C0true");
+      plotter->Fill1D("Benchmark_SX3_PCZ_trueA1C0_minus_sx3pczguess", 400, -100, 100, pc.Z() - pczguess, "A1C0true");
+    }
+  }
+
   for (const auto &pcevent : PC_Events)
   {
     bool PCSX3TimeCut = false;
@@ -1867,6 +1902,8 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
         std::pair<TVector3, TVector3> apwire_bm = std::get<0>(pw_tuple);
 
         auto cMaxWire = *std::max_element(cCl.begin(), cCl.end(), [](const auto &a, const auto &b)
+                                          { return std::get<1>(a) < std::get<1>(b); });
+        auto aMaxWire = *std::max_element(aCl.begin(), aCl.end(), [](const auto &a, const auto &b)
                                           { return std::get<1>(a) < std::get<1>(b); });
         std::vector<std::tuple<int, double, double>> cOne = {cMaxWire};
 
@@ -2076,7 +2113,7 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
               // Profile *_vs_fold: failures should pile up near the wires/edges.
               {
                 double z_a1c0 = pwinstance.getClosestWirePosAtWirePhi(apwire_bm, sx3event.pos.Phi()).Z();
-                A1C1Sol sm = a1c1_solve(cfrac, xo_a1c1.Z(), z_a1c0, std::get<0>(cMaxWire), aSumE_bm);
+                A1C1Sol sm = a1c1_solve(cfrac, xo_a1c1.Z(), z_a1c0, std::get<0>(cMaxWire), aSumE_bm, std::get<0>(aMaxWire));
                 int cell_truth = -1;
                 for (int i = 0; i < 7; ++i)
                   if (pcz_ref <= a1c1_zg[i] && pcz_ref > a1c1_zg[i + 1])
@@ -2122,8 +2159,8 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
             double pcz_raw = xo_a1c1.Z();
             TVector3 vtx_raw = vertexFrom(sx3event.pos, TVector3(xo_a1c1.X(), xo_a1c1.Y(), pcz_raw));
             fillSuite("trueA1C1", pcz_raw, vtx_raw);
-            plotter->Fill2D("Benchmark_SX3_PCZ_trueA1C1_vs_sx3pczguess", 400, -200, 200, 400, -200, 200, pczguess, pcz_raw, "Benchmark_SX3_trueA1C1");
-            plotter->Fill1D("Benchmark_SX3_PCZ_trueA1C1_minus_sx3pczguess", 400, -100, 100, pcz_raw - pczguess, "Benchmark_SX3_trueA1C1");
+            plotter->Fill2D("Benchmark_SX3_PCZ_trueA1C1_vs_sx3pczguess", 400, -200, 200, 400, -200, 200, pczguess, pcz_raw, "A1C1true");
+            plotter->Fill1D("Benchmark_SX3_PCZ_trueA1C1_minus_sx3pczguess", 400, -100, 100, pcz_raw - pczguess, "A1C1true");
 
             // cfrac sub-cell reconstruction, anchored on the FIRED CATHODE.
             // Vertex-independent (no pczguess): the cell is the one adjacent to
@@ -2132,29 +2169,29 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
             if (cfrac >= 0.0)
             {
               double z_a1c0 = pwinstance.getClosestWirePosAtWirePhi(apwire_bm, sx3event.pos.Phi()).Z();
-              A1C1Sol s = a1c1_solve(cfrac, xo_a1c1.Z(), z_a1c0, std::get<0>(cMaxWire), aSumE_bm);
+              A1C1Sol s = a1c1_solve(cfrac, xo_a1c1.Z(), z_a1c0, std::get<0>(cMaxWire), aSumE_bm, std::get<0>(aMaxWire));
               int cell = s.cell;
               double f = s.f;
               // side from the beam-axis 2-hypothesis test (smaller-Perp vertex wins)
               int side_status;
               double pcz_cf = a1c1_pick_side(sx3event.pos, xo_a1c1.X(), xo_a1c1.Y(), s.pcz_lo, s.pcz_hi, side_status);
               bool valid = (side_status != 2); // accept if at least one side is beam-axis consistent
-              plotter->Fill1D("Benchmark_SX3_trueA1C1_sideStatus", 4, -1, 3, side_status + 0.5, "Benchmark_SX3_trueA1C1");
+              plotter->Fill1D("Benchmark_SX3_trueA1C1_sideStatus", 4, -1, 3, side_status + 0.5, "A1C1true");
 
               TVector3 vtx_cf = vertexFrom(sx3event.pos, TVector3(xo_a1c1.X(), xo_a1c1.Y(), pcz_cf));
               fillSuite(valid ? "trueA1C1_Cfrac" : "trueA1C1_Cfrac_invalid", pcz_cf, vtx_cf);
-              plotter->Fill1D("Benchmark_SX3_trueA1C1_cfrac", 220, -0.05, 1.05, cfrac, "Benchmark_SX3_trueA1C1");
+              plotter->Fill1D("Benchmark_SX3_trueA1C1_cfrac", 220, -0.05, 1.05, cfrac, "A1C1true");
               // item 2: cfrac vs anode E for genuine A1C1 (no A1C2 ref here)
-              plotter->Fill2D("Benchmark_SX3_trueA1C1_cfrac_vs_anodeE", 400, 0, 40000, 220, -0.05, 1.05, aSumE_bm, cfrac, "Benchmark_SX3_trueA1C1");
+              plotter->Fill2D("Benchmark_SX3_trueA1C1_cfrac_vs_anodeE", 400, 0, 40000, 220, -0.05, 1.05, aSumE_bm, cfrac, "A1C1true");
               // r-space linearity test (r = c + C_off/anodeE should be a straight line)
               if (aSumE_bm > 0.0 && cfrac > 0.0 && cfrac < 1.0)
                 plotter->Fill2D("Benchmark_SX3_trueA1C1_r_vs_invAnodeE", 200, 0, 0.0004, 200, 0, 2.0,
-                                1.0 / aSumE_bm, cfrac / (1.0 - cfrac), "Benchmark_SX3_trueA1C1");
+                                1.0 / aSumE_bm, cfrac / (1.0 - cfrac), "A1C1true");
               // reference-free per-cell cfrac (cell from geometry, no A1C2 ref): the
               // offline fitter reads per-cell edges/percentiles to gain-match cfmin/k.
-              plotter->Fill2D("Benchmark_SX3_trueA1C1_cfrac_vs_cell", 7, 0, 7, 220, -0.05, 1.05, cell + 0.5, cfrac, "Benchmark_SX3_trueA1C1");
-              plotter->Fill2D("Benchmark_SX3_trueA1C1_f_vs_cell", 7, 0, 7, 260, -1.5, 2.5, cell + 0.5, f, "Benchmark_SX3_trueA1C1");
-              plotter->Fill1D("Benchmark_SX3_trueA1C1_f", 260, -1.5, 2.5, f, "Benchmark_SX3_trueA1C1");
+              plotter->Fill2D("Benchmark_SX3_trueA1C1_cfrac_vs_cell", 7, 0, 7, 220, -0.05, 1.05, cell + 0.5, cfrac, "A1C1true");
+              plotter->Fill2D("Benchmark_SX3_trueA1C1_f_vs_cell", 7, 0, 7, 260, -1.5, 2.5, cell + 0.5, f, "A1C1true");
+              plotter->Fill1D("Benchmark_SX3_trueA1C1_f", 260, -1.5, 2.5, f, "A1C1true");
               plotter->Fill1D("Benchmark_SX3_trueA1C1_valid", 2, 0, 2, valid ? 1.0 : 0.0, "Benchmark_SX3_trueA1C1");
               // failure-reason breakdown (why the cfrac estimate is / isn't usable):
               //   0 valid & f in [0,1]   ideal, inside the calibrated band
@@ -2197,8 +2234,8 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
               TVector3 vtx0 = vertexFrom(sx3event.pos, pc);
               if (vtx0.Perp() <= 6.0 && vtx0.Z() >= -173.6)
               {
-                fillSuite("trueA1C0", pc.Z(), vtx0);
-                plotter->Fill2D("Benchmark_SX3_PCZ_trueA1C0_vs_sx3pczguess", 400, -200, 200, 400, -200, 200, pczguess, pc.Z(), "Benchmark_SX3_trueA1C1");
+                fillSuite("A1C1asA1C0", pc.Z(), vtx0);
+                plotter->Fill2D("Benchmark_SX3_PCZ_A1C1asA1C0_vs_sx3pczguess", 400, -200, 200, 400, -200, 200, pczguess, pc.Z(), "Benchmark_SX3_trueA1C1");
               }
             }
           }
@@ -2212,6 +2249,42 @@ void PCQQQClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
                           const std::vector<std::vector<std::tuple<int, double, double>>> &aClusters, const std::vector<std::vector<std::tuple<int, double, double>>> &cClusters)
 {
   static TRandom3 rand(0);
+
+  // --- GENUINE A1C0 events (QQQ twin): one anode cluster and NO cathode cluster.
+  // See the SX3 block for rationale. Anode-timestamp time coincidence + Si-anode phi
+  // + beam-axis vertex gate. Reference is the Si-only guess pcz_guess_37. ---
+  if (BenchMark && aClusters.size() == 1 && cClusters.size() == 0)
+  {
+    const auto &aCl = aClusters.front();
+    auto vertexFrom = [](const TVector3 &si, const TVector3 &pcpoint)
+    {
+      TVector3 vf = pcpoint - si;
+      double tm = -1.0 * (si.X() * vf.X() + si.Y() * vf.Y()) / (vf.X() * vf.X() + vf.Y() * vf.Y());
+      return TVector3(si + tm * vf);
+    };
+    auto aPw = pwinstance.GetPseudoWire(aCl, "ANODE");
+    auto apwire_bm = std::get<0>(aPw);
+    double anodeTS = std::get<3>(aPw);
+    for (const auto &qqqevent : QQQ_Events)
+    {
+      bool timecut = (qqqevent.Time1 - anodeTS < 0);
+      TVector3 pc = pwinstance.getClosestWirePosAtWirePhi(apwire_bm, qqqevent.pos.Phi());
+      bool phicut = (qqqevent.pos.Phi() <= pc.Phi() + TMath::Pi() / 4. &&
+                     qqqevent.pos.Phi() >= pc.Phi() - TMath::Pi() / 4.);
+      if (!(phicut && timecut))
+        continue;
+      TVector3 vtx0 = vertexFrom(qqqevent.pos, pc);
+      if (!(vtx0.Perp() <= 6.0 && vtx0.Z() >= -173.6))
+        continue;
+      double pcz_guess_37 = 37. / TMath::Tan((qqqevent.pos - TVector3(0, 0, source_vertex)).Theta()) + source_vertex;
+      plotter->Fill1D("Benchmark_QQQ_VertexZ_trueA1C0", 800, -400, 400, vtx0.Z(), "trueA1C0");
+      plotter->Fill1D("Benchmark_QQQ_VertexZ_trueA1C0_TC" + std::to_string(timecut) + "_PC" + std::to_string(phicut), 800, -400, 400, vtx0.Z(), "trueA1C0");
+      plotter->Fill2D("Benchmark_QQQ_VertexXY_trueA1C0", 200, -100, 100, 200, -100, 100, vtx0.X(), vtx0.Y(), "trueA1C0");
+      plotter->Fill1D("Benchmark_QQQ_PCZ_trueA1C0", 600, -200, 200, pc.Z(), "trueA1C0");
+      plotter->Fill2D("Benchmark_QQQ_PCZ_trueA1C0_vs_qqqpczguess", 400, -200, 200, 400, -200, 200, pcz_guess_37, pc.Z(), "trueA1C0");
+      plotter->Fill1D("Benchmark_QQQ_PCZ_trueA1C0_minus_qqqpczguess", 400, -100, 100, pc.Z() - pcz_guess_37, "trueA1C0");
+    }
+  }
 
   for (const auto &pcevent : PC_Events)
   {
@@ -2383,6 +2456,8 @@ void PCQQQClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
 
           auto cMaxWire = *std::max_element(cCl.begin(), cCl.end(), [](const auto &a, const auto &b)
                                             { return std::get<1>(a) < std::get<1>(b); });
+          auto aMaxWire = *std::max_element(aCl.begin(), aCl.end(), [](const auto &a, const auto &b)
+                                            { return std::get<1>(a) < std::get<1>(b); });
           std::vector<std::tuple<int, double, double>> cOne = {cMaxWire};
 
           auto xo_tuple = pwinstance.FindCrossoverProperties(aCl, cOne);
@@ -2448,7 +2523,7 @@ void PCQQQClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
             if (!a1c1Good || cfrac < 0.0)
               return;
             double z_a1c0 = pwinstance.getClosestWirePosAtWirePhi(apwire_bm, si_point.Phi()).Z();
-            A1C1Sol s = a1c1_solve(cfrac, xo_a1c1.Z(), z_a1c0, std::get<0>(cMaxWire), aSumE_bm);
+            A1C1Sol s = a1c1_solve(cfrac, xo_a1c1.Z(), z_a1c0, std::get<0>(cMaxWire), aSumE_bm, std::get<0>(aMaxWire));
             // side from the beam-axis 2-hypothesis test (replaces the z_a1c0 cell pick)
             int side_status;
             double pcz_pick = a1c1_pick_side(si_point, xo_a1c1.X(), xo_a1c1.Y(), s.pcz_lo, s.pcz_hi, side_status);
@@ -2565,7 +2640,7 @@ void PCQQQClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
                 // --- item 3: cell/side misclassification rate (truth = pcz_ref) ---
                 {
                   double z_a1c0 = pwinstance.getClosestWirePosAtWirePhi(apwire_bm, qqqevent.pos.Phi()).Z();
-                  A1C1Sol sm = a1c1_solve(cfrac, xo_a1c1.Z(), z_a1c0, std::get<0>(cMaxWire), aSumE_bm);
+                  A1C1Sol sm = a1c1_solve(cfrac, xo_a1c1.Z(), z_a1c0, std::get<0>(cMaxWire), aSumE_bm, std::get<0>(aMaxWire));
                   int cell_truth = -1;
                   for (int i = 0; i < 7; ++i)
                     if (pcz_ref <= a1c1_zg[i] && pcz_ref > a1c1_zg[i + 1])
@@ -2620,7 +2695,7 @@ void PCQQQClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
             if (cfrac >= 0.0)
             {
               double z_a1c0 = pwinstance.getClosestWirePosAtWirePhi(apwire_bm, qqqevent.pos.Phi()).Z();
-              A1C1Sol s = a1c1_solve(cfrac, xo_a1c1.Z(), z_a1c0, std::get<0>(cMaxWire), aSumE_bm);
+              A1C1Sol s = a1c1_solve(cfrac, xo_a1c1.Z(), z_a1c0, std::get<0>(cMaxWire), aSumE_bm, std::get<0>(aMaxWire));
               int cell = s.cell;
               double f = s.f;
               // side from the beam-axis 2-hypothesis test (smaller-Perp vertex wins)
@@ -2685,8 +2760,8 @@ void PCQQQClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
               TVector3 vtx0 = vertexFrom(qqqevent.pos, pc);
               if (vtx0.Perp() <= 6.0 && vtx0.Z() >= -173.6)
               {
-                fillSuite("trueA1C0", pc.Z(), vtx0);
-                plotter->Fill2D("Benchmark_QQQ_PCZ_trueA1C0_vs_qqqpczguess", 400, -200, 200, 400, -200, 200, pcz_guess_int, pc.Z(), "Benchmark_QQQ_trueA1C1");
+                fillSuite("A1C1asA1C0", pc.Z(), vtx0);
+                plotter->Fill2D("Benchmark_QQQ_PCZ_A1C1asA1C0_vs_qqqpczguess", 400, -200, 200, 400, -200, 200, pcz_guess_int, pc.Z(), "Benchmark_QQQ_trueA1C1");
               }
             }
           }
@@ -2706,7 +2781,7 @@ void PCQQQClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
         plotter->Fill2D("pctheta_vs_qqqtheta_sv", 180, -360, 360, 180, -360, 360, (qqqevent.pos - TVector3(0, 0, source_vertex)).Theta() * 180 / M_PI, (pcevent.pos - TVector3(0, 0, source_vertex)).Theta() * 180 / M_PI, "Kinematics_Angles");
         plotter->Fill2D("pctheta_vs_qqqtheta_rmz", 180, -360, 360, 180, -360, 360, (qqqevent.pos - TVector3(0, 0, r_rhoMin.Z())).Theta() * 180 / M_PI, (pcevent.pos - TVector3(0, 0, r_rhoMin.Z())).Theta() * 180 / M_PI, "Kinematics_Angles");
         plotter->Fill2D("pctheta_vs_qqqtheta_rm", 180, -360, 360, 180, -360, 360, (qqqevent.pos - r_rhoMin).Theta() * 180 / M_PI, (pcevent.pos - r_rhoMin).Theta() * 180 / M_PI, "Kinematics_Angles");
-        // plotter->Fill2D("pczguess_vs_pc_phi=" + std::to_string(qqqevent.pos.Phi() * 180. / M_PI), 300, 0, 200, 150, 0, 200, pcz_guess, pcevent.pos.Z(), "PCZ_Recon");
+        plotter->Fill2D("pczguess_vs_pc_phi=" + std::to_string(qqqevent.pos.Phi() * 180. / M_PI), 300, 0, 200, 150, 0, 200, pcz_guess, pcevent.pos.Z(), "Z_Reconstruction");
       }
     }
   }
@@ -3310,7 +3385,7 @@ void protonMiscHistograms(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
           std::vector<std::tuple<int, double, double>> aOne = {std::make_tuple(pcevent.Anodech, 1.0, 0.0)};
           auto apw = pwinstance.GetPseudoWire(aOne, "ANODE");
           double z_a1c0 = pwinstance.getClosestWirePosAtWirePhi(std::get<0>(apw), qqqevent.pos.Phi()).Z();
-          A1C1Sol s = a1c1_solve(cfrac, pcevent.pos.Z(), z_a1c0, pcevent.Cathodech, pcevent.Energy1);
+          A1C1Sol s = a1c1_solve(cfrac, pcevent.pos.Z(), z_a1c0, pcevent.Cathodech, pcevent.Energy1, pcevent.Anodech);
           // beam-axis 2-hypothesis side test (crossover = PC point, Si = qqq hit).
           int side_status;
           double pcz_pick = a1c1_pick_side(qqqevent.pos, pcevent.pos.X(), pcevent.pos.Y(), s.pcz_lo, s.pcz_hi, side_status);
@@ -3537,7 +3612,7 @@ void protonMiscHistograms_sx3(HistPlotter *plotter, const std::vector<Event> &QQ
         std::vector<std::tuple<int, double, double>> aOne = {std::make_tuple(pcevent.Anodech, 1.0, 0.0)};
         auto apw = pwinstance.GetPseudoWire(aOne, "ANODE");
         double z_a1c0 = pwinstance.getClosestWirePosAtWirePhi(std::get<0>(apw), sx3event.pos.Phi()).Z();
-        A1C1Sol s = a1c1_solve(cfrac, pcevent.pos.Z(), z_a1c0, pcevent.Cathodech, pcevent.Energy1);
+        A1C1Sol s = a1c1_solve(cfrac, pcevent.pos.Z(), z_a1c0, pcevent.Cathodech, pcevent.Energy1, pcevent.Anodech);
         // beam-axis 2-hypothesis side test (crossover = PC point, Si = sx3 hit).
         int side_status;
         double pcz_pick = a1c1_pick_side(sx3event.pos, pcevent.pos.X(), pcevent.pos.Y(), s.pcz_lo, s.pcz_hi, side_status);
