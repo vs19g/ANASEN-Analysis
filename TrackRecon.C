@@ -42,7 +42,7 @@ bool process_alpha_proton_scattering = false;
 bool doMiscHistograms = false;
 bool doPCSX3ClusterAnalysis = true;
 bool doPCQQQClusterAnalysis = true;
-bool doOldAnalysis = true;
+bool doOldAnalysis = false;
 bool do27AlapAnalysis = false;
 bool BenchMark = true;
 double source_vertex = 53; // 53
@@ -89,7 +89,7 @@ double a1c1_k_cell[7] = {0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25};
 
 static std::vector<int> a1c1_dead_anode_17F = {9, 12}; // 1 can be recovered
 static std::vector<int> a1c1_dead_cathode_17F = {};    // 0,13,15 can be recovered
-static std::vector<int> a1c1_dead_anode_27Al = {0, 9, 12, 19};
+static std::vector<int> a1c1_dead_anode_27Al = {0, 12, 19};
 static std::vector<int> a1c1_dead_cathode_27Al = {13};
 std::vector<int> *a1c1_dead_anode = &a1c1_dead_anode_17F; // active set, chosen in Begin()
 std::vector<int> *a1c1_dead_cathode = &a1c1_dead_cathode_17F;
@@ -137,19 +137,19 @@ double a1c1_missing_fmax = 2.0; // f-ceiling when a neighbouring wire is dead (1
 double a1c1_lowband_rfactor = 0.0; // r-space gain applied to low-band cfrac; <=0 = off
 
 // --- Anode-only (A1C0) z scale+offset correction -------------------------------
-// The A1C0_minus_ref_vs_theta / vs source-z plots show the anode-only PC z has a
-// ~6% scaling error plus a per-detector constant offset (same slope both detectors,
-// so it is a z-scaling, not a theta effect).
-// From source-run fits: QQQ y=0.0607x+40.442, SX3 y=0.0599x+1.196.
-// Correction: z_corr = z_a1c0 * (1 - scale) - offset_det
-// Env: A1C1_Z_SCALE, A1C1_Z_OFF_QQQ, A1C1_Z_OFF_SX3.
-double a1c1_z_scale = 0.06;   // fractional z scaling error (REFIT)
-double a1c1_z_off_qqq = 40.4; // QQQ constant offset mm (REFIT)
-double a1c1_z_off_sx3 = 1.2;  // SX3 constant offset mm (REFIT)
+// From a TProfile fit of z_a1c0 vs z_ref:  z_a1c0 = A*z_ref + B
+// => scale = 1 - 1/A,  off = B/A,  corrected = z_a1c0*(1-scale) - off
+// Per-detector because QQQ and SX3 see different slopes.
+// Env: A1C1_Z_SCALE_QQQ, A1C1_Z_SCALE_SX3, A1C1_Z_OFF_QQQ, A1C1_Z_OFF_SX3.
+double a1c1_z_scale_qqq = 0.0; // QQQ fractional z scaling (REFIT)
+double a1c1_z_scale_sx3 = 0.0; // SX3 fractional z scaling (REFIT)
+double a1c1_z_off_qqq = 0.0;   // QQQ constant offset mm (REFIT)
+double a1c1_z_off_sx3 = 0.0;   // SX3 constant offset mm (REFIT)
 inline double a1c1_zcorr(double z_a1c0, bool isQQQ)
 {
+  double scale = isQQQ ? a1c1_z_scale_qqq : a1c1_z_scale_sx3;
   double off = isQQQ ? a1c1_z_off_qqq : a1c1_z_off_sx3;
-  return z_a1c0 * (1.0 - a1c1_z_scale) - off;
+  return z_a1c0 * (1.0 - scale) - off;
 }
 
 // Sub-cell A1C1 z from cfrac (linear centre-fold). zf = crossover z (fired
@@ -449,9 +449,10 @@ void TrackRecon::Begin(TTree * /*tree*/)
                               // From the source-run cfrac_vs_sx3E (both bands at the
                               // alpha energy): g = r_main/r_low = (0.44/0.56)/(0.10/0.90)
                               // ~ 7.0, i.e. r_low*7 -> cfrac 0.10 maps to ~0.44.
-  a1c1_z_scale = 1;           // 17F: A1C0 z scaling error (REFIT)
-  a1c1_z_off_qqq = 40.4;      // 17F: QQQ constant offset mm (REFIT)
-  a1c1_z_off_sx3 = 1.2;       // 17F: SX3 constant offset mm (REFIT)
+  a1c1_z_scale_qqq = 0.0;     // 17F: QQQ z scaling (REFIT from source runs)
+  a1c1_z_scale_sx3 = 0.0;     // 17F: SX3 z scaling (REFIT from source runs)
+  a1c1_z_off_qqq = 0.0;       // 17F: QQQ constant offset mm (REFIT)
+  a1c1_z_off_sx3 = 0.0;       // 17F: SX3 constant offset mm (REFIT)
   a1c1_dead_anode = &a1c1_dead_anode_17F;
   a1c1_dead_cathode = &a1c1_dead_cathode_17F;
   if (dataset == "27Al")
@@ -462,16 +463,19 @@ void TrackRecon::Begin(TTree * /*tree*/)
     k2_src = a1c1_k2_27Al;
     a1c1_cfrac_split = 0.0;     // 27Al: no second band, low band disabled
     a1c1_lowband_rfactor = 0.0; // 27Al: nothing to fold
-    a1c1_z_scale = 0.06;        // 27Al: A1C0 z scaling error (REFIT)
-    a1c1_z_off_qqq = 40.4;      // 27Al: QQQ constant offset mm (REFIT)
-    a1c1_z_off_sx3 = 1.2;       // 27Al: SX3 constant offset mm (REFIT)
+    a1c1_z_scale_qqq = 0.0;     // 27Al: QQQ z scaling (REFIT from source runs)
+    a1c1_z_scale_sx3 = 0.0;     // 27Al: SX3 z scaling (REFIT from source runs)
+    a1c1_z_off_qqq = 0.0;       // 27Al: QQQ constant offset mm (REFIT)
+    a1c1_z_off_sx3 = 0.0;       // 27Al: SX3 constant offset mm (REFIT)
     a1c1_dead_anode = &a1c1_dead_anode_27Al;
     a1c1_dead_cathode = &a1c1_dead_cathode_27Al;
   }
   if (getenv("A1C1_LOWBAND_RFACTOR"))
     a1c1_lowband_rfactor = std::atof(getenv("A1C1_LOWBAND_RFACTOR"));
-  if (getenv("A1C1_Z_SCALE"))
-    a1c1_z_scale = std::atof(getenv("A1C1_Z_SCALE"));
+  if (getenv("A1C1_Z_SCALE_QQQ"))
+    a1c1_z_scale_qqq = std::atof(getenv("A1C1_Z_SCALE_QQQ"));
+  if (getenv("A1C1_Z_SCALE_SX3"))
+    a1c1_z_scale_sx3 = std::atof(getenv("A1C1_Z_SCALE_SX3"));
   if (getenv("A1C1_Z_OFF_QQQ"))
     a1c1_z_off_qqq = std::atof(getenv("A1C1_Z_OFF_QQQ"));
   if (getenv("A1C1_Z_OFF_SX3"))
@@ -1132,7 +1136,8 @@ Bool_t TrackRecon::Process(Long64_t entry)
   }
 
   //////Timing stuff for F data
-  static TRandom3 rnd(0);
+
+  static TRandom3 rnd(0); // seeded once (random seed via TUUID), not per event
   if (dataset == "17F" && reactiondata)
   {
     int ctr = 0;
@@ -1232,7 +1237,8 @@ Bool_t TrackRecon::Process(Long64_t entry)
 
   if (process_alpha_proton_scattering)
   {
-    protonAlphaHistograms(plotter, QQQ_Events, SX3_Events, PC_Events); // return kTRUE;
+    protonAlphaHistograms(plotter, QQQ_Events, SX3_Events, PC_Events);
+    // return kTRUE;
   } // end if(process_alpha_proton_scattering)
 
   if (doMiscHistograms)
@@ -1292,7 +1298,7 @@ Bool_t TrackRecon::Process(Long64_t entry)
       }
     } // for 'i' loop
 
-    for (const  auto &acluster : aClusters)
+    for (const auto &acluster : aClusters)
     {
       auto [apwire, apSumE, apMaxE, apTSMaxE] = pwinstance.GetPseudoWire(acluster, "ANODE");
       int a_number = acluster.size();
@@ -1909,6 +1915,27 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
           if (!a1c1Good || cfrac < 0.0)
             return;
           double z_a1c0 = pwinstance.getClosestWirePosAtWirePhi(apwire_bm, si_point.Phi()).Z();
+
+          // // -------------------------------------------------------------
+          // // SIMPLE ALGORITHM BENCHMARK (New vs Old on Real Data)
+          // // -------------------------------------------------------------
+          // // 1. Ask both algorithms for the intersection point using the real SX3 Phi
+          // TVector3 posNew = pwinstance.getClosestWirePosAtWirePhi(apwire_bm, sx3event.pos.Phi());
+          // TVector3 posOld = pwinstance.getClosestWirePosAtWirePhiOld(apwire_bm, sx3event.pos.Phi());
+
+          // // 2. Convert the returned Phi angles to degrees
+          // double phiNewDeg = posNew.Phi() * 180.0 / M_PI;
+          // double phiOldDeg = posOld.Phi() * 180.0 / M_PI;
+
+          // // 3. Plot Phi vs Phi (Should be a perfect diagonal line y = x)
+          // plotter->Fill2D("Algo_Compare_Phi_vs_Phi", 360, -180, 180, 360, -180, 180,
+          //                 phiOldDeg, phiNewDeg, "Algorithm_Check");
+
+          // // 4. Plot the Z residual (Should be a sharp peak exactly at 0)
+          // plotter->Fill1D("Algo_Compare_Delta_Z", 1000, -5, 5,
+          //                 posNew.Z() - posOld.Z(), "Algorithm_Check");
+          // // -------------------------------------------------------------
+
           A1C1Sol s = a1c1_solve(cfrac, xo_a1c1.Z(), z_a1c0, std::get<0>(cMaxWire), aSumE_bm);
           // side from the beam-axis 2-hypothesis test (replaces the z_a1c0 cell pick)
           int side_status;
@@ -1925,6 +1952,26 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
           if (pcevent.multi1 == 1 && pcevent.multi2 == 2)
           {
             fillSuite("A1C2", pcz_ref, vtx_ref);
+
+            // XY-offset diagnostic: if the source/beam is off-axis, the vertex-z
+            // residual modulates as cos(phi - phi0). A flat line = no XY offset.
+            {
+              double phi_deg = sx3event.pos.Phi() * 180.0 / M_PI;
+              double vz_resid = vtx_ref.Z() - source_vertex;
+              plotter->Fill2D("Diag_SX3_A1C2_vtxZ_resid_vs_phi", 180, -180, 180, 200, -50, 50,
+                              phi_deg, vz_resid, "Diag_XYoffset");
+              plotter->Fill2D("Diag_Combined_A1C2_vtxZ_resid_vs_phi", 180, -180, 180, 200, -50, 50,
+                              phi_deg, vz_resid, "Diag_XYoffset");
+              plotter->Fill2D("Diag_SX3_A1C2_vtxXY", 200, -15, 15, 200, -15, 15,
+                              vtx_ref.X(), vtx_ref.Y(), "Diag_XYoffset");
+              plotter->Fill2D("Diag_Combined_A1C2_time_vs_phi", 2000, 0, 2000, 180, -180, 180,
+                              pcevent.Time1 * 1e-9, phi_deg, "Diag_XYoffset");
+              plotter->Fill2D("Diag_SX3_A1C2_T_vs_vtxX", 2000, 0, 2000, 200, -15, 15,
+                              pcevent.Time1 * 1e-9, vtx_ref.X(), "Diag_XYoffset");
+              plotter->Fill2D("Diag_SX3_A1C2_T_vs_vtxY", 2000, 0, 2000, 200, -15, 15,
+                              pcevent.Time1 * 1e-9, vtx_ref.Y(), "Diag_XYoffset");
+            }
+
             doA1C1("A1C1", sx3event.pos, false);
             doAnodeOnly("A1C0", sx3event.pos.Phi(), sx3event.pos, false);
             doA1C1("A1C1_Hyb", smeared_sx3_pos);
@@ -1942,10 +1989,16 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
               double theta_ref = (sx3event.pos - TVector3(0, 0, vtx_ref.Z())).Theta() * 180. / M_PI;
               plotter->Fill2D("Benchmark_SX3_PCZ_A1C0_minus_ref_vs_theta", 180, 0, 180, 400, -200, 200,
                               theta_ref, pcz_a1c0 - pcz_ref, "Benchmark_SX3_ref");
-              // COMBINED QQQ+SX3 (same histogram) so the theta-dependence reads as one
-              // continuous curve across the full angular range.
               plotter->Fill2D("Benchmark_PCZ_A1C0_minus_ref_vs_theta", 180, 0, 180, 400, -200, 200,
                               theta_ref, pcz_a1c0 - pcz_ref, "Benchmark_AnodeOnly");
+
+              // A1C0 z-residual vs phi: if XY offset is the root cause, this should
+              // show the same cos(phi-phi0) as the A1C2 vertex diagnostic above.
+              double phi_deg_a = sx3event.pos.Phi() * 180.0 / M_PI;
+              plotter->Fill2D("Diag_SX3_A1C0_zresid_vs_phi", 180, -180, 180, 200, -100, 100,
+                              phi_deg_a, pcz_a1c0 - pcz_ref, "Diag_XYoffset");
+              plotter->Fill2D("Diag_Combined_A1C0_zresid_vs_phi", 180, -180, 180, 200, -100, 100,
+                              phi_deg_a, pcz_a1c0 - pcz_ref, "Diag_XYoffset");
             }
 
             // --- A1C1 charge-fraction diagnostics ---
@@ -2390,6 +2443,27 @@ void PCQQQClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
             if (pcevent.multi1 == 1 && pcevent.multi2 == 2)
             {
               fillSuite("A1C2", pcz_ref, vtx_ref);
+
+              // XY-offset diagnostic (QQQ twin of SX3 block above)
+              {
+                double phi_deg = qqqevent.pos.Phi() * 180.0 / M_PI;
+                double vz_resid = vtx_ref.Z() - source_vertex;
+                plotter->Fill2D("Diag_QQQ_A1C2_vtxZ_resid_vs_phi", 180, -180, 180, 200, -50, 50,
+                                phi_deg, vz_resid, "Diag_XYoffset");
+                plotter->Fill2D("Diag_Combined_A1C2_vtxZ_resid_vs_phi", 180, -180, 180, 200, -50, 50,
+                                phi_deg, vz_resid, "Diag_XYoffset");
+                plotter->Fill2D("Diag_QQQ_A1C2_vtxXY", 200, -15, 15, 200, -15, 15,
+                                vtx_ref.X(), vtx_ref.Y(), "Diag_XYoffset");
+                plotter->Fill2D("Diag_Combined_A1C2_time_vs_phi", 2000, 0, 2000, 180, -180, 180,
+                                pcevent.Time1 * 1e-9, phi_deg, "Diag_XYoffset");
+                plotter->Fill2D("Diag_QQQ_A1C2_time_vs_phi", 2000, 0, 2000, 180, -180, 180,
+                                pcevent.Time1 * 1e-9, phi_deg, "Diag_XYoffset");
+                plotter->Fill2D("Diag_QQQ_A1C2_T_vs_vtxX", 2000, 0, 2000, 200, -15, 15,
+                                pcevent.Time1 * 1e-9, vtx_ref.X(), "Diag_XYoffset");
+                plotter->Fill2D("Diag_QQQ_A1C2_T_vs_vtxY", 2000, 0, 2000, 200, -15, 15,
+                                pcevent.Time1 * 1e-9, vtx_ref.Y(), "Diag_XYoffset");
+              }
+
               doA1C1("A1C1", qqqevent.pos, false);
               doAnodeOnly("A1C0", qqqevent.pos.Phi(), qqqevent.pos, false);
               doA1C1("A1C1_Hyb", smeared_qqq_pos);
@@ -2405,9 +2479,14 @@ void PCQQQClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
                 double theta_ref = (qqqevent.pos - TVector3(0, 0, vtx_ref.Z())).Theta() * 180. / M_PI;
                 plotter->Fill2D("Benchmark_QQQ_PCZ_A1C0_minus_ref_vs_theta", 180, 0, 180, 400, -200, 200,
                                 theta_ref, pcz_a1c0 - pcz_ref, "Benchmark_QQQ_ref");
-                // COMBINED QQQ+SX3 (same histogram) -> one continuous curve vs theta.
                 plotter->Fill2D("Benchmark_PCZ_A1C0_minus_ref_vs_theta", 180, 0, 180, 400, -200, 200,
                                 theta_ref, pcz_a1c0 - pcz_ref, "Benchmark_AnodeOnly");
+
+                double phi_deg_a = qqqevent.pos.Phi() * 180.0 / M_PI;
+                plotter->Fill2D("Diag_QQQ_A1C0_zresid_vs_phi", 180, -180, 180, 200, -100, 100,
+                                phi_deg_a, pcz_a1c0 - pcz_ref, "Diag_XYoffset");
+                plotter->Fill2D("Diag_Combined_A1C0_zresid_vs_phi", 180, -180, 180, 200, -100, 100,
+                                phi_deg_a, pcz_a1c0 - pcz_ref, "Diag_XYoffset");
               }
 
               // --- A1C1 charge-fraction diagnostics ---
@@ -3037,7 +3116,7 @@ void TrackRecon::OldAnalysis()
 void miscHistograms_oneWire(HistPlotter *plotter, const std::vector<Event> &QQQ_Events, const std::vector<std::vector<std::tuple<int, double, double>>> &aClusters)
 {
   // consider the 'proton-like' QQQ branch seen in a,p data
-  static TRandom3 rnd(0);
+  static TRandom3 rand(0); // seeded once (random seed via TUUID), not per call
   double initial_energy = 7.0;
   if (dataset == "27Al") /// m3 is alpha, 6.79 MeV is 7.0 MeV proton energy after kapton+100mm 4He gas (molar mass 5.6, 1 gain)
     initial_energy = 6.79;
@@ -3051,7 +3130,7 @@ void miscHistograms_oneWire(HistPlotter *plotter, const std::vector<Event> &QQQ_
     if (qqqevent.Energy1 < 0.6)
       continue; // coarse gating
     // if(qqqevent.Energy1 > 5.0) continue; //coarse gating
-    for (const  auto &acluster : aClusters)
+    for (const auto &acluster : aClusters)
     {
       auto [apwire, apSumE, apMaxE, apTSMaxE] = pwinstance.GetPseudoWire(acluster, "ANODE");
       // if(apSumE<6000) continue;
@@ -3129,7 +3208,7 @@ void miscHistograms_oneWire(HistPlotter *plotter, const std::vector<Event> &QQQ_
 void protonMiscHistograms(HistPlotter *plotter, const std::vector<Event> &QQQ_Events, const std::vector<Event> &SX3_Events, const std::vector<Event> &PC_Events)
 {
   // consider the 'proton-like' QQQ branch seen in a,p data
-  static TRandom3 rnd(0);
+  static TRandom3 rand(0); // seeded once (random seed via TUUID), not per call
   double initial_energy = 7.0;
   if (dataset == "27Al")
     initial_energy = 6.79; // m3 is alpha, 6.79 MeV is 7.0 MeV proton energy after kapton+100mm 4He gas (molar mass 5.2, 1 gain)
@@ -3158,7 +3237,7 @@ void protonMiscHistograms(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
         pcz_fix = pcfix_func.Eval(pcevent.pos.Z());
       else
       {
-        pcz_fix = rnd.Gaus(pcevent.pos.Z(), 8.0); // dither for a1c1 events
+        pcz_fix = rand.Gaus(pcevent.pos.Z(), 8.0); // dither for a1c1 events
         pcz_dith = pcz_fix;
       }
 
@@ -3310,7 +3389,7 @@ void protonMiscHistograms(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
 void protonMiscHistograms_sx3(HistPlotter *plotter, const std::vector<Event> &QQQ_Events, const std::vector<Event> &SX3_Events, const std::vector<Event> &PC_Events)
 {
   // consider the 'proton-like' QQQ branch seen in a,p data
-  static TRandom3 rnd(0);
+  static TRandom3 rand(0); // seeded once (random seed via TUUID), not per call
   for (const auto &sx3event : SX3_Events)
   {
     if (sx3event.Energy1 < 1.2)
@@ -3426,7 +3505,7 @@ void protonMiscHistograms_sx3(HistPlotter *plotter, const std::vector<Event> &QQ
         }
       };
 
-      fillCmp(rnd.Gaus(pcevent.pos.Z(), 8.0), "dither"); // method 1: Gaussian dither baseline
+      fillCmp(rand.Gaus(pcevent.pos.Z(), 8.0), "dither"); // method 1: Gaussian dither baseline
 
       // method 2: cfrac sub-cell linear centre-fold (side ref = anode-only z
       // rebuilt from the fired anode wire)

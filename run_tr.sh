@@ -77,7 +77,7 @@ if [[ 1 -eq 1 ]]; then
     export source_vertex=14.24;  process_run 19
     export source_vertex=-24.96; process_run 20
     export source_vertex=-73.96; process_run 21
-    exit
+    # exit
 fi
 
 # --- Block 3: 27Al Protons+Gas Runs (15, 17-22) ---
