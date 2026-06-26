@@ -140,7 +140,7 @@ double a1c1_lowband_rfactor = 0.0; // r-space gain applied to low-band cfrac; <=
 // Env: A1C1_Z_SCALE_QQQ, A1C1_Z_SCALE_SX3, A1C1_Z_OFF_QQQ, A1C1_Z_OFF_SX3.
 double a1c1_z_scale_qqq = 0.0111081;
 double a1c1_z_off_qqq = 34.501;
-double a1c1_z_scale_sx3 = -0.0639365;
+double a1c1_z_scale_sx3 = 0;
 double a1c1_z_off_sx3 = 2.52614;
 inline double a1c1_zcorr(double z_a1c0, bool isQQQ)
 {
@@ -1705,23 +1705,33 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
     double anodeTS = std::get<3>(aPw);
     for (const auto &sx3event : SX3_Events)
     {
-      bool PCSX3TimeCut = (sx3event.Time1 - anodeTS < 0);
+      bool PCSX3TimeCut = (sx3event.Time1 - anodeTS < 150);
+      double sx3_phi_pitch = 6.5 * (M_PI / 180.0);
+      double smeared_phi = sx3event.pos.Phi() + rand.Uniform(-sx3_phi_pitch / 2.0, sx3_phi_pitch / 2.0);
+      TVector3 smeared_sx3(sx3event.pos.Perp() * TMath::Cos(smeared_phi), sx3event.pos.Perp() * TMath::Sin(smeared_phi), sx3event.pos.Z());
+
       TVector3 pc = pwinstance.getClosestWirePosAtWirePhi(apwire_bm, sx3event.pos.Phi());
+      pc.SetZ(a1c1_zcorr(pc.Z(), true));
+      double pc_dither = rand.Gaus(pc.Z(), dither_sigma);
+
       bool phicut = (sx3event.pos.Phi() <= pc.Phi() + TMath::Pi() / 4. &&
                      sx3event.pos.Phi() >= pc.Phi() - TMath::Pi() / 4.);
       if (!(phicut && PCSX3TimeCut))
         continue;
       TVector3 vtx0 = vertexFrom(sx3event.pos, pc);
+      TVector3 vtx1 = vertexFrom(smeared_sx3, TVector3(pc.X(), pc.Y(), pc_dither));
+
       if (!(vtx0.Perp() <= 6.0 && vtx0.Z() >= -173.6))
         continue;
       double sx3theta = TMath::ATan2(88.0, sx3event.pos.Z() - source_vertex);
       double pczguess = 37.0 / TMath::Tan(sx3theta) + source_vertex;
-      plotter->Fill1D("Benchmark_SX3_VertexZ_trueA1C0", 800, -400, 400, vtx0.Z(), "A1C0true");
-      plotter->Fill1D("Benchmark_SX3_VertexZ_trueA1C0_TC" + std::to_string(PCSX3TimeCut) + "_PC" + std::to_string(phicut), 800, -400, 400, vtx0.Z(), "A1C0true");
-      plotter->Fill2D("Benchmark_SX3_VertexXY_trueA1C0", 200, -100, 100, 200, -100, 100, vtx0.X(), vtx0.Y(), "A1C0true");
-      plotter->Fill1D("Benchmark_SX3_PCZ_trueA1C0", 600, -200, 200, pc.Z(), "A1C0true");
-      plotter->Fill2D("Benchmark_SX3_PCZ_trueA1C0_vs_sx3pczguess", 400, -200, 200, 400, -200, 200, pczguess, pc.Z(), "A1C0true");
-      plotter->Fill1D("Benchmark_SX3_PCZ_trueA1C0_minus_sx3pczguess", 400, -100, 100, pc.Z() - pczguess, "A1C0true");
+      plotter->Fill1D("Benchmark_SX3_VertexZ_trueA1C0", 800, -400, 400, vtx0.Z(), "A1C0True");
+      plotter->Fill1D("Benchmark_SX3_VertexZ_trueA1C0_Hybrid", 800, -400, 400, vtx1.Z(), "A1C0True");
+      plotter->Fill1D("Benchmark_SX3_VertexZ_trueA1C0_Hybrid_TC" + std::to_string(PCSX3TimeCut) + "_PC" + std::to_string(phicut), 800, -400, 400, vtx1.Z(), "A1C0True");
+      plotter->Fill2D("Benchmark_SX3_VertexXY_trueA1C0_Hybrid", 200, -100, 100, 200, -100, 100, vtx1.X(), vtx1.Y(), "A1C0True");
+      plotter->Fill1D("Benchmark_SX3_PCZ_trueA1C0_Hybrid", 600, -200, 200, pc_dither, "A1C0True");
+      plotter->Fill2D("Benchmark_SX3_PCZ_trueA1C0_Hybrid_vs_sx3pczguess", 400, -200, 200, 400, -200, 200, pczguess, pc_dither, "A1C0True");
+      plotter->Fill1D("Benchmark_SX3_PCZ_trueA1C0_Hybrid_minus_sx3pczguess", 400, -100, 100, pc_dither - pczguess, "A1C0True");
     }
   }
 
@@ -2266,22 +2276,33 @@ void PCQQQClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
     double anodeTS = std::get<3>(aPw);
     for (const auto &qqqevent : QQQ_Events)
     {
-      bool timecut = (qqqevent.Time1 - anodeTS < 0);
-      TVector3 pc = pwinstance.getClosestWirePosAtWirePhi(apwire_bm, qqqevent.pos.Phi());
+      bool timecut = (qqqevent.Time1 - anodeTS < 150);
+      double qqq_wedge_pitch = (87.0 / 16.0) * (M_PI / 180.0);
+      double qqq_ring_pitch = 48.0 / 16.0;
+      double smeared_phi = qqqevent.pos.Phi() + rand.Uniform(-qqq_wedge_pitch / 2.0, qqq_wedge_pitch / 2.0);
+      double smeared_rho = qqqevent.pos.Perp() + rand.Uniform(-qqq_ring_pitch / 2.0, qqq_ring_pitch / 2.0);
+      TVector3 smeared_qqq(smeared_rho * TMath::Cos(smeared_phi), smeared_rho * TMath::Sin(smeared_phi), qqqevent.pos.Z());
+
+      TVector3 pc = pwinstance.getClosestWirePosAtWirePhi(apwire_bm, smeared_phi);
+      pc.SetZ(a1c1_zcorr(pc.Z(), true));
+      double pc_dither = rand.Gaus(pc.Z(), dither_sigma_c0 / 2.0);
       bool phicut = (qqqevent.pos.Phi() <= pc.Phi() + TMath::Pi() / 4. &&
                      qqqevent.pos.Phi() >= pc.Phi() - TMath::Pi() / 4.);
       if (!(phicut && timecut))
         continue;
       TVector3 vtx0 = vertexFrom(qqqevent.pos, pc);
+      TVector3 vtx1 = vertexFrom(smeared_qqq, TVector3(pc.X(), pc.Y(), pc_dither));
+
       if (!(vtx0.Perp() <= 6.0 && vtx0.Z() >= -173.6))
         continue;
       double pcz_guess_37 = 37. / TMath::Tan((qqqevent.pos - TVector3(0, 0, source_vertex)).Theta()) + source_vertex;
       plotter->Fill1D("Benchmark_QQQ_VertexZ_trueA1C0", 800, -400, 400, vtx0.Z(), "A1C0True");
-      plotter->Fill1D("Benchmark_QQQ_VertexZ_trueA1C0_TC" + std::to_string(timecut) + "_PC" + std::to_string(phicut), 800, -400, 400, vtx0.Z(), "A1C0True");
-      plotter->Fill2D("Benchmark_QQQ_VertexXY_trueA1C0", 200, -100, 100, 200, -100, 100, vtx0.X(), vtx0.Y(), "A1C0True");
-      plotter->Fill1D("Benchmark_QQQ_PCZ_trueA1C0", 600, -200, 200, pc.Z(), "A1C0True");
-      plotter->Fill2D("Benchmark_QQQ_PCZ_trueA1C0_vs_qqqpczguess", 400, -200, 200, 400, -200, 200, pcz_guess_37, pc.Z(), "A1C0True");
-      plotter->Fill1D("Benchmark_QQQ_PCZ_trueA1C0_minus_qqqpczguess", 400, -100, 100, pc.Z() - pcz_guess_37, "A1C0True");
+      plotter->Fill1D("Benchmark_QQQ_VertexZ_trueA1C0_Hybrid", 800, -400, 400, vtx1.Z(), "A1C0True");
+      plotter->Fill1D("Benchmark_QQQ_VertexZ_trueA1C0_Hybrid_TC" + std::to_string(timecut) + "_PC" + std::to_string(phicut), 800, -400, 400, vtx1.Z(), "A1C0True");
+      plotter->Fill2D("Benchmark_QQQ_VertexXY_trueA1C0_Hybrid", 200, -100, 100, 200, -100, 100, vtx1.X(), vtx1.Y(), "A1C0True");
+      plotter->Fill1D("Benchmark_QQQ_PCZ_trueA1C0_Hybrid", 600, -200, 200, pc_dither, "A1C0True");
+      plotter->Fill2D("Benchmark_QQQ_PCZ_trueA1C0_Hybrid_vs_qqqpczguess", 400, -200, 200, 400, -200, 200, pcz_guess_37, pc_dither, "A1C0True");
+      plotter->Fill1D("Benchmark_QQQ_PCZ_trueA1C0_Hybrid_minus_qqqpczguess", 400, -100, 100, pc_dither - pcz_guess_37, "A1C0True");
     }
   }
 
