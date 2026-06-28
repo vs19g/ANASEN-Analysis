@@ -27,6 +27,7 @@ Int_t colors[40] = {
 #include <TMath.h>
 #include <TBranch.h>
 #include <TVector3.h>
+#include <TVector2.h>
 #include <TRandom3.h>
 
 #include <fstream>
@@ -39,7 +40,7 @@ Int_t colors[40] = {
 #include <algorithm>
 
 bool process_alpha_proton_scattering = false;
-bool doMiscHistograms = false;
+bool doMiscHistograms = true;
 bool doPCSX3ClusterAnalysis = true;
 bool doPCQQQClusterAnalysis = true;
 bool doOldAnalysis = false;
@@ -136,6 +137,8 @@ double a1c1_missing_fmax = 2.0; // f-ceiling when a neighbouring wire is dead (1
 // median(r_main)/median(r_low) over the two bands. <=0 disables the fold (then
 // low-band events fall back to the separate cfmin2/k2 set). Env: A1C1_LOWBAND_RFACTOR.
 double a1c1_lowband_rfactor = 0.0; // r-space gain applied to low-band cfrac; <=0 = off
+double cathode_gain = 1.0;         // used to bring Al cathode data to the same level as the F data, this way we can use the same
+// cfrac parameters for eerything
 
 // --- Anode-only (A1C0) z scale+offset correction -------------------------------
 // From a TProfile fit of z_a1c0 vs z_ref:  z_a1c0 = A*z_ref + B
@@ -309,12 +312,11 @@ TGraph *MeV_to_cm_17F = NULL, *cm_to_MeV_17F = NULL;
 
 // declaring masses for kinematics calculations
 double mass_27Al = 26.981538;
-double mass_4He = 4.002603;
-double mass_1H = 1.007825;
+double mass_4He = 4.002603254;
+double mass_1H = 1.007825032;
 double mass_30Si = 29.973770;
 double mass_17F = 17.002095;
 double mass_20Ne = 19.992440;
-
 
 // new Parabola for 4wire shift
 double z_to_crossover_rho(double z)
@@ -424,6 +426,9 @@ void TrackRecon::Begin(TTree * /*tree*/)
   if (getenv("Gain"))
     Gain = std::atof(getenv("Gain"));
 
+  if (getenv("CATHODE_GAIN"))
+    cathode_gain = std::atof(getenv("CATHODE_GAIN"));
+
   // --- A1C1 per-cell linear centre-fold constants: select the static, offline-
   // optimised set for this dataset (cfmin floats with the arbitrary gain, so the
   // values are dataset-specific). Re-fit them with fit_a1c1_cfrac.C on prebuilt
@@ -445,8 +450,8 @@ void TrackRecon::Begin(TTree * /*tree*/)
   a1c1_dead_cathode = &a1c1_dead_cathode_17F;
   if (dataset == "27Al")
   {
-    cfmin_src = a1c1_cfmin_27Al;
-    k_src = a1c1_k_27Al;
+    cfmin_src = a1c1_cfmin_17F;
+    k_src = a1c1_k_17F;
     cfmin2_src = a1c1_cfmin2_27Al;
     k2_src = a1c1_k2_27Al;
     a1c1_cfrac_split = 0.0;     // 27Al: no second band, low band disabled
@@ -576,10 +581,14 @@ void TrackRecon::Begin(TTree * /*tree*/)
 
   if (dataset == "17F" && CO2percent == 3)
   {
-    MeV_to_cm = new TGraph("eloss_calculations/alpha_lookup_20MeV_3pc.dat", "%lf %*lf %lf");
-    MeV_to_cm_p = new TGraph("eloss_calculations/proton_lookup_20MeV_3pc.dat", "%lf %*lf %lf");
-    MeV_to_cm_27Al = new TGraph("eloss_calculations/aluminum_lookup_80MeV_3pc.dat", "%lf %*lf %lf");
-    MeV_to_cm_17F = new TGraph("eloss_calculations/fluorine_lookup_70MeV_3pc.dat", "%lf %*lf %lf");
+    if (!MeV_to_cm)
+      MeV_to_cm = new TGraph("eloss_calculations/alpha_lookup_20MeV_3pc.dat", "%lf %*lf %lf");
+    if (!MeV_to_cm_p)
+      MeV_to_cm_p = new TGraph("eloss_calculations/proton_lookup_20MeV_3pc.dat", "%lf %*lf %lf");
+    if (!MeV_to_cm_27Al)
+      MeV_to_cm_27Al = new TGraph("eloss_calculations/aluminum_lookup_80MeV_3pc.dat", "%lf %*lf %lf");
+    if (!MeV_to_cm_17F)
+      MeV_to_cm_17F = new TGraph("eloss_calculations/fluorine_lookup_70MeV_3pc.dat", "%lf %*lf %lf");
 
     // MeV_to_cm = new TGraph("eloss_calculations/alpha_lookup_20MeV_3pc_350Torr.dat", "%lf %*lf %lf");
     // MeV_to_cm_p = new TGraph("eloss_calculations/proton_lookup_20MeV_3pc_350Torr.dat", "%lf %*lf %lf");
@@ -759,8 +768,11 @@ Bool_t TrackRecon::Process(Long64_t entry)
         // if(backE<2000) continue;
         det.stripF = 3 - det.stripF;
 
-        double alpha_n = TMath::ATan2((2 * det.stripF - 3) * 40.30, 8.0 * 88.0 * TMath::Cos(15.0 * M_PI / 180.0)) * 180. / M_PI; // angle subtended w.r.t the radial perpendicular bisector of each sx3
-        double beta_n = 15.0 + alpha_n;                                                                                          // how much to add per strip to the starting position? this is the angle w.r.t an edge of the sx3, the above values run as (-10.08deg, -3.39deg, 3.39deg, 10.08deg)
+        double strip_pitch = 40.30 / 4.0;                  // ~10.075 mm
+        double y_local = (det.stripF - 1.5) * strip_pitch; // gives -15.11, -5.03, +5.03, +15.11
+        double x_local = 88.0 * TMath::Cos(15.0 * M_PI / 180.0);
+        double alpha_n = TMath::ATan2(y_local, x_local) * 180. / M_PI;
+        double beta_n = 15.0 + alpha_n; // how much to add per strip to the starting position? this is the angle w.r.t an edge of the sx3, the above values run as (-10.08deg, -3.39deg, 3.39deg, 10.08deg)
         double phi_n = ((-id + 0.5) * 30 + beta_n);
         phi_n += 45;
         double rho_at_strip = 88.0 / TMath::Cos(alpha_n * M_PI / 180.0); //*TMath::Cos(15.0*M_PI/180.0) if the edge-length is 88mm
@@ -905,11 +917,11 @@ Bool_t TrackRecon::Process(Long64_t entry)
 
           // double theta = 2 * TMath::Pi() * (-qqq.id[i] * 16 + (15 - chWedge) + 0.5) / (16 * 4);
 
-          double theta = (M_PI / 180.) * (-90 * qqq.id[i] + (87. / 16.) * ((15 - chWedge) + 0.5) + 3.0);
+          double phi_qqq = (M_PI / 180.) * (-90 * qqq.id[i] + (87. / 16.) * ((15 - chWedge) + 0.5) + 3.0);
           double rho = 50. + (50. / 16.) * (chRing + 0.5); //"?"
           // z used to be 75+30+23=128
           // we found a 12mm shift towards the vertex later --> 116
-          Event qqqevent(TVector3(rho * TMath::Cos(theta), rho * TMath::Sin(theta), qqq_z), eRingMeV, eWedgeMeV, tRing, tWedge, chRing + qqq.id[i] * 16, chWedge + qqq.id[i] * 16);
+          Event qqqevent(TVector3(rho * TMath::Cos(phi_qqq), rho * TMath::Sin(phi_qqq), qqq_z), eRingMeV, eWedgeMeV, tRing, tWedge, chRing + qqq.id[i] * 16, chWedge + qqq.id[i] * 16);
           // Event qqqeventr(TVector3(rho * TMath::Cos(theta), rho * TMath::Sin(theta), qqq_z), eRing, eWedge, tRing, tWedge, chRing + qqq.id[i] * 16, chWedge + qqq.id[i] * 16);
 
           QQQ_Events.push_back(qqqevent);
@@ -969,10 +981,10 @@ Bool_t TrackRecon::Process(Long64_t entry)
         {
           // double theta = -TMath::Pi() / 2 + 2 * TMath::Pi() / 16 / 4. * (qqq.id[i] * 16 + chWedge + 0.5);
           // double rho = 50. + (50. / 16.) * (chRing + 0.5); //"?"
-          double theta = 2 * TMath::Pi() * (-qqq.id[i] * 16 + (15 - chWedge) + 0.5) / (16 * 4);
+          double phi_qqq = (2 * M_PI) * (-90 * qqq.id[i] + (87. / 16.) * ((15 - chWedge) + 0.5) + 3.0);
           double rho = 50. + (50. / 16.) * (chRing + 0.5); //"?"
-          double x = rho * TMath::Cos(theta);
-          double y = rho * TMath::Sin(theta);
+          double x = rho * TMath::Cos(phi_qqq);
+          double y = rho * TMath::Sin(phi_qqq);
           hitPos.SetXYZ(x, y, qqq_z);
           qqqenergy = eRingMeV;
           qqqtimestamp = tRing;
@@ -1001,10 +1013,12 @@ Bool_t TrackRecon::Process(Long64_t entry)
     }
 #endif
 
-    if (pc.index[i] < 48)
+    pc.e[i] = pcSlope[pc.index[i]] * pc.e[i] + pcIntercept[pc.index[i]];
+    if (pc.e[i] > 50)
     {
-      pc.e[i] = pcSlope[pc.index[i]] * pc.e[i] + pcIntercept[pc.index[i]];
-      if (pc.e[i] > 50)
+      if (pc.index[i] >= 24)
+        plotter->Fill2D("PC_Index_VS_GainMatched_Energy", 48, 0, 48, 2000, 0, 30000, pc.index[i], pc.e[i] * cathode_gain, "hGMPC");
+      else
         plotter->Fill2D("PC_Index_VS_GainMatched_Energy", 48, 0, 48, 2000, 0, 30000, pc.index[i], pc.e[i], "hGMPC");
     }
     if (pc.e[i] > 50)
@@ -1019,7 +1033,8 @@ Bool_t TrackRecon::Process(Long64_t entry)
       {
         cathodeT = static_cast<double>(pc.t[i]);
         cathodeIndex = pc.index[i] - 24;
-        cWireEvents[pc.index[i] - 24] = std::tuple(pc.index[i] - 24, pc.e[i], static_cast<double>(pc.t[i]));
+        // cWireEvents[pc.index[i] - 24] = std::tuple(pc.index[i] - 24, pc.e[i], static_cast<double>(pc.t[i]));
+        cWireEvents[pc.index[i] - 24] = std::tuple(pc.index[i] - 24, pc.e[i] * cathode_gain, static_cast<double>(pc.t[i]));
       }
     }
 
@@ -1075,7 +1090,7 @@ Bool_t TrackRecon::Process(Long64_t entry)
       }
       else if (pc.index[i] >= 24)
       {
-        cathodeHits.push_back(std::pair<int, double>(pc.index[i] - 24, pc.e[i]));
+        cathodeHits.push_back(std::pair<int, double>(pc.index[i] - 24, pc.e[i] * cathode_gain));
       }
     }
   }
@@ -1505,7 +1520,7 @@ Bool_t TrackRecon::Process(Long64_t entry)
       // Energy Loss Correction
       double path_length = (qqqevent.pos - TVector3(0, 0, vertex_recon)).Mag() * 0.1;
       double qqqEfix = cm_to_MeVp->Eval(MeV_to_cm_p->Eval(qqqevent.Energy1) - path_length);
-      double qqqEfixalpha = cm_to_MeV->Eval(MeV_to_cm->Eval(qqqevent.Energy2) - path_length);
+      double qqqEfixalpha = cm_to_MeV->Eval(MeV_to_cm->Eval(qqqevent.Energy1) - path_length);
 
       double theta_recon = (qqqevent.pos - TVector3(0, 0, vertex_recon)).Theta();
       double sinTheta = TMath::Sin(theta_recon);
@@ -1552,14 +1567,14 @@ void protonAlphaHistograms(HistPlotter *plotter, const std::vector<Event> &QQQ_E
 
   // Sidetrack for a(p,p)
   std::string aplabel = "a(p,p)";
-  double initial_energy = 7.0;
-  if (dataset == "27Al")
-    initial_energy = 6.79;
-  if (dataset == "17F")
-    initial_energy = 6.78;
+  double initial_energy = 6.78;
+  // if (dataset == "27Al")
+  //   initial_energy = 6.78;
+  // if (dataset == "17F")
+  //   initial_energy = 6.78;
 
-  Kinematics apkin_p(1.008664916, 4.002603254, 1.008664916, 4.002603254, initial_energy); // m3 is proton
-  Kinematics apkin_a(1.008664916, 4.002603254, 4.002603254, 1.008664916, initial_energy); // m3 is alpha
+  Kinematics apkin_p(mass_1H, mass_4He, mass_1H, mass_4He, initial_energy); // m3 is proton
+  Kinematics apkin_a(mass_1H, mass_4He, mass_4He, mass_1H, initial_energy); // m3 is alpha
 
   for (const auto &qqqevent : QQQ_Events)
   {
@@ -1755,7 +1770,7 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
         plotter->Fill2D("dE_E_Cathodesx3B_a1c0", 400, 0, 30, 800, 0, 10000, sx3event.Energy1, pcevent.Energy2, "PID_dE_E");
 
       plotter->Fill2D("sx3phi_vs_pcphi" + std::to_string(sx3event.Time1 - pcevent.Time1 < -150), 100, -360, 360, 100, -360, 360, sx3event.pos.Phi() * 180 / M_PI, pcevent.pos.Phi() * 180 / M_PI, "Kinematics_Angles");
-      plotter->Fill1D("sx3phi_minus_pcphi" + std::to_string(sx3event.Time1 - pcevent.Time1 < -150), 100, -180, 180, (sx3event.pos.Phi() - pcevent.pos.Phi()) * 180 / M_PI, "Kinematics_Angles");
+      plotter->Fill1D("sx3phi_minus_pcphi" + std::to_string(sx3event.Time1 - pcevent.Time1 < -150), 100, -180, 180, (sx3event.pos.DeltaPhi(pcevent.pos)) * 180 / M_PI, "Kinematics_Angles");
 
       if (PCSX3TimeCut)
       {
@@ -1841,10 +1856,16 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
         plotter->Fill2D("sx3E_vs_sx3z", 400, 0, 30, 300, 0, 200, sx3event.Energy1, sx3z, "Kinematics_Angles");
 
         plotter->Fill2D("pcdEA_vs_sx3z", 800, 0, 20000, 300, 0, 200, pcevent.Energy1, sx3z, "Kinematics_Angles");
+        plotter->Fill2D("pcdEA_vs_sx3pczguess", 800, 0, 20000, 600, -200, 200, pcevent.Energy1, pczguess, "Kinematics_Angles");
+        plotter->Fill2D("pcdEA_vs_pczfix", 800, 0, 20000, 600, -200, 200, pcevent.Energy1, pcz_fix, "Kinematics_Angles");
         plotter->Fill2D("pcdEC_vs_sx3z", 800, 0, 20000, 300, 0, 200, pcevent.Energy2, sx3z, "Kinematics_Angles");
+        plotter->Fill2D("pcdEC_vs_sx3pczguess", 800, 0, 20000, 600, -200, 200, pcevent.Energy2, pczguess, "Kinematics_Angles");
+        plotter->Fill2D("pcdEC_vs_pczfix", 800, 0, 20000, 600, -200, 200, pcevent.Energy2, pcz_fix, "Kinematics_Angles");
 
         plotter->Fill2D("pcdEA_vs_sx3z" + std::to_string(sx3event.ch2), 800, 0, 20000, 300, 0, 200, pcevent.Energy1, sx3z, "Kinematics_Angles");
+        plotter->Fill2D("pcdEA_vs_sx3pczguess" + std::to_string(sx3event.ch2), 800, 0, 20000, 600, -200, 200, pcevent.Energy1, pczguess, "Kinematics_Angles");
         plotter->Fill2D("pcdEC_vs_sx3z" + std::to_string(sx3event.ch2), 800, 0, 20000, 300, 0, 200, pcevent.Energy2, sx3z, "Kinematics_Angles");
+        plotter->Fill2D("pcdEC_vs_sx3pczguess" + std::to_string(sx3event.ch2), 800, 0, 20000, 600, -200, 200, pcevent.Energy2, pczguess, "Kinematics_Angles");
 
         plotter->Fill2D("pcdE2A_vs_sx3z", 800, 0, 20000, 300, 0, 200, pcevent.Energy1 * sinTheta, sx3z, "Kinematics_Angles");
         plotter->Fill2D("pcdE2C_vs_sx3z", 800, 0, 20000, 300, 0, 200, pcevent.Energy2 * sinTheta, sx3z, "Kinematics_Angles");
@@ -2292,7 +2313,6 @@ void PCQQQClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
       plotter->Fill2D("dt_pcA_qqqR_vs_qqqRE", 640, -2000, 2000, 400, 0, 30, qqqevent.Time1 - pcevent.Time1, qqqevent.Energy1, "Timing");
       plotter->Fill1D("dt_pcC_qqqW", 640, -2000, 2000, qqqevent.Time2 - pcevent.Time2, "Timing");
       plotter->Fill2D("phiPC_vs_phiQQQ", 180, -360, 360, 180, -360, 360, qqqevent.pos.Phi() * 180 / M_PI, pcevent.pos.Phi() * 180 / M_PI, "Kinematics_Angles");
-      plotter->Fill1D("phiQQQ_minus_phiPC", 180, -180, 180, (qqqevent.pos.Phi() - pcevent.pos.Phi()) * 180 / M_PI, "Kinematics_Angles");
 
       double qqqTheta = (qqqevent.pos - TVector3(0, 0, source_vertex)).Theta();
       double sinTheta = TMath::Sin(qqqTheta);
@@ -2352,6 +2372,12 @@ void PCQQQClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
         plotter->Fill2D("dE2_theta_AnodeQQQR_zoomin", 60, 0, 30, 400, 0, 5000, qqqTheta * 180 / M_PI, pcevent.Energy1 * sinTheta, "Kinematics_Angles");
         plotter->Fill2D("dE2_theta_AnodeQQQR", 90, 0, 90, 400, 0, 20000, qqqTheta * 180 / M_PI, pcevent.Energy1 * sinTheta, "Kinematics_Angles");
         plotter->Fill2D("phiPC_vs_phiQQQ_TimeCut", 180, -360, 360, 180, -360, 360, qqqevent.pos.Phi() * 180 / M_PI, pcevent.pos.Phi() * 180 / M_PI, "Kinematics_Angles");
+        double pcz_guess_37 = 37. / TMath::Tan(qqqTheta) + source_vertex;
+
+        if ((qqqevent.ch1) % 16 == 7)
+          plotter->Fill2D("phiPC_vs_phiQQQ_TimeCut_allring8", 180, -360, 360, 180, -360, 360, qqqevent.pos.Phi() * 180 / M_PI, pcevent.pos.Phi() * 180 / M_PI, "Kinematics_Angles");
+
+        plotter->Fill1D("phiQQQ_minus_phiPC_TimeCut_QQQ" + std::to_string(qqqevent.ch1 / 16), 180, -180, 180, qqqevent.pos.DeltaPhi(pcevent.pos) * 180 / M_PI, "Kinematics_Angles");
 
         plotter->Fill2D("Etot2_theta_AnodeQQQR", 75, 0, 90, 300, 0, 15, qqqTheta * 180 / M_PI, qqqevent.Energy1 + pcevent.Energy1 * anode_gain * sinTheta, "Kinematics_Angles");
 
@@ -2360,10 +2386,12 @@ void PCQQQClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
         plotter->Fill2D("dE2_theta_CathodeQQQR_zoomin", 60, 0, 30, 800, 0, 3000, qqqTheta * 180 / M_PI, pcevent.Energy2 * sinTheta, "Kinematics_Angles");
 
         plotter->Fill2D("dE_phi_AnodeQQQR", 100, -180, 180, 800, 0, 40000, (qqqevent.pos - TVector3(0, 0, source_vertex)).Phi() * 180 / M_PI, pcevent.Energy1, "Kinematics_Angles");
-        plotter->Fill2D("dE_phi_CathodeQQQR", 100, -180, 180, 800, 0, 10000, (qqqevent.pos - TVector3(0, 0, source_vertex)).Phi() * 180 / M_PI, pcevent.Energy2, "Kinematics_Angles");
+        plotter->Fill2D("dE_phi_CathodeQQQR", 100, -180, 180, 800, 0, 40000, (qqqevent.pos - TVector3(0, 0, source_vertex)).Phi() * 180 / M_PI, pcevent.Energy2, "Kinematics_Angles");
+        plotter->Fill2D("pcdEA_vs_qqqpczguess", 800, 0, 20000, 600, -200, 200, pcevent.Energy1, pcz_guess_37, "Kinematics_Angles");
+        plotter->Fill2D("pcdEC_vs_qqqpczguess", 800, 0, 20000, 600, -200, 200, pcevent.Energy2, pcz_guess_37, "Kinematics_Angles");
+
         plotter->Fill1D("PCZ", 800, -200, 200, pcevent.pos.Z(), "PCZ_Recon");
 
-        double pcz_guess_37 = 37. / TMath::Tan(qqqTheta) + source_vertex;
         plotter->Fill2D("pczguess_vs_pc_37", 180, 0, 200, 150, 0, 200, pcz_guess_37, pcevent.pos.Z(), "PCZ_Recon");
 
         double pcz_guess_42 = 42. / TMath::Tan(qqqTheta) + source_vertex;
@@ -2402,6 +2430,8 @@ void PCQQQClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
           plotter->Fill1D("pczfix-qqqpczguess_A1C2", 200, -100, 100, pcz_fix - pcz_guess_37, "Residuals");
           plotter->Fill1D("pczfix-qqqpczint_A1C2", 200, -100, 100, pcz_fix - pcz_guess_int, "Residuals");
           plotter->Fill1D("pczguess_vs_int_residualsqqq", 200, -50, 50, pcz_guess_int - pcz_guess_37, "Residuals");
+          plotter->Fill2D("pcdEA_vs_pczfix", 800, 0, 20000, 600, -200, 200, pcevent.Energy1, pcz_fix, "Kinematics_Angles");
+          plotter->Fill2D("pcdEC_vs_pczfix", 800, 0, 20000, 600, -200, 200, pcevent.Energy2, pcz_fix, "Kinematics_Angles");
 
           double path_length = (qqqevent.pos - TVector3(0, 0, r_rhoMin_fix.Z())).Mag() * 0.1;
           double qqqEfix = cm_to_MeV->Eval(MeV_to_cm->Eval(qqqevent.Energy1) - path_length);
@@ -3171,14 +3201,14 @@ void miscHistograms_oneWire(HistPlotter *plotter, const std::vector<Event> &QQQ_
 {
   // consider the 'proton-like' QQQ branch seen in a,p data
   static TRandom3 rand(0); // seeded once (random seed via TUUID), not per call
-  double initial_energy = 7.0;
-  if (dataset == "27Al") /// m3 is alpha, 6.79 MeV is 7.0 MeV proton energy after kapton+100mm 4He gas (molar mass 5.6, 1 gain)
-    initial_energy = 6.79;
-  if (dataset == "17F")
-    initial_energy = 6.78; // m3 is alpha, 6.79 MeV is 7.0 MeV proton energy after kapton+100mm 4He gas (molar mass 5.6, 350 gain)
+  double initial_energy = 6.78;
+  // if (dataset == "27Al") /// m3 is alpha, 6.79 MeV is 7.0 MeV proton energy after kapton+100mm 4He gas (molar mass 5.6, 1 gain)
+  //   initial_energy = 6.79;
+  // if (dataset == "17F")
+  //   initial_energy = 6.78; // m3 is alpha, 6.79 MeV is 7.0 MeV proton energy after kapton+100mm 4He gas (molar mass 5.6, 350 gain)
   // initial_energy = 6.32; // m3 is alpha, 6.411 MeV is 7.0 MeV proton energy after havar+mylar+kapton+100mm 4He gas (molar mass 5.3, 1 gain)
 
-  Kinematics apkin_a(1.008664916, 4.002603254, 4.002603254, 1.008664916, initial_energy);
+  Kinematics apkin_a(mass_1H, mass_4He, mass_4He, mass_1H, initial_energy);
   for (const auto &qqqevent : QQQ_Events)
   {
     if (qqqevent.Energy1 < 0.6)
@@ -3237,13 +3267,13 @@ void protonMiscHistograms(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
 {
   // consider the 'proton-like' QQQ branch seen in a,p data
   static TRandom3 rand(0); // seeded once (random seed via TUUID), not per call
-  double initial_energy = 7.0;
-  if (dataset == "27Al")
-    initial_energy = 6.79; // m3 is alpha, 6.79 MeV is 7.0 MeV proton energy after kapton+100mm 4He gas (molar mass 5.2, 1 gain)
-  if (dataset == "17F")
-    initial_energy = 6.32; // m3 is alpha, 6.411 MeV is 7.0 MeV proton energy after Havar+kapton+100mm 4He gas (molar mass 5.2, 1 gain)
+  double initial_energy = 6.78;
+  // if (dataset == "27Al")
+  //   initial_energy = 6.79; // m3 is alpha, 6.79 MeV is 7.0 MeV proton energy after kapton+100mm 4He gas (molar mass 5.2, 1 gain)
+  // if (dataset == "17F")
+  //   initial_energy = 6.32; // m3 is alpha, 6.411 MeV is 7.0 MeV proton energy after Havar+kapton+100mm 4He gas (molar mass 5.2, 1 gain)
 
-  Kinematics apkin_a(1.008664916, 4.002603254, 4.002603254, 1.008664916, initial_energy); // m3 is alpha
+  Kinematics apkin_a(mass_1H, mass_4He, mass_4He, mass_1H, initial_energy); // m3 is alpha
 
   for (const auto &qqqevent : QQQ_Events)
   {
@@ -3302,6 +3332,8 @@ void protonMiscHistograms(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
             plotter->Fill1D("pmisc_a1c1cmp_Ex_" + m + w, 200, -10, 10, Ex, lbl);
             plotter->Fill1D("pmisc_a1c1cmp_VertexZ_" + m + w, 800, -400, 400, rv.Z(), lbl);
             plotter->Fill2D("pmisc_a1c1cmp_VertexZ_vs_Ef_" + m + w, 800, -400, 400, 800, 0, 20, rv.Z(), Ef, lbl);
+            plotter->Fill2D("pmisc_a1c1cmp_phi_vs_Ef_" + m + w, 180, -180, 180, 800, 0, 20, qqqevent.pos.Phi() * 180 / M_PI, Ef, lbl);
+            plotter->Fill2D("pmisc_a1c1cmp_phi_vs_Ex_" + m + w, 180, -180, 180, 800, -5, 5, qqqevent.pos.Phi() * 180 / M_PI, Ex, lbl);
             plotter->Fill2D("pmisc_a1c1cmp_Ef_vs_theta_" + m + w, 100, 0, 180, 800, 0, 20, th * 180 / M_PI, Ef, lbl);
           }
         };
@@ -3530,6 +3562,7 @@ void protonMiscHistograms_sx3(HistPlotter *plotter, const std::vector<Event> &QQ
           plotter->Fill1D("pmiscs_a1c1cmp_VertexZ_" + m + w, 800, -400, 400, rv.Z(), lbl);
           plotter->Fill2D("pmiscs_a1c1cmp_VertexZ_vs_Ef_" + m + w, 800, -400, 400, 800, 0, 20, rv.Z(), Ef, lbl);
           plotter->Fill2D("pmiscs_a1c1cmp_Ef_vs_theta_" + m + w, 100, 0, 180, 800, 0, 20, th * 180 / M_PI, Ef, lbl);
+          plotter->Fill2D("pmisc_a1c1cmp_phi_vs_Ef_" + m + w, 180, -180, 180, 800, 0, 20, sx3event.pos.Phi() * 180 / M_PI, Ef, lbl);
         }
       };
 
