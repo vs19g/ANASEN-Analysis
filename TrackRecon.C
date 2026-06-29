@@ -136,8 +136,6 @@ static const double a1c1_k2_27Al[7] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 
 double a1c1_cfmin2_cell[7] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 double a1c1_k2_cell[7] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
-double a1c1_cfrac_split = 0.0;  // cfrac below this uses the low band; <=0 disables
-double a1c1_missing_fmax = 2.0; // f-ceiling when a neighbouring wire is dead (1.0 = no extension)
 
 inline double a1c1_zcorr(double z_a1c0, bool isQQQ)
 {
@@ -1719,13 +1717,13 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
         continue;
       double sx3theta = TMath::ATan2(88.0, sx3event.pos.Z() - source_vertex);
       double pczguess = 37.0 / TMath::Tan(sx3theta) + source_vertex;
-      plotter->Fill1D("Benchmark_SX3_VertexZ_trueA1C0", 800, -400, 400, vtx0.Z(), "A1C0True");
-      plotter->Fill1D("Benchmark_SX3_VertexZ_trueA1C0_Hybrid", 800, -400, 400, vtx1.Z(), "A1C0True");
-      plotter->Fill1D("Benchmark_SX3_VertexZ_trueA1C0_Hybrid_TC" + std::to_string(PCSX3TimeCut) + "_PC" + std::to_string(phicut), 800, -400, 400, vtx1.Z(), "A1C0True");
-      plotter->Fill2D("Benchmark_SX3_VertexXY_trueA1C0_Hybrid", 200, -100, 100, 200, -100, 100, vtx1.X(), vtx1.Y(), "A1C0True");
-      plotter->Fill1D("Benchmark_SX3_PCZ_trueA1C0_Hybrid", 600, -200, 200, pc_dither, "A1C0True");
-      plotter->Fill2D("Benchmark_SX3_PCZ_trueA1C0_Hybrid_vs_sx3pczguess", 400, -200, 200, 400, -200, 200, pczguess, pc_dither, "A1C0True");
-      plotter->Fill1D("Benchmark_SX3_PCZ_trueA1C0_Hybrid_minus_sx3pczguess", 400, -100, 100, pc_dither - pczguess, "A1C0True");
+      plotter->Fill1D("Benchmark_SX3_VertexZ_trueA1C0", 800, -400, 400, vtx0.Z(), "A1C0True_SX3");
+      plotter->Fill1D("Benchmark_SX3_VertexZ_trueA1C0_Hybrid", 800, -400, 400, vtx1.Z(), "A1C0True_SX3");
+      plotter->Fill1D("Benchmark_SX3_VertexZ_trueA1C0_Hybrid_TC" + std::to_string(PCSX3TimeCut) + "_PC" + std::to_string(phicut), 800, -400, 400, vtx1.Z(), "A1C0True_SX3");
+      plotter->Fill2D("Benchmark_SX3_VertexXY_trueA1C0_Hybrid", 200, -100, 100, 200, -100, 100, vtx1.X(), vtx1.Y(), "A1C0True_SX3");
+      plotter->Fill1D("Benchmark_SX3_PCZ_trueA1C0_Hybrid", 600, -200, 200, pc_dither, "A1C0True_SX3");
+      plotter->Fill2D("Benchmark_SX3_PCZ_trueA1C0_Hybrid_vs_sx3pczguess", 400, -200, 200, 400, -200, 200, pczguess, pc_dither, "A1C0True_SX3");
+      plotter->Fill1D("Benchmark_SX3_PCZ_trueA1C0_Hybrid_minus_sx3pczguess", 400, -100, 100, pc_dither - pczguess, "A1C0True_SX3");
     }
   }
 
@@ -2278,13 +2276,13 @@ void PCQQQClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
         continue;
       double qqqTheta = (qqqevent.pos - TVector3(0, 0, source_vertex)).Theta();
       double pcz_guess_37 = 37. / TMath::Tan(qqqTheta) + source_vertex;
-      plotter->Fill1D("Benchmark_QQQ_VertexZ_trueA1C0", 800, -400, 400, vtx0.Z(), "A1C0True");
-      plotter->Fill1D("Benchmark_QQQ_VertexZ_trueA1C0_Hybrid", 800, -400, 400, vtx1.Z(), "A1C0True");
-      plotter->Fill1D("Benchmark_QQQ_VertexZ_trueA1C0_Hybrid_TC" + std::to_string(timecut) + "_PC" + std::to_string(phicut), 800, -400, 400, vtx1.Z(), "A1C0True");
-      plotter->Fill2D("Benchmark_QQQ_VertexXY_trueA1C0_Hybrid", 200, -100, 100, 200, -100, 100, vtx1.X(), vtx1.Y(), "A1C0True");
-      plotter->Fill1D("Benchmark_QQQ_PCZ_trueA1C0_Hybrid", 600, -200, 200, pc_dither, "A1C0True");
-      plotter->Fill2D("Benchmark_QQQ_PCZ_trueA1C0_Hybrid_vs_qqqpczguess", 400, -200, 200, 400, -200, 200, pcz_guess_37, pc_dither, "A1C0True");
-      plotter->Fill1D("Benchmark_QQQ_PCZ_trueA1C0_Hybrid_minus_qqqpczguess", 400, -100, 100, pc_dither - pcz_guess_37, "A1C0True");
+      plotter->Fill1D("Benchmark_QQQ_VertexZ_trueA1C0", 800, -400, 400, vtx0.Z(), "A1C0True_QQQ");
+      plotter->Fill1D("Benchmark_QQQ_VertexZ_trueA1C0_Hybrid", 800, -400, 400, vtx1.Z(), "A1C0True_QQQ");
+      plotter->Fill1D("Benchmark_QQQ_VertexZ_trueA1C0_Hybrid_TC" + std::to_string(timecut) + "_PC" + std::to_string(phicut), 800, -400, 400, vtx1.Z(), "A1C0True_QQQ");
+      plotter->Fill2D("Benchmark_QQQ_VertexXY_trueA1C0_Hybrid", 200, -100, 100, 200, -100, 100, vtx1.X(), vtx1.Y(), "A1C0True_QQQ");
+      plotter->Fill1D("Benchmark_QQQ_PCZ_trueA1C0_Hybrid", 600, -200, 200, pc_dither, "A1C0True_QQQ");
+      plotter->Fill2D("Benchmark_QQQ_PCZ_trueA1C0_Hybrid_vs_qqqpczguess", 400, -200, 200, 400, -200, 200, pcz_guess_37, pc_dither, "A1C0True_QQQ");
+      plotter->Fill1D("Benchmark_QQQ_PCZ_trueA1C0_Hybrid_minus_qqqpczguess", 400, -100, 100, pc_dither - pcz_guess_37, "A1C0True_QQQ");
     }
   }
 
