@@ -41,22 +41,6 @@ if [[ 1 -eq 0 ]]; then
     parallel --bar -j 6 process_run ::: {1..8}
 fi
 
-# --- Block 2: 27Al Alpha+Gas Runs (9, 12) ---
-if [[ 1 -eq 1 ]]; then
-    export DATASET="27Al"
-    export PREFIX="Run_"
-    export OUT_DIR="Output_a"
-    export Gain=2
-    export CATHODE_GAIN=3.0
-    echo "Processing 27Al alpha+gas runs..."
-    export source_vertex=-5.36; export timecut_low=12.0; export timecut_high=119.0; process_run 9 "$slope"
-    unset timecut_high
-    export source_vertex=53.44; export timecut_low=400.0; process_run 12 "$slope"
-    unset Gain
-    unset CATHODE_GAIN
-    unset timecut_low
-fi
-
 # --- Block 4: 17F Source Runs (5-14) ---
 if [[ 1 -eq 0 ]]; then
     export DATASET="17F"
@@ -67,8 +51,25 @@ if [[ 1 -eq 0 ]]; then
     parallel --bar -j 6 process_run ::: {5..13}
 fi
 
-# --- Block 5: 17F Alpha Run with Gas (18-21) ---
-if [[ 1 -eq 1 ]]; then
+# --- Block 2: 27Al Alpha+Gas Runs (9, 12) ---
+if [[ 1 -eq 0 ]]; then
+    export DATASET="27Al"
+    export PREFIX="Run_"
+    export OUT_DIR="Output_a"
+    export Gain=2
+    export CATHODE_GAIN=3.0
+    rm -f ${OUT_DIR}/all.root
+    echo "Processing 27Al alpha+gas runs..."
+    export source_vertex=-5.36; export timecut_low=12.0; export timecut_high=119.0; process_run 9 "$slope"
+    unset timecut_high
+    export source_vertex=53.44; export timecut_low=400.0; process_run 12 "$slope"
+    unset Gain
+    unset CATHODE_GAIN
+    unset timecut_low
+fi
+
+# --- Block 5: 17F Alpha+Gas Runs (18-21) ---
+if [[ 1 -eq 0 ]]; then
     export DATASET="17F"
     export PREFIX="SourceRun_"
     export OUT_DIR="Output_a"
@@ -79,11 +80,12 @@ if [[ 1 -eq 1 ]]; then
     export source_vertex=14.24;  process_run 19
     export source_vertex=-24.96; process_run 20
     export source_vertex=-73.96; process_run 21
+    hadd -j 4 -k ${OUT_DIR}/all.root ${OUT_DIR}/results_run*.root
     # exit
 fi
 
 # --- Block 3: 27Al Protons+Gas Runs (15, 17-22) ---
-if [[ 1 -eq 1 ]]; then
+if [[ 1 -eq 0 ]]; then
 
     # export CO2percent=4
     export DATASET="27Al"
@@ -101,6 +103,7 @@ if [[ 1 -eq 1 ]]; then
     hadd -j 4 -k ${OUT_DIR}/Al_protons.root ${OUT_DIR}/results_run0{15..22}.root
     unset Gain
     unset CATHODE_GAIN
+    # exit
 fi
 
 # --- Block 6: 17F Proton Data  ---

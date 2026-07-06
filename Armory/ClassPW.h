@@ -96,6 +96,8 @@ public:
   void FindWireID(TVector3 pos, TVector3 direction, bool verbose = false);
   void CalTrack(TVector3 sx3Pos, int anodeID, int cathodeID, bool verbose = false);
   void CalTrack2(TVector3 sx3Pos, TVector3 anodeInt, bool verbose = false);
+  static constexpr double kPCPathFail = 54321.0;
+  inline double PCPathLength(const TVector3 &x1, const TVector3 &x2) const;
 
   void Print()
   {
@@ -615,6 +617,41 @@ inline double PW::GetZ0()
   double theta = trackVec.Theta();
 
   return trackVec.Z();
+}
+
+inline double PW::PCPathLength(const TVector3 &x1, const TVector3 &x2) const
+{
+  TVector3 dx = x2 - x1;
+  double t2 = 1.0; // parametric endpoint: x2 corresponds to t=1
+
+  // Returns the point where the ray x1+t*dx intersects the one-sheet
+  // hyperboloid (x²+y²)/a² - z²/c² = 1, for t in [0, t2].
+  // Returns a sentinel with Z==kPCPathFail on no intersection.
+  auto intersect = [&](double a, double c) -> TVector3
+  {
+    double A = dx.Perp2() / (a * a) - dx.Z() * dx.Z() / (c * c);
+    double B = 2.0 * (dx.X() * x1.X() + dx.Y() * x1.Y()) / (a * a) - 2.0 * (dx.Z() * x1.Z()) / (c * c);
+    double C = x1.Perp2() / (a * a) - x1.Z() * x1.Z() / (c * c) - 1.0;
+    double disc = B * B - 4.0 * A * C;
+    if (disc < 0.0)
+      return TVector3(0, 0, kPCPathFail);
+    double t1s = (-B + TMath::Sqrt(disc)) / (2.0 * A);
+    double t2s = (-B - TMath::Sqrt(disc)) / (2.0 * A);
+    if (t1s >= 0.0 && t1s <= t2)
+      return x1 + t1s * dx;
+    else if (t2s >= 0.0 && t2s <= t2)
+      return x1 + t2s * dx;
+    else
+      return TVector3(0, 0, kPCPathFail);
+  };
+
+  // Hyperboloid parameters (mm) from fits to anode/cathode crossover points.
+  // Cathode waist is anode waist scaled by the outermost-radius ratio 43/37.
+  TVector3 an = intersect(32.0429, 301.895);
+  TVector3 ca = intersect(37.239045, 301.895);
+  if (an.Z() != kPCPathFail && ca.Z() != kPCPathFail)
+    return (ca - an).Mag();
+  return kPCPathFail;
 }
 
 #endif

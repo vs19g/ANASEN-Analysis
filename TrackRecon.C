@@ -41,7 +41,7 @@ Int_t colors[40] = {
 
 // --- Analysis Control Flags ---
 bool process_alpha_proton_scattering = false,
-     doMiscHistograms = false,
+     doMiscHistograms = true,
      doPCSX3ClusterAnalysis = true,
      doPCQQQClusterAnalysis = true,
      doOldAnalysis = false,
@@ -581,31 +581,27 @@ void TrackRecon::Begin(TTree * /*tree*/)
 
   if (dataset == "17F" && CO2percent == 3)
   {
-    if (!MeV_to_cm)
-      MeV_to_cm = new TGraph("eloss_calculations/alpha_lookup_20MeV_3pc.dat", "%lf %*lf %lf");
-    if (!MeV_to_cm_p)
-      MeV_to_cm_p = new TGraph("eloss_calculations/proton_lookup_20MeV_3pc.dat", "%lf %*lf %lf");
-    if (!MeV_to_cm_27Al)
-      MeV_to_cm_27Al = new TGraph("eloss_calculations/aluminum_lookup_80MeV_3pc.dat", "%lf %*lf %lf");
-    if (!MeV_to_cm_17F)
-      MeV_to_cm_17F = new TGraph("eloss_calculations/fluorine_lookup_70MeV_3pc.dat", "%lf %*lf %lf");
+    //     MeV_to_cm = new TGraph("eloss_calculations/alpha_lookup_20MeV_3pc.dat", "%lf %*lf %lf");
+    //     MeV_to_cm_p = new TGraph("eloss_calculations/proton_lookup_20MeV_3pc.dat", "%lf %*lf %lf");
+    //     MeV_to_cm_27Al = new TGraph("eloss_calculations/aluminum_lookup_80MeV_3pc.dat", "%lf %*lf %lf");
+    //     MeV_to_cm_17F = new TGraph("eloss_calculations/fluorine_lookup_70MeV_3pc.dat", "%lf %*lf %lf");
 
-    // MeV_to_cm = new TGraph("eloss_calculations/alpha_lookup_20MeV_3pc_350Torr.dat", "%lf %*lf %lf");
-    // MeV_to_cm_p = new TGraph("eloss_calculations/proton_lookup_20MeV_3pc_350Torr.dat", "%lf %*lf %lf");
-    // MeV_to_cm_17F = new TGraph("eloss_calculations/fluorine_lookup_70MeV_3pc_350Torr.dat", "%lf %*lf %lf");
-    // MeV_to_cm_27Al = new TGraph("eloss_calculations/aluminum_lookup_80MeV_3pc_350Torr.dat", "%lf %*lf %lf");
+    MeV_to_cm = new TGraph("eloss_calculations/alpha_lookup_20MeV_3pc_350Torr.dat", "%lf %*lf %lf");
+    MeV_to_cm_p = new TGraph("eloss_calculations/proton_lookup_20MeV_3pc_350Torr.dat", "%lf %*lf %lf");
+    MeV_to_cm_17F = new TGraph("eloss_calculations/fluorine_lookup_70MeV_3pc_350Torr.dat", "%lf %*lf %lf");
+    MeV_to_cm_27Al = new TGraph("eloss_calculations/aluminum_lookup_80MeV_3pc_350Torr.dat", "%lf %*lf %lf");
   }
   else if (dataset == "17F" && CO2percent == 4)
   {
-    MeV_to_cm = new TGraph("eloss_calculations/alpha_lookup_20MeV_4pc.dat", "%lf %*lf %lf");
-    MeV_to_cm_p = new TGraph("eloss_calculations/proton_lookup_20MeV_4pc.dat", "%lf %*lf %lf");
-    MeV_to_cm_27Al = new TGraph("eloss_calculations/aluminum_lookup_80MeV_4pc.dat", "%lf %*lf %lf");
-    MeV_to_cm_17F = new TGraph("eloss_calculations/fluorine_lookup_70MeV_4pc.dat", "%lf %*lf %lf");
+    // MeV_to_cm = new TGraph("eloss_calculations/alpha_lookup_20MeV_4pc.dat", "%lf %*lf %lf");
+    // MeV_to_cm_p = new TGraph("eloss_calculations/proton_lookup_20MeV_4pc.dat", "%lf %*lf %lf");
+    // MeV_to_cm_27Al = new TGraph("eloss_calculations/aluminum_lookup_80MeV_4pc.dat", "%lf %*lf %lf");
+    // MeV_to_cm_17F = new TGraph("eloss_calculations/fluorine_lookup_70MeV_4pc.dat", "%lf %*lf %lf");
 
-    // MeV_to_cm = new TGraph("eloss_calculations/alpha_lookup_20MeV_4pc_350Torr.dat", "%lf %*lf %lf");
-    // MeV_to_cm_p = new TGraph("eloss_calculations/proton_lookup_20MeV_4pc_350Torr.dat", "%lf %*lf %lf");
-    // MeV_to_cm_17F = new TGraph("eloss_calculations/fluorine_lookup_70MeV_4pc_350Torr.dat", "%lf %*lf %lf");
-    // MeV_to_cm_27Al = new TGraph("eloss_calculations/aluminum_lookup_80MeV_4pc_350Torr.dat", "%lf %*lf %lf");
+    MeV_to_cm = new TGraph("eloss_calculations/alpha_lookup_20MeV_4pc_350Torr.dat", "%lf %*lf %lf");
+    MeV_to_cm_p = new TGraph("eloss_calculations/proton_lookup_20MeV_4pc_350Torr.dat", "%lf %*lf %lf");
+    MeV_to_cm_17F = new TGraph("eloss_calculations/fluorine_lookup_70MeV_4pc_350Torr.dat", "%lf %*lf %lf");
+    MeV_to_cm_27Al = new TGraph("eloss_calculations/aluminum_lookup_80MeV_4pc_350Torr.dat", "%lf %*lf %lf");
   }
   else
   {
@@ -1422,6 +1418,8 @@ Bool_t TrackRecon::Process(Long64_t entry)
 #endif
 
       double path_length = (sx3event.pos - TVector3(0, 0, vertex_recon)).Mag() * 0.1;
+      double _pc_sx3 = pwinstance.PCPathLength(TVector3(0, 0, vertex_recon), sx3event.pos);
+      double path_length = (_pc_sx3 < PW::kPCPathFail ? _pc_sx3 : (sx3event.pos - TVector3(0, 0, vertex_recon)).Mag()) * 0.1;
       double sx3Efix = cm_to_MeVp->Eval(MeV_to_cm_p->Eval(sx3event.Energy1) - path_length);
       double sx3Efixalpha = cm_to_MeV->Eval(MeV_to_cm->Eval(sx3event.Energy1) - path_length);
 
@@ -1521,6 +1519,8 @@ Bool_t TrackRecon::Process(Long64_t entry)
 
       // Energy Loss Correction
       double path_length = (qqqevent.pos - TVector3(0, 0, vertex_recon)).Mag() * 0.1;
+      double _pc_qqq = pwinstance.PCPathLength(TVector3(0, 0, vertex_recon), qqqevent.pos);
+      double path_length = (_pc_qqq < PW::kPCPathFail ? _pc_qqq : (qqqevent.pos - TVector3(0, 0, vertex_recon)).Mag()) * 0.1;
       double qqqEfix = cm_to_MeVp->Eval(MeV_to_cm_p->Eval(qqqevent.Energy1) - path_length);
       double qqqEfixalpha = cm_to_MeV->Eval(MeV_to_cm->Eval(qqqevent.Energy1) - path_length);
 
@@ -1628,8 +1628,13 @@ void protonAlphaHistograms(HistPlotter *plotter, const std::vector<Event> &QQQ_E
         plotter->Fill1D("ap_pczfix", 600, -300, 300, pcz_fix, aplabel);
         plotter->Fill1D("ap_pcz", 600, -300, 300, pcevent.pos.Z(), aplabel);
 
-        double path_length_q = (qqqevent.pos - TVector3(0, 0, vertex_z)).Mag() * 0.1;
-        double path_length_s = (sx3event.pos - TVector3(0, 0, vertex_z)).Mag() * 0.1;
+        double _pc_q0 = pwinstance.PCPathLength(TVector3(0, 0, vertex_z), qqqevent.pos);
+        double _pc_s0 = pwinstance.PCPathLength(TVector3(0, 0, vertex_z), sx3event.pos);
+        double path_length_q = (_pc_q0 < PW::kPCPathFail ? _pc_q0 : (qqqevent.pos - TVector3(0, 0, vertex_z)).Mag()) * 0.1;
+        double path_length_s = (_pc_s0 < PW::kPCPathFail ? _pc_s0 : (sx3event.pos - TVector3(0, 0, vertex_z)).Mag()) * 0.1;
+
+        // double path_length_q = (qqqevent.pos - TVector3(0, 0, vertex_z)).Mag() * 0.1;
+        // double path_length_s = (sx3event.pos - TVector3(0, 0, vertex_z)).Mag() * 0.1;
         // double path_length_q = (qqqevent.pos-r_rhoMin_fix).Mag()*0.1;
         // double path_length_s = (sx3event.pos-r_rhoMin_fix).Mag()*0.1;
 
@@ -1858,7 +1863,7 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
 
         // plotter->Fill2D("pcdEA_vs_sx3z", 300, 0, 200, 800, 0, 20000, sx3z, pcevent.Energy1, "Kinematics_Angles");
         // plotter->Fill2D("pcdEA_vs_sx3pczguess", 600, -200, 200, 800, 0, 20000, pczguess, pcevent.Energy1, "Kinematics_Angles");
-        plotter->Fill2D("pcdEA_vs_pczfix", 600, -200, 200, 800, 0, 20000, pcz_fix, pcevent.Energy1, "Kinematics_Angles");
+        plotter->Fill2D("pcdEA_vs_pczfix", 600, -200, 200, 800, 0, 20000, pcz_fix, pcevent.Energy1, "PCdE_vs_Z");
         // plotter->Fill2D("pcdEC_vs_sx3z", 300, 0, 200, 800, 0, 20000, sx3z, pcevent.Energy2, "Kinematics_Angles");
         // plotter->Fill2D("pcdEC_vs_sx3pczguess", 600, -200, 200, 800, 0, 20000, pczguess, pcevent.Energy2, "Kinematics_Angles");
         plotter->Fill2D("pcdEC_vs_pczfix", 600, -200, 200, 800, 0, 20000, pcz_fix, pcevent.Energy2, "PCdE_vs_Z");
@@ -1877,7 +1882,7 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
 
       // plotter->Fill2D("pcdEA_vs_sx3pczguess_A" + std::to_string(pcevent.multi1) + "C" + std::to_string(pcevent.multi2), 600, -200, 200, 800, 0, 20000, pczguess, pcevent.Energy1, "PCdE_vs_Z");
       plotter->Fill2D("pcdEA_vs_sx3pczguess", 600, -200, 200, 800, 0, 20000, pczguess, pcevent.Energy1, "PCdE_vs_Z");
-      // plotter->Fill2D("pcdEA_vs_pczguess", 600, -200, 200, 800, 0, 20000, pczguess, pcevent.Energy1, "PCdE_vs_Z");
+      plotter->Fill2D("pcdEA_vs_pczguess", 600, -200, 200, 800, 0, 20000, pczguess, pcevent.Energy1, "PCdE_vs_Z");
       // plotter->Fill2D("pcdEA_vs_pczfix" + std::to_string(pcevent.multi1) + "A" + std::to_string(pcevent.multi1) + "C", 600, -200, 200, 800, 0, 20000, pcz_fix, pcevent.Energy1, "PCdE_vs_Z");
       // plotter->Fill2D("pcdEC_vs_sx3pczguess_A" + std::to_string(pcevent.multi1) + "C" + std::to_string(pcevent.multi2), 600, -200, 200, 800, 0, 20000, pczguess, pcevent.Energy2, "PCdE_vs_Z");
       if (pcevent.multi1 == 1)
@@ -1887,6 +1892,10 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
       if (pcevent.multi2 == 1)
       {
         plotter->Fill2D("pcdEC_vs_sx3pczguess_C1", 600, -200, 200, 800, 0, 20000, pczguess, pcevent.Energy2, "PCdE_vs_Z");
+      }
+      if (pcevent.multi2 == 2)
+      {
+        plotter->Fill2D("pcdEC_vs_sx3pczguess_C2", 600, -200, 200, 800, 0, 20000, pczguess, pcevent.Energy2, "PCdE_vs_Z");
       }
       plotter->Fill2D("pcdEC_vs_sx3pczguess", 600, -200, 200, 800, 0, 20000, pczguess, pcevent.Energy2, "PCdE_vs_Z");
       plotter->Fill2D("pcdEC_vs_pczguess", 600, -200, 200, 800, 0, 20000, pczguess, pcevent.Energy2, "PCdE_vs_Z");
@@ -2130,10 +2139,10 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
                   double zc = 0.5 * (a1c1_zg[cell_truth] + a1c1_zg[cell_truth + 1]);
                   double half = 0.5 * (a1c1_zg[cell_truth] - a1c1_zg[cell_truth + 1]);
 
-                  plotter->Fill2D("AnodeEnergy_vs_CellSX3", 120, 0, 1.2, 100, 0, 40000, 1 - TMath::Abs(pcz_ref - zc) / half, pcevent.Energy1);
+                  plotter->Fill2D("AnodeEnergy_vs_CellSX3", 120, 0, 1.2, 800, 0, 40000, 1 - TMath::Abs(pcz_ref - zc) / half, pcevent.Energy1);
                   plotter->Fill2D("CathodeEnergy_vs_CellSX3", 120, 0, 1.2, 800, 0, 40000, TMath::Abs(pcz_ref - zc) / half, pcevent.Energy2);
-                  plotter->Fill2D("FracEnergy_vs_CellSX3", 120, 0, 1.2, 1200, 0, 20, TMath::Abs(pcz_ref - zc) / half, pcevent.Energy2 / pcevent.Energy1);
-                  plotter->Fill2D("SumEnergy_vs_CellSX3", 120, 0, 1.2, 1200, 0, 20, TMath::Abs(pcz_ref - zc) / half, (pcevent.Energy1 + pcevent.Energy2) / 2);
+                  plotter->Fill2D("FracEnergy_vs_CellSX3", 120, 0, 1.2, 800, 0, 10, TMath::Abs(pcz_ref - zc) / half, pcevent.Energy2 / pcevent.Energy1);
+                  plotter->Fill2D("SumEnergy_vs_CellSX3", 120, 0, 1.2, 800, 0, 10, TMath::Abs(pcz_ref - zc) / half, (pcevent.Energy1 + pcevent.Energy2) / 2);
 
                   if (half > 0.0)
                   {
@@ -2300,8 +2309,8 @@ void PCQQQClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
   for (const auto &pcevent : PC_Events)
   {
 
-    plotter->Fill2D("pcdEACSum_vs_anodechannel", 24, 0, 23, 800, 0, 20000, pcevent.ch1, (pcevent.Energy1 + pcevent.Energy2) / 2);
-    plotter->Fill2D("pcdEACSum_vs_cathodechannel", 24, 0, 23, 800, 0, 20000, pcevent.ch2, (pcevent.Energy1 + pcevent.Energy2) / 2);
+    plotter->Fill2D("pcdEACAvg_vs_anodechannel", 24, 0, 23, 800, 0, 20000, pcevent.Anodech, (pcevent.Energy1 + pcevent.Energy2) / 2);
+    plotter->Fill2D("pcdEACAvg_vs_cathodechannel", 24, 0, 23, 800, 0, 20000, pcevent.Cathodech, (pcevent.Energy1 + pcevent.Energy2) / 2);
 
     for (const auto &qqqevent : QQQ_Events)
     {
@@ -2432,7 +2441,9 @@ void PCQQQClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
 
           plotter->Fill2D("pcdEACSum_vs_pczfix", 600, -200, 200, 800, 0, 20000, pcz_fix, (pcevent.Energy1 + pcevent.Energy2) / 2, "PCdE_vs_Z");
 
-          double path_length = (qqqevent.pos - TVector3(0, 0, r_rhoMin_fix.Z())).Mag() * 0.1;
+          // double path_length = (qqqevent.pos - TVector3(0, 0, r_rhoMin_fix.Z())).Mag() * 0.1;
+          double _pc_bq = pwinstance.PCPathLength(r_rhoMin_fix, qqqevent.pos);
+          double path_length = (_pc_bq < PW::kPCPathFail ? _pc_bq : (qqqevent.pos - TVector3(0, 0, r_rhoMin_fix.Z())).Mag()) * 0.1;
           double qqqEfix = cm_to_MeV->Eval(MeV_to_cm->Eval(qqqevent.Energy1) - path_length);
           double qqqEfix_p = cm_to_MeVp->Eval(MeV_to_cm_p->Eval(qqqevent.Energy1) - path_length);
 
@@ -2447,6 +2458,7 @@ void PCQQQClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
 
           plotter->Fill2D("dE3_Ef_AnodeQQQR_TC1" + std::to_string(phicut) + "_pidlow" + std::to_string(lowercut_cath), 600, 0, 15, 800, 0, 40000, qqqEfix, pcevent.Energy1 * sinTheta_customV, "PID_dE_E");
           plotter->Fill2D("dE3_Ef_CathodeQQQR_TC1PC" + std::to_string(phicut) + "_pidlow" + std::to_string(lowercut_cath), 600, 0, 15, 800, 0, 10000, qqqEfix, pcevent.Energy2 * sinTheta_customV, "PID_dE_E");
+          plotter->Fill2D("pcdEACAvg_A1C2_vs_qqqE", 400, 0, 10, 1600, 0, 40000, qqqevent.Energy1, (pcevent.Energy1 + pcevent.Energy2) / 2);
         }
 
         // plotter->Fill2D("pcdEA_vs_qqqpczguess_A" + std::to_string(pcevent.multi1) + "C" + std::to_string(pcevent.multi2), 600, -200, 200, 800, 0, 20000, pcz_guess_37, pcevent.Energy1, "PCdE_vs_Z");
@@ -2457,24 +2469,10 @@ void PCQQQClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
         plotter->Fill2D("pcdEC_vs_qqqpczguess", 600, -200, 200, 800, 0, 20000, pcz_guess_37, pcevent.Energy2, "PCdE_vs_Z");
         plotter->Fill2D("pcdEC_vs_pczguess", 600, -200, 200, 800, 0, 20000, pcz_guess_37, pcevent.Energy2, "PCdE_vs_Z");
 
-        plotter->Fill2D("pcdEACSum_vs_qqqpczguess", 600, -200, 200, 800, 0, 20000, pcz_guess_37, (pcevent.Energy1 + pcevent.Energy2) / 2, "PCdE_vs_Z");
-        plotter->Fill2D("pcdEACSum_vs_pczguess", 600, -200, 200, 800, 0, 20000, pcz_guess_37, (pcevent.Energy1 + pcevent.Energy2) / 2, "PCdE_vs_Z");
+        plotter->Fill2D("pcdEACAvg_vs_qqqpczguess", 600, -200, 200, 800, 0, 20000, pcz_guess_37, (pcevent.Energy1 + pcevent.Energy2) / 2, "PCdE_vs_Z");
+        plotter->Fill2D("pcdEACAvg_vs_pczguess", 600, -200, 200, 800, 0, 20000, pcz_guess_37, (pcevent.Energy1 + pcevent.Energy2) / 2, "PCdE_vs_Z");
 
-        // A1CmaxC low-band corrected PC energy sum vs QQQ energy.
-        {
-          double ac_sum_ev = pcevent.Energy1 + pcevent.Energy2;
-          if (ac_sum_ev > 0.0)
-          {
-            double cfrac_ev = pcevent.Energy2 / ac_sum_ev;
-            bool is_lowband = (cfrac_ev < a1c1_cfrac_split);
-            double pcEsum_corr_cmaxc = (is_lowband && a1c1_lowband_rfactor > 0.0)
-                                           ? pcevent.Energy1 + pcevent.Energy2 * a1c1_lowband_rfactor
-                                           : ac_sum_ev;
-            plotter->Fill2D("pcdEACSum_cmaxc_corr_vs_qqqE", 400, 0, 10, 800, 0, 40000, qqqevent.Energy1, pcEsum_corr_cmaxc);
-            plotter->Fill2D("pcdEA_vs_qqqE", 400, 0, 10, 800, 0, 40000, qqqevent.Energy1, pcEsum_corr_cmaxc);
-            plotter->Fill2D("pcdEACSum_cmaxc_raw_vs_qqqE", 400, 0, 10, 800, 0, 40000, qqqevent.Energy1, ac_sum_ev);
-          }
-        }
+        plotter->Fill2D("pcdEACAvg_vs_qqqE", 400, 0, 10, 1600, 0, 40000, qqqevent.Energy1, (pcevent.Energy1 + pcevent.Energy2) / 2);
 
         // plotter->Fill2D("pcdEC_vs_pczfix" + std::to_string(pcevent.multi1) + "A" + std::to_string(pcevent.multi1) + "C", 800, 0, 20000, 600, -200, 200, pcevent.Energy2, pcz_fix, "PCdE_vs_Z");
 
@@ -3268,7 +3266,9 @@ void miscHistograms_oneWire(HistPlotter *plotter, const std::vector<Event> &QQQ_
         plotter->Fill1D("vertexZ1d_ainterp_qqqZ_TC1_ignC_a" + std::to_string(acluster.size()), 800, -400, 400, r_rhoMin_fix.Z(), "ainterp_noc");
         plotter->Fill2D("vertexXY_ainterp_TC1_ignC_a" + std::to_string(acluster.size()), 200, -100, 100, 200, -100, 100, r_rhoMin_fix.X(), r_rhoMin_fix.Y(), "ainterp_noc");
 
-        double path_length_q = (qqqevent.pos - r_rhoMin_fix).Mag() * 0.1;
+        // double path_length_q = (qqqevent.pos - r_rhoMin_fix).Mag() * 0.1;
+        double _pc_q1 = pwinstance.PCPathLength(r_rhoMin_fix, qqqevent.pos);
+        double path_length_q = (_pc_q1 < PW::kPCPathFail ? _pc_q1 : (qqqevent.pos - r_rhoMin_fix).Mag()) * 0.1;
         double qqqEfix;
         qqqEfix = cm_to_MeV->Eval(MeV_to_cm->Eval(qqqevent.Energy1) - path_length_q);
         plotter->Fill1D("pmisc_ow_Ex_from_alpha", 200, -10, 10, apkin_a.getExc(qqqEfix, theta_q * 180 / M_PI), "ainterp_noc");
@@ -3283,7 +3283,8 @@ void protonMiscHistograms(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
 {
   // consider the 'proton-like' QQQ branch seen in a,p data
   static TRandom3 rand(0); // seeded once (random seed via TUUID), not per call
-  double initial_energy = 6.78;
+  double initial_energy = 6.89; //only Kapton
+  // double initial_energy = 6.78; // Kapton plus 100mm He-CO2
   // if (dataset == "27Al")
   //   initial_energy = 6.79; // m3 is alpha, 6.79 MeV is 7.0 MeV proton energy after kapton+100mm 4He gas (molar mass 5.2, 1 gain)
   // if (dataset == "17F")
@@ -3395,6 +3396,12 @@ void protonMiscHistograms(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
       if (vertex_z < -173.6 || vertex_z > 100)
         continue;
 
+      double beam_path_length_q = TMath::Abs(vertex_z - z_entrance) * 0.1;
+      double beam_energy_at_vertex_q = cm_to_MeVp->Eval(MeV_to_cm_p->Eval(initial_energy) - beam_path_length_q);
+      if (beam_energy_at_vertex_q <= 0.0)
+        beam_energy_at_vertex_q = 0.001;
+      Kinematics apkin_a(mass_1H, mass_4He, mass_4He, mass_1H, beam_energy_at_vertex_q);
+
       // What's below: radial cut, time coincident, phi-correlated events with possible energy selection applied to both E_si and dE_Anodes
       auto plot_with_tag = [&](std::string tag = "")
       {
@@ -3425,7 +3432,9 @@ void protonMiscHistograms(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
 
         // double path_length_q = (qqqevent.pos-TVector3(0,0,vertex_z)).Mag()*0.1;
         // double path_length_s = (sx3event.pos-TVector3(0,0,vertex_z)).Mag()*0.1;
-        double path_length_q = (qqqevent.pos - r_rhoMin_fix).Mag() * 0.1;
+        // double path_length_q = (qqqevent.pos - r_rhoMin_fix).Mag() * 0.1;
+        double _pc_q2 = pwinstance.PCPathLength(r_rhoMin_fix, qqqevent.pos);
+        double path_length_q = (_pc_q2 < PW::kPCPathFail ? _pc_q2 : (qqqevent.pos - r_rhoMin_fix).Mag()) * 0.1;
         double qqqEfix;
         if (tag == "_cathode_alphas")
         { // satisfied when find succeeds
@@ -3500,6 +3509,13 @@ void protonMiscHistograms_sx3(HistPlotter *plotter, const std::vector<Event> &QQ
       bool cathode_alpha_select = (pcevent.Energy2 > 1400);
 
       // What's below: radial cut, time coincident, phi-correlated events with possible energy selection applied to both E_si and dE_Anodes
+
+      double beam_path_length_s = TMath::Abs(vertex_z - z_entrance) * 0.1;
+      double beam_energy_at_vertex_s = cm_to_MeVp->Eval(MeV_to_cm_p->Eval(6.89) - beam_path_length_s);
+      if (beam_energy_at_vertex_s <= 0.0)
+        beam_energy_at_vertex_s = 0.001;
+      Kinematics apkin_a_s(mass_1H, mass_4He, mass_4He, mass_1H, beam_energy_at_vertex_s);
+
       auto plot_with_tag = [&](std::string tag = "")
       {
         std::string pmlabel = "proton+miscsx3" + tag;
@@ -3518,7 +3534,9 @@ void protonMiscHistograms_sx3(HistPlotter *plotter, const std::vector<Event> &QQ
 
         // double path_length_q = (sx3event.pos-TVector3(0,0,vertex_z)).Mag()*0.1;
         // double path_length_s = (sx3event.pos-TVector3(0,0,vertex_z)).Mag()*0.1;
-        double path_length_s = (sx3event.pos - r_rhoMin_fix).Mag() * 0.1;
+        // double path_length_s = (sx3event.pos - r_rhoMin_fix).Mag() * 0.1;
+        double _pc_s1 = pwinstance.PCPathLength(r_rhoMin_fix, sx3event.pos);
+        double path_length_s = (_pc_s1 < PW::kPCPathFail ? _pc_s1 : (sx3event.pos - r_rhoMin_fix).Mag()) * 0.1;
         double sx3Efix = cm_to_MeVp->Eval(MeV_to_cm_p->Eval(sx3event.Energy1) - path_length_s);
 
         // plotter->Fill2D("sx3Ef_sx3E_matrix_all"+tag,400,0,10,400,0,10,sx3Efix,sx3event.Energy1,pmlabel);
