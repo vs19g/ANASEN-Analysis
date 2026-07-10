@@ -53,7 +53,7 @@ if [[ 1 -eq 0 ]]; then
 fi
 
 # --- Block 3: 27Al Alpha+Gas Runs (9, 12) ---
-if [[ 1 -eq 0 ]]; then
+if [[ 1 -eq 1 ]]; then
     export DATASET="27Al"
     export PREFIX="Run_"
     export OUT_DIR="Output_a"
@@ -69,7 +69,7 @@ if [[ 1 -eq 0 ]]; then
 fi
 
 # --- Block 4: 17F Alpha+Gas Runs (18-21) ---
-if [[ 1 -eq 0 ]]; then
+if [[ 1 -eq 1 ]]; then
     export DATASET="17F"
     export PREFIX="SourceRun_"
     export OUT_DIR="Output_a"
@@ -96,12 +96,12 @@ if [[ 1 -eq 1 ]]; then
     export source_vertex=-200.0 # Source on the entrance window
     echo "Starting parallel processing for 27Al proton runs..."
 
-    process_run 18
-    # parallel --bar -j 8 process_run ::: 15 {17..22}
+    # process_run 18
+    parallel --bar -j 8 process_run ::: 15 {17..22}
     # parallel --bar -j 8 process_run :::  {17..22}
-    # hadd -j 4 -k ${OUT_DIR}/Al_protons.root ${OUT_DIR}/results_run0{15..22}.root
+    hadd -j 4 -k ${OUT_DIR}/Al_protons.root ${OUT_DIR}/results_run0{15..22}.root
     unset CATHODE_GAIN
-    exit
+    # exit
 fi
 
 # --- Block 6: 17F Proton Data  ---

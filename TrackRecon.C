@@ -2158,8 +2158,6 @@ void PCQQQClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
 
         plotter->Fill2D("dE_phi_AnodeQQQR", 100, -180, 180, 800, 0, 40000, (qqqevent.pos - TVector3(0, 0, source_vertex)).Phi() * 180 / M_PI, pcevent.Energy1, "Kinematics_Angles");
         plotter->Fill2D("dE_phi_CathodeQQQR", 100, -180, 180, 800, 0, 40000, (qqqevent.pos - TVector3(0, 0, source_vertex)).Phi() * 180 / M_PI, pcevent.Energy2, "Kinematics_Angles");
-        plotter->Fill2D("pcdEA_vs_qqqpczguess", 800, 0, 20000, 600, -200, 200, pcevent.Energy1, pcz_guess_37, "Kinematics_Angles");
-        plotter->Fill2D("pcdEC_vs_qqqpczguess", 800, 0, 20000, 600, -200, 200, pcevent.Energy2, pcz_guess_37, "Kinematics_Angles");
 
         plotter->Fill1D("PCZ", 800, -200, 200, pcevent.pos.Z(), "PCZ_Recon");
 
