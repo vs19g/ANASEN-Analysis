@@ -96,8 +96,6 @@ public:
   void FindWireID(TVector3 pos, TVector3 direction, bool verbose = false);
   void CalTrack(TVector3 sx3Pos, int anodeID, int cathodeID, bool verbose = false);
   void CalTrack2(TVector3 sx3Pos, TVector3 anodeInt, bool verbose = false);
-  static constexpr double kPCPathFail = 54321.0;
-  inline double PCPathLength(const TVector3 &x1, const TVector3 &x2) const;
 
   void Print()
   {
@@ -619,39 +617,46 @@ inline double PW::GetZ0()
   return trackVec.Z();
 }
 
-inline double PW::PCPathLength(const TVector3 &x1, const TVector3 &x2) const
+inline std::tuple<TVector3, TVector3, double> find_PC_PathLength(const TVector3 &x1, const TVector3 &x2)
 {
-  TVector3 dx = x2 - x1;
-  double t2 = 1.0; // parametric endpoint: x2 corresponds to t=1
-
-  // Returns the point where the ray x1+t*dx intersects the one-sheet
-  // hyperboloid (x²+y²)/a² - z²/c² = 1, for t in [0, t2].
-  // Returns a sentinel with Z==kPCPathFail on no intersection.
-  auto intersect = [&](double a, double c) -> TVector3
+  /*
+      Function that finds the path length between anode and cathode surfaces, both one-sheet hyperboloids of form (x*x+y*y)/(a*a) - (z*z)/(c*c) = 1
+      * path length found for a given particle moving along a certain direction from x1 to x2
+      * Typical arguments here will be x1=r_rhoMin, x2=qqqevent.pos or sx3event.pos
+      * Returns {cathode_intersect, anode_intersect, gap_in_cm}; gap == 54321 sentinel on failure.
+  */
+  TVector3 dx = x2 - x1; // direction vector
+  double t2 = 1.0;       // The value of 't' at the destination point, by definition: t=(z(t)-z0)/dz
+  auto onesheet_hyperboloid_intersect = [&](double a, double c)
   {
-    double A = dx.Perp2() / (a * a) - dx.Z() * dx.Z() / (c * c);
-    double B = 2.0 * (dx.X() * x1.X() + dx.Y() * x1.Y()) / (a * a) - 2.0 * (dx.Z() * x1.Z()) / (c * c);
-    double C = x1.Perp2() / (a * a) - x1.Z() * x1.Z() / (c * c) - 1.0;
-    double disc = B * B - 4.0 * A * C;
-    if (disc < 0.0)
-      return TVector3(0, 0, kPCPathFail);
-    double t1s = (-B + TMath::Sqrt(disc)) / (2.0 * A);
-    double t2s = (-B - TMath::Sqrt(disc)) / (2.0 * A);
-    if (t1s >= 0.0 && t1s <= t2)
-      return x1 + t1s * dx;
-    else if (t2s >= 0.0 && t2s <= t2)
-      return x1 + t2s * dx;
+    auto A = pow(dx.Perp(), 2) / (a * a) - pow(dx.Z(), 2) / (c * c);
+    auto B = 2 * (dx.X() * x1.X() + dx.Y() * x1.Y()) / (a * a) - 2 * (dx.Z() * x1.Z()) / (c * c);
+    auto C = pow(x1.Perp(), 2) / (a * a) - pow(x1.Z(), 2) / (c * c) - 1.0;
+    double disc = B * B - 4 * A * C;
+    if (disc < 0)
+      return TVector3(0, 0, 54321);
     else
-      return TVector3(0, 0, kPCPathFail);
+    {
+      double tsol1 = (-B + TMath::Sqrt(disc)) / (2 * A);
+      double tsol2 = (-B - TMath::Sqrt(disc)) / (2 * A);
+      if (tsol1 >= 0 && tsol1 <= t2)
+        return x1 + tsol1 * dx;
+      else if (tsol2 >= 0 && tsol2 <= t2)
+        return x1 + tsol2 * dx;
+      else
+        return TVector3(0, 0, 54321);
+    }
   };
 
-  // Hyperboloid parameters (mm) from fits to anode/cathode crossover points.
-  // Cathode waist is anode waist scaled by the outermost-radius ratio 43/37.
-  TVector3 an = intersect(32.0429, 301.895);
-  TVector3 ca = intersect(37.239045, 301.895);
-  if (an.Z() != kPCPathFail && ca.Z() != kPCPathFail)
-    return (ca - an).Mag();
-  return kPCPathFail;
+  // TODO: Magic numbers here describing waist 'a', and flare 'c' will need better treatment.
+  // Currently, these are derived by fitting the crossover points to R^2/a^2 - z^2/c^2 = 1 for anodes
+  //  Cathode a, c values are found by scaling up the anode waist by 43/37, the ratio of the outermost radii
+  TVector3 anode_intersect = onesheet_hyperboloid_intersect(32.0429, 301.895);
+  TVector3 cathode_intersect = onesheet_hyperboloid_intersect(37.239045, 301.895);
+  if (anode_intersect.Z() != 54321 && cathode_intersect.Z() != 54321)
+    return std::tuple(cathode_intersect, anode_intersect, (cathode_intersect - anode_intersect).Mag() * 0.1);
+  else
+    return std::tuple(TVector3(0, 0, 0), TVector3(0, 0, 0), 54321);
 }
 
 #endif

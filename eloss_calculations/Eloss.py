@@ -2,7 +2,7 @@ import pycatima as catima
 import numpy as np
 
 # --- 1. Constants ---
-P_TORR = 250
+P_TORR = 350
 TEMP_K = 293.15 
 R = 8.3144
 MEV2U = 1.0 / 931.494
@@ -22,40 +22,57 @@ gas_mix = catima.Material(material_def)
 gas_mix.density(rho_g_cm3)
 
 # Thickness step settings
-step_mg_cm2 = 0.001           # 1 ug/cm2 steps as per your example
-step_g_cm2 = step_mg_cm2 / 1000.0 
+step_mg_cm2 = 0.001           # 1 ug/cm2 steps as per your example -- kept fine for
+                               # numerical accuracy of the dedx integration itself.
+step_g_cm2 = step_mg_cm2 / 1000.0
 max_steps = 1000000000             # Adjust based on how far you want to track
+
+coarse_step_cm = 0.25   # row spacing over most of the track
+fine_step_cm = 0.03     # row spacing near the Bragg peak
+fine_zone_frac = 0.08   # fraction of the *total* range treated as "near the peak"
 
 def generate_lookup(z, mass_u, e_start_mev, label):
     filename = f"{label}_lookup_{e_start_mev}MeV_{P_TORR}torr_{P_CO2}pc.dat"
-    projectile = catima.Projectile(mass_u, z)
-    
-    current_e_total = e_start_mev
-    current_thickness_g_cm2 = 0.0
-    
-    output = []
     header = f"Energy(MeV) \tmg/cm2 \tcm\nStarting Energy: {e_start_mev} MeV"
 
-    for i in range(max_steps):
-        # 1. Record current state
-        dist_cm = current_thickness_g_cm2 / rho_g_cm3
-        output.append([current_e_total, current_thickness_g_cm2 * 1000.0, dist_cm])
-        
-        # 2. Calculate energy loss for the NEXT step
-        e_u = current_e_total / mass_u
-        if e_u < 0.0001: # Stop at ATIMA limit
-            break
-            
+    projectile = catima.Projectile(mass_u, z)
+    e_u = e_start_mev / mass_u
+    total_thickness_g_cm2 = 0.0
+    while e_u >= 0.0001:
         projectile.T(e_u)
-        # dedx returns MeV / (g/cm2)
         loss_mev = catima.dedx(projectile, gas_mix) * step_g_cm2
-        
-        # 3. Update values
+        e_u = (e_u * mass_u - loss_mev) / mass_u
+        total_thickness_g_cm2 += step_g_cm2
+    total_range_cm = total_thickness_g_cm2 / rho_g_cm3
+    fine_zone_start_cm = total_range_cm * (1.0 - fine_zone_frac)
+
+    projectile = catima.Projectile(mass_u, z)
+    current_e_total = e_start_mev
+    current_thickness_g_cm2 = 0.0
+    next_checkpoint_cm = 0.0
+
+    output = []
+    for i in range(max_steps):
+        dist_cm = current_thickness_g_cm2 / rho_g_cm3
+        if dist_cm >= next_checkpoint_cm:
+            output.append([current_e_total, current_thickness_g_cm2 * 1000.0, dist_cm])
+            step_cm = fine_step_cm if dist_cm >= fine_zone_start_cm else coarse_step_cm
+            next_checkpoint_cm = dist_cm + step_cm
+
+        e_u = current_e_total / mass_u
+        if e_u < 0.0001:  # Stop at ATIMA limit
+            output.append([current_e_total, current_thickness_g_cm2 * 1000.0, dist_cm])
+            break
+
+        projectile.T(e_u)
+        loss_mev = catima.dedx(projectile, gas_mix) * step_g_cm2
+
         current_e_total -= loss_mev
         current_thickness_g_cm2 += step_g_cm2
 
     np.savetxt(filename, output, fmt='%.6f', delimiter='\t', header=header)
-    print(f"Lookup table created: {filename}")
+    print(f"Lookup table created: {filename} ({len(output)} rows, "
+          f"range {total_range_cm:.2f} cm, fine zone below {fine_zone_start_cm:.2f} cm)")
 
 # --- 3. Run ---
 # Format: generate_lookup(Z, mass_u, E_start_MeV, label)

@@ -18,7 +18,7 @@ process_run() {
     mkdir -p "$outdir"
 
     root -q -l -b -x "../ANASEN_analysis/data/${DATASET}_Data/${prefix}${wrun}_mapped.root" \
-         -e "tree->Process(\"TrackRecon.C+\", \"${out}\")" > /dev/null 2>&1
+         -e "tree->Process(\"TrackRecon.C+\", \"${out}\")" # >  /dev/null 2>&1
          
     if [ -f "$out" ]; then
         echo "Run $wrun completed successfully in $outdir."
@@ -28,6 +28,7 @@ process_run() {
 }
 export -f process_run
 
+export pressure_in_torr=250
 export CO2percent=3
 
 # --- Block 1: 27Al Source Runs No Gas (1-8) ---
@@ -41,7 +42,7 @@ if [[ 1 -eq 0 ]]; then
     parallel --bar -j 6 process_run ::: {1..8}
 fi
 
-# --- Block 4: 17F Source Runs (5-14) ---
+# --- Block 2: 17F Source Runs (5-14) ---
 if [[ 1 -eq 0 ]]; then
     export DATASET="17F"
     export PREFIX="Source_"
@@ -51,12 +52,11 @@ if [[ 1 -eq 0 ]]; then
     parallel --bar -j 6 process_run ::: {5..13}
 fi
 
-# --- Block 2: 27Al Alpha+Gas Runs (9, 12) ---
+# --- Block 3: 27Al Alpha+Gas Runs (9, 12) ---
 if [[ 1 -eq 0 ]]; then
     export DATASET="27Al"
     export PREFIX="Run_"
     export OUT_DIR="Output_a"
-    export Gain=2
     export CATHODE_GAIN=3.0
     rm -f ${OUT_DIR}/all.root
     echo "Processing 27Al alpha+gas runs..."
@@ -68,7 +68,7 @@ if [[ 1 -eq 0 ]]; then
     unset timecut_low
 fi
 
-# --- Block 5: 17F Alpha+Gas Runs (18-21) ---
+# --- Block 4: 17F Alpha+Gas Runs (18-21) ---
 if [[ 1 -eq 0 ]]; then
     export DATASET="17F"
     export PREFIX="SourceRun_"
@@ -84,26 +84,24 @@ if [[ 1 -eq 0 ]]; then
     # exit
 fi
 
-# --- Block 3: 27Al Protons+Gas Runs (15, 17-22) ---
-if [[ 1 -eq 0 ]]; then
+# --- Block 5: 27Al Protons+Gas Runs (15, 17-22) ---
+if [[ 1 -eq 1 ]]; then
 
     # export CO2percent=4
     export DATASET="27Al"
     export PREFIX="Run_"
     export OUT_DIR="Output_p"       
-    export Gain=2
     export CATHODE_GAIN=3.0
     rm -f ${OUT_DIR}/*protons*
     export source_vertex=-200.0 # Source on the entrance window
     echo "Starting parallel processing for 27Al proton runs..."
 
-    # process_run 17
+    process_run 18
     # parallel --bar -j 8 process_run ::: 15 {17..22}
-    parallel --bar -j 8 process_run :::  {17..22}
-    hadd -j 4 -k ${OUT_DIR}/Al_protons.root ${OUT_DIR}/results_run0{15..22}.root
-    unset Gain
+    # parallel --bar -j 8 process_run :::  {17..22}
+    # hadd -j 4 -k ${OUT_DIR}/Al_protons.root ${OUT_DIR}/results_run0{15..22}.root
     unset CATHODE_GAIN
-    # exit
+    exit
 fi
 
 # --- Block 6: 17F Proton Data  ---
@@ -135,5 +133,5 @@ unset PREFIX
 unset CO2percent
 unset timecut_low
 unset timecut_high
-
+unset pressure_in_torr
 echo "Script execution finished."

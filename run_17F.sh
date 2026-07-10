@@ -1,6 +1,8 @@
 #!/bin/bash
 export DATASET="17F"
 export reactiondata=1
+export CO2percent=3
+export pressure_in_torr=250
 
 run_once() {
     local wrun=$(printf "%03d" "$1")
@@ -34,7 +36,10 @@ export DATASET="17F"
 export PREFIX="Run_"
 export OUT_DIR="Output_17F"
 export source_vertex=-57.28
-export Gain=1
+export CATHODE_GAIN=1
+# A1C1 cfrac low-band fold + z autocal (see TrackRecon.C Begin()). Defaults are the
+# 17F values; override here to re-tune without recompiling.
+export A1C1_LOWBAND_RFACTOR=7.0
 rm -f ${OUT_DIR}/*.root
 
 # Pre-compile TrackRecon.C ONCE on a single core so parallel jobs don't race on ACLiC
@@ -49,3 +54,10 @@ hadd -j 4 -k ${OUT_DIR}/Output_17F.root ${OUT_DIR}/results_run*.root
 unset source_vertex
 unset DATASET
 unset reactiondata
+unset CO2percent
+unset pressure_in_torr
+unset CATHODE_GAIN
+unset A1C1_LOWBAND_RFACTOR
+unset A1C1_Z_SCALE_QQQ
+unset A1C1_Z_OFF_QQQ
+unset A1C1_Z_OFF_SX3
