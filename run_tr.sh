@@ -53,7 +53,7 @@ if [[ 1 -eq 0 ]]; then
 fi
 
 # --- Block 3: 27Al Alpha+Gas Runs (9, 12) ---
-if [[ 1 -eq 1 ]]; then
+if [[ 1 -eq 0 ]]; then
     export DATASET="27Al"
     export PREFIX="Run_"
     export OUT_DIR="Output_a"
@@ -69,7 +69,7 @@ if [[ 1 -eq 1 ]]; then
 fi
 
 # --- Block 4: 17F Alpha+Gas Runs (18-21) ---
-if [[ 1 -eq 1 ]]; then
+if [[ 1 -eq 0 ]]; then
     export DATASET="17F"
     export PREFIX="SourceRun_"
     export OUT_DIR="Output_a"
@@ -85,7 +85,7 @@ if [[ 1 -eq 1 ]]; then
 fi
 
 # --- Block 5: 27Al Protons+Gas Runs (15, 17-22) ---
-if [[ 1 -eq 1 ]]; then
+if [[ 1 -eq 0 ]]; then
 
     # export CO2percent=4
     export DATASET="27Al"
@@ -111,6 +111,7 @@ if [[ 1 -eq 1 ]]; then
     export OUT_DIR="Output_p"
     rm -f ${OUT_DIR}/*pc*.root 
     export source_vertex=-200.0
+    export pressure_in_torr=350
     
     parallel --bar -j 8 process_run ::: {44..48} #3% CO2 
     hadd -j 4 -k ${OUT_DIR}/3pc.root ${OUT_DIR}/results_run0{44..48}.root
