@@ -10,9 +10,11 @@ root -q -l -b -e '.L TrackRecon.C++O'
 # Function to process a single run
 process_run() {
     local wrun=$(printf "%03d" "$1")
-    local prefix="${PREFIX:-Run_}" 
-    local outdir="${OUT_DIR:-Output_default}" 
+    local prefix="${PREFIX:-Run_}"
+    local outdir="${OUT_DIR:-Output_default}"
     local out="${outdir}/results_run${wrun}.root"
+
+    export RUN_NUMBER="$1"
 
     # Ensure the directory exists so ROOT doesn't fail silently
     mkdir -p "$outdir"
@@ -85,7 +87,7 @@ if [[ 1 -eq 0 ]]; then
 fi
 
 # --- Block 5: 27Al Protons+Gas Runs (15, 17-22) ---
-if [[ 1 -eq 0 ]]; then
+if [[ 1 -eq 1 ]]; then
 
     # export CO2percent=4
     export DATASET="27Al"
@@ -135,4 +137,5 @@ unset CO2percent
 unset timecut_low
 unset timecut_high
 unset pressure_in_torr
+unset RUN_NUMBER
 echo "Script execution finished."
