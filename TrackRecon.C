@@ -234,7 +234,10 @@ inline double evalEloss(TSpline3 *fwd, TSpline3 *inv, double E, double pathlen)
   double residual = fwd->Eval(E) - pathlen;
   if (!std::isfinite(residual))
     return 0.0;
-  return inv->Eval(residual);
+  if (residual <= 0.0)
+    return 0.0;
+  double e = inv->Eval(residual);
+  return std::isfinite(e) ? e : 0.0;
 }
 
 static const double a1c1_cfmin2_17F[7] = {0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10};
@@ -473,6 +476,7 @@ bool PCSX3TimeCut = false, PCASX3TimeCut = false, PCCSX3TimeCut = false;
 double anodeT = -99999, cathodeT = 99999;
 int anodeIndex = -1, cathodeIndex = -1;
 
+double a1c1_cfrac_pcz(const Event &pcevent, const TVector3 &si, bool &inband);
 void protonAlphaHistograms(HistPlotter *plotter, const std::vector<Event> &QQQ_Events, const std::vector<Event> &SX3_Events, const std::vector<Event> &PC_Events);
 void pcCalibratedHistograms(HistPlotter *plotter, const std::vector<Event> &QQQ_Events, const std::vector<Event> &SX3_Events, const std::vector<Event> &PC_Events_calibrated);
 void miscHistograms_oneWire(HistPlotter *plotter, const std::vector<Event> &QQQ_Events, const std::vector<std::vector<std::tuple<int, double, double>>> &aClusters);
@@ -789,7 +793,7 @@ inline void pcEnergyCalibrationAccumulate(const std::vector<Event> &PC_Events)
       continue;
     double path_length = pathLengthCm(source_pos, pcevent.pos);
     double e_remaining = evalElossForward(MeV_to_cm_spl, cm_to_MeV_spl, pc_calib_alpha_source_mev, path_length);
-     double dE_gas = pc_calib_alpha_source_mev - e_remaining;
+    double dE_gas = pc_calib_alpha_source_mev - e_remaining;
     
     if (!std::isfinite(dE_gas) || dE_gas <= 0.0)
       continue;
@@ -797,6 +801,102 @@ inline void pcEnergyCalibrationAccumulate(const std::vector<Event> &PC_Events)
       pcCalibData[pcevent.Anodech].push_back({pcevent.Energy1, dE_gas});
     if (pcevent.Cathodech >= 0 && pcevent.Cathodech < 24)
       pcCalibData[24 + pcevent.Cathodech].push_back({pcevent.Energy2, dE_gas});
+  }
+}
+
+inline double predictElasticEnergy(Kinematics &kin, double angle3_deg, double t3_lo = 0.001, double t3_hi = 60.0, int iters = 60)
+{
+  double f_lo = kin.getExc(t3_lo, angle3_deg);
+  double f_hi = kin.getExc(t3_hi, angle3_deg);
+  if (!std::isfinite(f_lo) || !std::isfinite(f_hi) || f_lo * f_hi > 0.0)
+    return -1.0; // no root in range (e.g. kinematically forbidden angle)
+  for (int i = 0; i < iters; ++i)
+  {
+    double t3_mid = 0.5 * (t3_lo + t3_hi);
+    double f_mid = kin.getExc(t3_mid, angle3_deg);
+    if (!std::isfinite(f_mid))
+      return -1.0;
+    if (f_mid * f_lo <= 0.0)
+      t3_hi = t3_mid;
+    else
+    {
+      t3_lo = t3_mid;
+      f_lo = f_mid;
+    }
+  }
+  return 0.5 * (t3_lo + t3_hi);
+}
+
+// Supplements the alpha-source calibration with cathode-tagged alpha events
+// from the proton-scattering runs (a(p,p)a elastic recoil), for wires the
+// source run barely illuminates. Mirrors the A1C2/A1C1(cfrac) vertex
+// reconstruction already used in protonMiscHistograms/_sx3, but instead of
+// reading the PC's own (uncalibrated) energy, predicts the alpha's energy
+// from elastic kinematics at the reconstructed angle/vertex and walks that
+// forward through the gas to a predicted dE_gas -- same target quantity as
+// the source calibration, merged into the same pcCalibData[wire] clouds.
+inline void pcEnergyCalibrationAccumulateProton(const std::vector<Event> &PC_Events, const std::vector<Event> &QQQ_Events, const std::vector<Event> &SX3_Events)
+{
+  if (!ta_foil_run)
+    return; // only meaningful for the proton-scattering campaign
+  static const double initial_energy = 6.89;
+  Kinematics apkin_a(mass_1H, mass_4He, mass_4He, mass_1H, initial_energy);
+
+  auto tryEvent = [&](const Event &pcevent, const Event &sievent, double perp_max, double phi_win)
+  {
+    if (!(pcevent.multi1 >= 1 && pcevent.multi2 >= 1))
+      return;
+    if (!(pcevent.Energy2 > 1400)) // cathode-tagged alpha, same cut as protonMiscHistograms
+      return;
+    if (TMath::Abs(sievent.pos.DeltaPhi(pcevent.pos)) > phi_win)
+      return;
+
+    double pcz;
+    if (pcevent.multi2 == 2)
+      pcz = pcfix_func.Eval(pcevent.pos.Z());
+    else
+    {
+      bool inband;
+      pcz = a1c1_cfrac_pcz(pcevent, sievent.pos, inband);
+      if (!inband)
+        return; // only trust in-band A1C1 solutions for calibration
+    }
+
+    TVector3 x2(pcevent.pos.X(), pcevent.pos.Y(), pcz);
+    TVector3 vertex = beamVertex(sievent.pos, x2 - sievent.pos);
+    if (beamPerp(vertex) > perp_max || vertex.Z() < z_entrance || vertex.Z() > 100)
+      return;
+
+    double theta = (sievent.pos - vertex).Theta();
+    double beam_path_length = TMath::Abs(vertex.Z() - z_entrance) * 0.1;
+    double beam_energy_at_vertex = evalEloss(MeV_to_cm_p_spl, cm_to_MeVp_spl, initial_energy, beam_path_length);
+    beam_energy_at_vertex = applyTaFoilEloss(beam_energy_at_vertex, vertex.Z());
+    if (beam_energy_at_vertex <= 0.0)
+      return;
+    apkin_a.setValues(mass_1H, mass_4He, mass_4He, mass_1H, beam_energy_at_vertex);
+
+    double predicted_alpha_E = predictElasticEnergy(apkin_a, theta * 180.0 / M_PI);
+    if (predicted_alpha_E <= 0.0)
+      return;
+
+    double path_length = pathLengthCm(vertex, pcevent.pos);
+    double e_remaining = evalElossForward(MeV_to_cm_spl, cm_to_MeV_spl, predicted_alpha_E, path_length);
+    double dE_gas = predicted_alpha_E - e_remaining;
+    if (!std::isfinite(dE_gas) || dE_gas <= 0.0)
+      return;
+
+    if (pcevent.Anodech >= 0 && pcevent.Anodech < 24)
+      pcCalibData[pcevent.Anodech].push_back({pcevent.Energy1, dE_gas});
+    if (pcevent.Cathodech >= 0 && pcevent.Cathodech < 24)
+      pcCalibData[24 + pcevent.Cathodech].push_back({pcevent.Energy2, dE_gas});
+  };
+
+  for (const auto &pcevent : PC_Events)
+  {
+    for (const auto &qqqevent : QQQ_Events)
+      tryEvent(pcevent, qqqevent, 6.0, TMath::Pi() / 4.0);
+    for (const auto &sx3event : SX3_Events)
+      tryEvent(pcevent, sx3event, 10.0, TMath::Pi() / 3.0);
   }
 }
 
@@ -1316,7 +1416,10 @@ Bool_t TrackRecon::Process(Long64_t entry)
   }
 
   if (doPCEnergyCalibration)
+  {
     pcEnergyCalibrationAccumulate(PC_Events);
+    pcEnergyCalibrationAccumulateProton(PC_Events, QQQ_Events, SX3_Events);
+  }
 
   //////Timing stuff for F data
 
@@ -1422,8 +1525,16 @@ Bool_t TrackRecon::Process(Long64_t entry)
   {
     protonAlphaHistograms(plotter, QQQ_Events, SX3_Events, PC_Events);
     // return kTRUE;
-  }
+  } // end if(process_alpha_proton_scattering)
 
+  if (pcEnergyCalibLoaded)
+    pcCalibratedHistograms(plotter, QQQ_Events, SX3_Events, PC_Events_calibrated);
+
+  // protonMiscHistograms*/miscHistograms_oneWire model the a(p,p) proton-
+  // scattering campaign specifically (they assume the Ta foil's beam-energy
+  // correction, applied inside them via ta_foil_run/applyTaFoilEloss) -- gate
+  // them to only run for runs actually in that campaign, not source or
+  // (a,a) reaction runs.
   if (doMiscHistograms && ta_foil_run)
   {
     if (onwire_analysis)
@@ -1510,7 +1621,7 @@ void TrackRecon::Terminate()
       }
       if (!ok)
         std::cerr << "PC energy calibration: wire " << wire << " has too few events (" << pts.size()
-                  << ") to fit -- writing identity (slope=1, intercept=0)" << std::endl;
+                   << ") to fit -- writing identity (slope=1, intercept=0)" << std::endl;
       outfile << wire << " " << slope << " " << intercept << "\n";
     }
     outfile.close();
