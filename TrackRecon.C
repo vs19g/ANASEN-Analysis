@@ -26,6 +26,7 @@ Int_t colors[40] = {
 #include <TVector2.h>
 #include <TRandom3.h>
 #include <TSpline.h>
+#include <TSystem.h> // gSystem->mkdir for the pc_calib_raw/ output directory
 
 #include <fstream>
 #include <iomanip>
@@ -33,6 +34,7 @@ Int_t colors[40] = {
 #include <sstream>
 #include <vector>
 #include <array>
+#include <unistd.h> // getpid(), for a unique per-process pc_calib_raw/ filename
 #include <map>
 #include <utility>
 #include <algorithm>
@@ -589,7 +591,8 @@ void TrackRecon::Begin(TTree * /*tree*/)
   if (doPCEnergyCalibration)
     std::cout << "PC energy calibration ON: alpha source = " << pc_calib_alpha_source_mev
               << " MeV, source position = (" << beam_axis_x << ", " << beam_axis_y << ", " << source_vertex
-              << ") mm -- writes pc_energy_calibration_" << dataset << ".dat in Terminate()" << std::endl;
+              << ") mm -- appends raw calibration points to pc_calib_raw/ in Terminate()"
+              << " (run pccal/fit_pc_energy_calibration.C afterward to produce pc_energy_calibration.dat)" << std::endl;
   for (int i = 0; i < 7; ++i)
   {
     a1c1_cfmin_cell[i] = cfmin_src[i];
@@ -641,7 +644,7 @@ void TrackRecon::Begin(TTree * /*tree*/)
     pcEnergyIntercept[i] = 0.0;
   }
   {
-    std::ifstream pcEnergyFile("pc_energy_calibration_" + dataset + ".dat");
+    std::ifstream pcEnergyFile("pc_energy_calibration.dat");
     if (pcEnergyFile.is_open())
     {
       std::string line;
@@ -659,7 +662,7 @@ void TrackRecon::Begin(TTree * /*tree*/)
       }
       pcEnergyFile.close();
       pcEnergyCalibLoaded = true;
-      std::cout << "Loaded independent PC energy calibration from pc_energy_calibration_" << dataset << ".dat"
+      std::cout << "Loaded independent PC energy calibration from pc_energy_calibration.dat"
                 << " -- populating PC_Events_calibrated" << std::endl;
     }
   }
@@ -791,7 +794,18 @@ inline void pcEnergyCalibrationAccumulate(const std::vector<Event> &PC_Events)
   {
     if (!(pcevent.multi1 >= 1 && pcevent.multi2 >= 1))
       continue;
-    double path_length = pathLengthCm(source_pos, pcevent.pos);
+
+    TVector3 interaction = pcevent.pos;
+    if (pcevent.multi1 == 1 && pcevent.multi2 == 1)
+    {
+      bool inband = false;
+      double pcz = a1c1_cfrac_pcz(pcevent, source_pos, inband);
+      if (!inband)
+        continue;
+      interaction.SetZ(pcz);
+    }
+
+    double path_length = pathLengthCm(source_pos, interaction);
     double e_remaining = evalElossForward(MeV_to_cm_spl, cm_to_MeV_spl, pc_calib_alpha_source_mev, path_length);
     double dE_gas = pc_calib_alpha_source_mev - e_remaining;
     
@@ -885,7 +899,9 @@ inline void pcEnergyCalibrationAccumulateProton(const std::vector<Event> &PC_Eve
     if (!std::isfinite(dE_gas) || dE_gas <= 0.0)
       return;
 
-    if (pcevent.Anodech >= 0 && pcevent.Anodech < 24)
+    // Single-wire only, so each wire's cloud maps its own charge (see the
+    // source-run accumulator for the same reasoning).
+    if (pcevent.multi1 == 1 && pcevent.Anodech >= 0 && pcevent.Anodech < 24)
       pcCalibData[pcevent.Anodech].push_back({pcevent.Energy1, dE_gas});
     if (pcevent.Cathodech >= 0 && pcevent.Cathodech < 24)
       pcCalibData[24 + pcevent.Cathodech].push_back({pcevent.Energy2, dE_gas});
@@ -1403,7 +1419,23 @@ Bool_t TrackRecon::Process(Long64_t entry)
         if (pcEnergyCalibLoaded)
         {
           Event PCEventCalibrated = PCEvent;
-          PCEventCalibrated.Energy1 = pcEnergySlope[PCEvent.Anodech] * apSumE + pcEnergyIntercept[PCEvent.Anodech];
+          // Calibrate EACH anode wire with its own factor and sum the results,
+          // rather than applying the first wire's factor to the raw cluster sum.
+          // The alpha's total gas dE is the charge summed over the wires it
+          // straddles; whether it lands on one wire or two is phi-correlated, so
+          // the old single-factor-on-sum made the calibrated anode energy depend
+          // on phi (unphysical: dE depends only on theta,z). Per-wire-then-sum is
+          // charge-conserving and phi-independent.
+          double anodeCalibSum = 0.0;
+          for (const auto &w : aCluster)
+          {
+            int wi = std::get<0>(w);
+            if (wi >= 0 && wi < 24)
+              anodeCalibSum += pcEnergySlope[wi] * std::get<1>(w) + pcEnergyIntercept[wi];
+          }
+          PCEventCalibrated.Energy1 = anodeCalibSum;
+          // Cathode uses the single max wire (cpMaxE) -- indexed by z, so it's
+          // already phi-consistent; leave it as-is.
           PCEventCalibrated.Energy2 = pcEnergySlope[24 + PCEvent.Cathodech] * cpMaxE + pcEnergyIntercept[24 + PCEvent.Cathodech];
           PC_Events_calibrated.push_back(PCEventCalibrated);
         }
@@ -1411,6 +1443,83 @@ Bool_t TrackRecon::Process(Long64_t entry)
       else
       {
         ; // std::cout << "AAAA " << std::endl;
+      }
+    }
+  }
+
+  if ((pcEnergyCalibLoaded || doPCEnergyCalibration) && cClusters.empty())
+  {
+    const TVector3 source_pos_a1c0(beam_axis_x, beam_axis_y, source_vertex);
+    for (const auto &aCl : aClusters)
+    {
+      if (aCl.empty())
+        continue;
+      auto aPw = pwinstance.GetPseudoWire(aCl, "ANODE");
+      auto apwire = std::get<0>(aPw);
+      double apSumE = std::get<1>(aPw);
+      double apTSMaxE = std::get<3>(aPw);
+      int anodeIdx = std::get<0>(aCl[0]);
+      if (anodeIdx < 0 || anodeIdx >= 24)
+        continue;
+
+      // Pick the single best phi-coincident, time-coincident Si hit (QQQ or SX3)
+      // so this anode cluster yields ONE unambiguous (position, ADC) pair rather
+      // than one per Si hit (which would map the same ADC to conflicting dE_gas).
+      const Event *bestSi = nullptr;
+      bool bestIsQQQ = true;
+      double bestDphi = 1e9;
+      auto consider = [&](const std::vector<Event> &sis, bool isQQQ)
+      {
+        for (const auto &si : sis)
+        {
+          if (!(si.Time1 - apTSMaxE < 150)) // loose time coincidence (benchmark sign)
+            continue;
+          TVector3 pc = pwinstance.getClosestWirePosAtWirePhi(apwire, si.pos.Phi());
+          double dphi = TMath::Abs(si.pos.DeltaPhi(pc));
+          if (dphi <= TMath::Pi() / 4.0 && dphi < bestDphi)
+          {
+            bestDphi = dphi;
+            bestSi = &si;
+            bestIsQQQ = isQQQ;
+          }
+        }
+      };
+      consider(QQQ_Events, true);
+      consider(SX3_Events, false);
+      if (!bestSi)
+        continue;
+
+      TVector3 pc = pwinstance.getClosestWirePosAtWirePhi(apwire, bestSi->pos.Phi());
+      pc.SetZ(a1c1_zcorr(pc.Z(), bestIsQQQ)); // same A1C0 z reference as the benchmark
+
+      if (pcEnergyCalibLoaded)
+      {
+        // Per-wire-then-sum, phi-independent (same reasoning as the crossover branch).
+        double anodeCalibSum = 0.0;
+        for (const auto &w : aCl)
+        {
+          int wi = std::get<0>(w);
+          if (wi >= 0 && wi < 24)
+            anodeCalibSum += pcEnergySlope[wi] * std::get<1>(w) + pcEnergyIntercept[wi];
+        }
+        Event ev(pc, anodeCalibSum, -1.0, apTSMaxE, -1.0);
+        ev.multi1 = static_cast<int>(aCl.size());
+        ev.multi2 = 0; // no cathode -> a{n}c0 topology in pcCalibratedHistograms
+        ev.Anodech = anodeIdx;
+        ev.Cathodech = -1;
+        PC_Events_calibrated.push_back(ev);
+      }
+
+      // Anode-wire calibration point -- source runs only. The fixed alpha-source
+      // energy is only valid there; proton-run A1C0 has no elastic tag to predict
+      // its energy, so it contributes to the display but not the fit.
+      if (doPCEnergyCalibration && !ta_foil_run)
+      {
+        double path = pathLengthCm(source_pos_a1c0, pc);
+        double e_rem = evalElossForward(MeV_to_cm_spl, cm_to_MeV_spl, pc_calib_alpha_source_mev, path);
+        double dE_gas = pc_calib_alpha_source_mev - e_rem;
+        if (std::isfinite(dE_gas) && dE_gas > 0.0)
+          pcCalibData[anodeIdx].push_back({apSumE, dE_gas});
       }
     }
   }
@@ -1591,43 +1700,25 @@ void TrackRecon::Terminate()
 
   if (doPCEnergyCalibration)
   {
-    std::string outname = "pc_energy_calibration_" + dataset + ".dat";
+    gSystem->mkdir("pc_calib_raw", kTRUE); // kTRUE = create parents, no-op if it exists
+    std::string tag = getenv("RUN_NUMBER") ? std::string("run") + getenv("RUN_NUMBER")
+                                            : dataset + "_pid" + std::to_string(getpid());
+    std::string outname = "pc_calib_raw/points_" + tag + ".dat";
     std::ofstream outfile(outname);
     outfile << std::scientific << std::setprecision(6);
+    long long nPoints = 0;
     for (int wire = 0; wire < 48; ++wire)
     {
-      const auto &pts = pcCalibData[wire];
-      double slope = 1.0, intercept = 0.0;
-      bool ok = pts.size() >= 2;
-      if (ok)
+      for (const auto &p : pcCalibData[wire])
       {
-        // unweighted least-squares fit of dE_gas (y) vs raw ADC (x)
-        double sx = 0, sy = 0, sxx = 0, sxy = 0;
-        for (const auto &p : pts)
-        {
-          sx += p.first;
-          sy += p.second;
-          sxx += p.first * p.first;
-          sxy += p.first * p.second;
-        }
-        double n = static_cast<double>(pts.size());
-        double denom = n * sxx - sx * sx;
-        ok = std::isfinite(denom) && std::abs(denom) > 1e-12;
-        if (ok)
-        {
-          slope = (n * sxy - sx * sy) / denom;
-          intercept = (sy - slope * sx) / n;
-        }
+        outfile << wire << " " << p.first << " " << p.second << "\n";
+        ++nPoints;
       }
-      if (!ok)
-        std::cerr << "PC energy calibration: wire " << wire << " has too few events (" << pts.size()
-                   << ") to fit -- writing identity (slope=1, intercept=0)" << std::endl;
-      outfile << wire << " " << slope << " " << intercept << "\n";
     }
     outfile.close();
-    std::cout << "PC energy calibration: wrote " << outname
-              << " (copy/rename to slope_intercept_results_" << dataset
-              << ".dat to use it in a normal trackrecon run)" << std::endl;
+    std::cout << "PC energy calibration: appended " << nPoints << " raw points to " << outname
+              << " -- run pccal/fit_pc_energy_calibration.C once all calibration runs are done"
+              << " to (re)produce pc_energy_calibration.dat" << std::endl;
   }
 }
 
@@ -1748,25 +1839,38 @@ void pcCalibratedHistograms(HistPlotter *plotter, const std::vector<Event> &QQQ_
 {
   for (const auto &pcevent : PC_Events_calibrated)
   {
-    plotter->Fill2D("Calib_AnodeE_vs_AnodeIndex", 24, 0, 24, 500, 0, 10, pcevent.Anodech, pcevent.Energy1, "hCalibPC");
-    plotter->Fill2D("Calib_CathodeE_vs_CathodeIndex", 24, 0, 24, 500, 0, 10, pcevent.Cathodech, pcevent.Energy2, "hCalibPC");
-    plotter->Fill1D("Calib_AnodeE", 500, 0, 10, pcevent.Energy1, "hCalibPC");
-    plotter->Fill1D("Calib_CathodeE", 500, 0, 10, pcevent.Energy2, "hCalibPC");
-    plotter->Fill2D("Calib_AnodeE_vs_CathodeE", 500, 0, 10, 500, 0, 10, pcevent.Energy1, pcevent.Energy2, "hCalibPC");
-    plotter->Fill2D("Calib_dE_vs_Z", 400, -200, 200, 500, 0, 10, pcevent.pos.Z(), pcevent.Energy1 + pcevent.Energy2, "hCalibPC");
-    plotter->Fill2D("Calib_dE_vs_Phi", 360, -180, 180, 500, 0, 10, pcevent.pos.Phi() * 180 / M_PI, pcevent.Energy1 + pcevent.Energy2, "hCalibPC");
+    const std::string topo = "_a" + std::to_string(pcevent.multi1) + "c" + std::to_string(pcevent.multi2);
+    const bool hasCathode = (pcevent.Cathodech >= 0);
+    const double totalE = hasCathode ? (pcevent.Energy1 + pcevent.Energy2) : pcevent.Energy1;
+    if (hasCathode)
+      plotter->Fill2D("Calib_AnodeE_vs_CathodeE_a1c1andup",800, 0, 3, 800, 0, 3, pcevent.Energy1, pcevent.Energy2, "hCalibPC");
+    for (const std::string &t : {std::string(""), topo})
+    {
+      plotter->Fill2D("Calib_AnodeE_vs_AnodeIndex" + t, 24, 0, 24, 800, 0, 3, pcevent.Anodech, pcevent.Energy1, "hCalibPC");
+      plotter->Fill1D("Calib_AnodeE" + t, 800, 0, 3, pcevent.Energy1, "hCalibPC");
+      plotter->Fill2D("Calib_dE_vs_Z" + t, 400, -200, 200, 800, 0, 3, pcevent.pos.Z(), totalE, "hCalibPC");
+      plotter->Fill2D("Calib_dE_vs_Phi" + t, 360, -180, 180, 800, 0, 3, pcevent.pos.Phi() * 180 / M_PI, totalE, "hCalibPC");
+      if (hasCathode)
+      {
+        plotter->Fill2D("Calib_CathodeE_vs_CathodeIndex" + t, 24, 0, 24, 800, 0, 3, pcevent.Cathodech, pcevent.Energy2, "hCalibPC");
+        plotter->Fill1D("Calib_CathodeE" + t, 800, 0, 3, pcevent.Energy2, "hCalibPC");
+        plotter->Fill2D("Calib_AnodeE_vs_CathodeE" + t,800, 0, 3, 800, 0, 3, pcevent.Energy1, pcevent.Energy2, "hCalibPC");
+      }
 
-    for (const auto &qqqevent : QQQ_Events)
-    {
-      plotter->Fill2D("Calib_dE_AnodeE_vs_QQQE", 400, 0, 10, 500, 0, 10, qqqevent.Energy1, pcevent.Energy1, "hCalibPC");
-      plotter->Fill2D("Calib_dE_CathodeE_vs_QQQE", 400, 0, 10, 500, 0, 10, qqqevent.Energy1, pcevent.Energy2, "hCalibPC");
-      plotter->Fill2D("Calib_dE_TotalE_vs_QQQE", 400, 0, 10, 500, 0, 10, qqqevent.Energy1, pcevent.Energy1 + pcevent.Energy2, "hCalibPC");
-    }
-    for (const auto &sx3event : SX3_Events)
-    {
-      plotter->Fill2D("Calib_dE_AnodeE_vs_SX3E", 400, 0, 10, 500, 0, 10, sx3event.Energy1, pcevent.Energy1, "hCalibPC");
-      plotter->Fill2D("Calib_dE_CathodeE_vs_SX3E", 400, 0, 10, 500, 0, 10, sx3event.Energy1, pcevent.Energy2, "hCalibPC");
-      plotter->Fill2D("Calib_dE_TotalE_vs_SX3E", 400, 0, 10, 500, 0, 10, sx3event.Energy1, pcevent.Energy1 + pcevent.Energy2, "hCalibPC");
+      for (const auto &qqqevent : QQQ_Events)
+      {
+        plotter->Fill2D("Calib_dE_AnodeE_vs_QQQE" + t, 400, 0, 10, 800, 0, 3, qqqevent.Energy1, pcevent.Energy1, "hCalibPC");
+        plotter->Fill2D("Calib_dE_TotalE_vs_QQQE" + t, 400, 0, 10, 800, 0, 3, qqqevent.Energy1, totalE, "hCalibPC");
+        if (hasCathode)
+          plotter->Fill2D("Calib_dE_CathodeE_vs_QQQE" + t, 400, 0, 10, 800, 0, 3, qqqevent.Energy1, pcevent.Energy2, "hCalibPC");
+      }
+      for (const auto &sx3event : SX3_Events)
+      {
+        plotter->Fill2D("Calib_dE_AnodeE_vs_SX3E" + t, 400, 0, 10, 800, 0, 3, sx3event.Energy1, pcevent.Energy1, "hCalibPC");
+        plotter->Fill2D("Calib_dE_TotalE_vs_SX3E" + t, 400, 0, 10, 800, 0, 3, sx3event.Energy1, totalE, "hCalibPC");
+        if (hasCathode)
+          plotter->Fill2D("Calib_dE_CathodeE_vs_SX3E" + t, 400, 0, 10, 800, 0, 3, sx3event.Energy1, pcevent.Energy2, "hCalibPC");
+      }
     }
   }
 }
