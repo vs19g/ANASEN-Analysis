@@ -6,12 +6,13 @@ export OUT_DIR="Output_27Al"
 export reactiondata=1
 export CO2percent=3
 export pressure_in_torr=250
-export CATHODE_GAIN=1
+export CATHODE_GAIN=3.0
+export source_vertex=-200.0
 export BEAM_AXIS_X=-15
 export BEAM_AXIS_Y=-5
 
 # Clean up previous runs
-rm -f ${OUT_DIR}/results_run*.root output_27Al.root
+rm -f ${OUT_DIR}/*.root
 
 echo "Pre-compiling TrackRecon.C safely on a single core..."
 root -q -l -b -e '.L TrackRecon.C++O'
@@ -23,7 +24,6 @@ process_run() {
     local infile="../ANASEN_analysis/data/${DATASET}_Data/${prefix}${wrun}_mapped.root"
     local out="${outdir}/results_run${wrun}.root"
 
-    # Ensure the directory exists so ROOT doesn't fail silently
     mkdir -p "$outdir"
 
     root -q -l -b -x "$infile" \
@@ -39,19 +39,28 @@ process_run() {
 export -f process_run
 
 echo "Starting parallel processing..."
-parallel --bar -j 4 process_run ::: {50..52}
+time parallel --bar -j 8 process_run ::: {50..59}
+time parallel --bar -j 8 process_run ::: 62 63 66 67 73 74
+# time parallel --bar -j 1 run_once {1} ::: 68
+# time parallel --bar -j 6 run_once {1} ::: {78..89}
 
 echo "Merging files..."
 hadd -k -j 4 ${OUT_DIR}/output_27Al.root ${OUT_DIR}/results_run*.root
 
+rootbrowse ${OUT_DIR}/output_27Al.root
+
 unset DATASET
+unset PREFIX
+unset OUT_DIR
 unset reactiondata
 unset CO2percent
 unset pressure_in_torr
 unset CATHODE_GAIN
+unset source_vertex
 unset A1C1_LOWBAND_RFACTOR
 unset A1C1_Z_SCALE_QQQ
 unset A1C1_Z_OFF_QQQ
 unset A1C1_Z_OFF_SX3
 unset BEAM_AXIS_X
 unset BEAM_AXIS_Y
+echo "Script execution finished."

@@ -44,15 +44,16 @@ bool process_alpha_proton_scattering = false,
      doMiscHistograms = true,
      doPCSX3ClusterAnalysis = true,
      doPCQQQClusterAnalysis = true,
-     doOldAnalysis = false,
+     doOldAnalysis = true,
      do27AlapAnalysis = false,
      BenchMark = true,
      onwire_analysis = true,
      diagnostic_eplots = true,
-     diagnostic_tplots = false,
+     diagnostic_tplots = true,
      reactiondata = false,
      doPCEnergyCalibration = false,
-     ta_foil_run = false;
+     ta_foil_run = false,
+     source_run = false;
 
 // --- Geometry, Calibration, & Model Variables ---
 double source_vertex = 53.0,
@@ -153,7 +154,17 @@ static std::vector<int> a1c1_dead_cathode_17F = {};    // 0,13,15 can be recover
 static std::vector<int> a1c1_dead_anode_27Al = {0, 12, 19};
 static std::vector<int> a1c1_dead_cathode_27Al = {13};
 
-std::vector<std::pair<double, double>> pcCalibData[48];
+// Calibration points are streamed straight to disk as they're generated
+// (opened in Begin(), written by pcCalibWritePoint(), closed in Terminate())
+// instead of buffered in memory for the whole run -- a full run can produce
+// many millions of points, and holding them all in a std::vector until
+// Terminate() grows unbounded and can exhaust memory on long runs.
+std::ofstream pcCalibOutFile;
+inline void pcCalibWritePoint(int wire, double adc, double dE_gas)
+{
+  if (pcCalibOutFile.is_open())
+    pcCalibOutFile << wire << " " << adc << " " << dE_gas << "\n";
+}
 
 std::vector<int> *a1c1_dead_anode = &a1c1_dead_anode_17F; // active set, chosen in Begin()
 std::vector<int> *a1c1_dead_cathode = &a1c1_dead_cathode_17F;
@@ -507,20 +518,27 @@ void TrackRecon::Begin(TTree * /*tree*/)
     std::cout << "Analyzing dataset as reactiondata" << std::endl;
   }
 
-  if (getenv("RUN_NUMBER"))
+  // Run classification is by OUT_DIR, not RUN_NUMBER: run numbers collide
+  // across datasets/blocks (e.g. 17F's alpha+gas block and 27Al's proton
+  // block both use runs 18-21), so a RUN_NUMBER-keyed lookup misclassifies
+  // whichever dataset didn't originally populate kTaFoilRuns.
+  std::string outdir = getenv("OUT_DIR") ? getenv("OUT_DIR") : "";
+  ta_foil_run = (outdir == "Output_p");
+  source_run = (outdir == "Output_a");
+  if (ta_foil_run && getenv("RUN_NUMBER"))
   {
     int run_number = std::atoi(getenv("RUN_NUMBER"));
     for (const auto &r : kTaFoilRuns)
     {
       if (r.run == run_number)
       {
-        ta_foil_run = true;
         ta_foil_z_mm = r.z_mm;
         break;
       }
     }
   }
-  std::cout << "Ta foil: " << (ta_foil_run ? ("present, run in proton-scattering campaign, z=" + std::to_string(ta_foil_z_mm) + " mm") : std::string("not applicable (RUN_NUMBER unset or not a proton-scattering run)")) << std::endl;
+  std::cout << "OUT_DIR=" << outdir << " -> ta_foil_run=" << ta_foil_run
+             << " (z=" << ta_foil_z_mm << " mm), source_run=" << source_run << std::endl;
 
   // if (getenv("PC_ENERGY_CALIBRATION"))
   //   doPCEnergyCalibration = std::atoi(getenv("PC_ENERGY_CALIBRATION")) != 0;
@@ -529,6 +547,25 @@ void TrackRecon::Begin(TTree * /*tree*/)
     dataset = std::string(getenv("DATASET"));
   if (getenv("source_vertex"))
     source_vertex = (double)std::atof(std::string(getenv("source_vertex")).c_str());
+
+  if (doPCEnergyCalibration)
+  {
+    gSystem->mkdir("pc_calib_raw", kTRUE); // kTRUE = create parents, no-op if it exists
+    // Tag source-run vs proton-run files distinctly (src_/ap_ prefix) so the
+    // aggregator can treat them differently: source runs sit at a handful of
+    // known, fixed positions -- each run is a single clean, additive
+    // calibration point per wire, not thousands of samples of the same thing --
+    // while proton runs sample a continuously varying vertex/angle within a
+    // single run, where the per-event spread IS the useful signal and must
+    // stay pooled at the individual-point level.
+    std::string runTypeTag = source_run ? "src_" : (ta_foil_run ? "ap_" : "other_");
+    std::string tag = runTypeTag + (getenv("RUN_NUMBER") ? std::string("run") + getenv("RUN_NUMBER")
+                                                          : dataset + "_pid" + std::to_string(getpid()));
+    std::string outname = "pc_calib_raw/points_" + tag + ".dat";
+    pcCalibOutFile.open(outname);
+    pcCalibOutFile << std::scientific << std::setprecision(6);
+    std::cout << "PC energy calibration: streaming raw points to " << outname << std::endl;
+  }
 
   if (getenv("CO2percent"))
     co2pc = std::atoi(getenv("CO2percent"));
@@ -787,7 +824,7 @@ inline double evalElossForward(TSpline3 *fwd, TSpline3 *inv, double E, double pa
   return e;
 }
 
-inline void pcEnergyCalibrationAccumulate(const std::vector<Event> &PC_Events)
+inline void pcEnergyCalibrationAccumulate(const std::vector<Event> &PC_Events, const std::vector<Event> &SX3_Events, const std::vector<Event> &QQQ_Events)
 {
   const TVector3 source_pos(beam_axis_x, beam_axis_y, source_vertex);
   for (const auto &pcevent : PC_Events)
@@ -795,26 +832,66 @@ inline void pcEnergyCalibrationAccumulate(const std::vector<Event> &PC_Events)
     if (!(pcevent.multi1 >= 1 && pcevent.multi2 >= 1))
       continue;
 
-    TVector3 interaction = pcevent.pos;
-    if (pcevent.multi1 == 1 && pcevent.multi2 == 1)
+    // Use an Si-hit-derived z (pczguess) instead of the PC's own cfrac
+    // sub-cell reconstruction: after depositing dE_gas in the PC, the alpha
+    // continues on and strikes SX3 or QQQ, giving a genuinely INDEPENDENT
+    // trajectory-angle measurement from the known, fixed source position --
+    // same pczguess pattern used elsewhere in this file for A1C0 benchmarks
+    // (each detector keeps its own established formula/geometry constants
+    // for consistency with the rest of the file). This sidesteps the
+    // PC-only reconstruction entirely (no more circular dependence on the
+    // PC's own charge-division z, and no more dependence on anode/cathode
+    // multiplicity for z precision), so the push gates below only need to
+    // protect ADC purity, not z precision. Try SX3 first, then QQQ.
+    bool foundSi = false;
+    double pcz = 0.0;
+    for (const auto &sx3event : SX3_Events)
     {
-      bool inband = false;
-      double pcz = a1c1_cfrac_pcz(pcevent, source_pos, inband);
-      if (!inband)
+      if (!(std::isfinite(sx3event.Time1) && std::isfinite(pcevent.Time1)) || TMath::Abs(sx3event.Time1 - pcevent.Time1) > 150.0)
         continue;
-      interaction.SetZ(pcz);
+      if (TMath::Abs(sx3event.pos.DeltaPhi(pcevent.pos)) > TMath::Pi() / 3.0)
+        continue;
+      double sx3theta = TMath::ATan2(88.0, sx3event.pos.Z() - source_vertex);
+      pcz = 37.0 / TMath::Tan(sx3theta) + source_vertex;
+      foundSi = true;
+      break;
     }
+    if (!foundSi)
+    {
+      for (const auto &qqqevent : QQQ_Events)
+      {
+        if (!(std::isfinite(qqqevent.Time1) && std::isfinite(pcevent.Time1)) || TMath::Abs(qqqevent.Time1 - pcevent.Time1) > 150.0)
+          continue;
+        if (TMath::Abs(qqqevent.pos.DeltaPhi(pcevent.pos)) > TMath::Pi() / 4.0)
+          continue;
+        double qqqTheta = (qqqevent.pos - TVector3(0, 0, source_vertex)).Theta();
+        pcz = 37.0 / TMath::Tan(qqqTheta) + source_vertex;
+        foundSi = true;
+        break;
+      }
+    }
+    if (!foundSi)
+      continue;
 
+    TVector3 interaction(pcevent.pos.X(), pcevent.pos.Y(), pcz);
     double path_length = pathLengthCm(source_pos, interaction);
     double e_remaining = evalElossForward(MeV_to_cm_spl, cm_to_MeV_spl, pc_calib_alpha_source_mev, path_length);
     double dE_gas = pc_calib_alpha_source_mev - e_remaining;
 
     if (!std::isfinite(dE_gas) || dE_gas <= 0.0)
       continue;
-    if (pcevent.Anodech >= 0 && pcevent.Anodech < 24)
-      pcCalibData[pcevent.Anodech].push_back({pcevent.Energy1, dE_gas});
-    if (pcevent.Cathodech >= 0 && pcevent.Cathodech < 24)
-      pcCalibData[24 + pcevent.Cathodech].push_back({pcevent.Energy2, dE_gas});
+    // Energy1/Energy2 are per-wire ADC. When multi1/multi2 > 1 the charge is
+    // shared across several wires, so a single wire's Energy here is only
+    // its (event-dependent) share of the total -- not comparable to the
+    // full predicted dE_gas. Restrict each side to clean, single-wire
+    // clusters so ADC and dE_gas both refer to the whole deposited charge.
+    // z now comes from SX3 independently of multi1/multi2, so anode and
+    // cathode purity are gated independently (mirrors the proton
+    // accumulator's tryEvent).
+    if (pcevent.multi1 == 1 && pcevent.Anodech >= 0 && pcevent.Anodech < 24)
+      pcCalibWritePoint(pcevent.Anodech, pcevent.Energy1, dE_gas);
+    if (pcevent.multi2 >= 1 && pcevent.Cathodech >= 0 && pcevent.Cathodech < 24)
+      pcCalibWritePoint(24 + pcevent.Cathodech, pcevent.Energy2, dE_gas);
   }
 }
 
@@ -848,7 +925,7 @@ inline double predictElasticEnergy(Kinematics &kin, double angle3_deg, double t3
 // reading the PC's own (uncalibrated) energy, predicts the alpha's energy
 // from elastic kinematics at the reconstructed angle/vertex and walks that
 // forward through the gas to a predicted dE_gas -- same target quantity as
-// the source calibration, merged into the same pcCalibData[wire] clouds.
+// the source calibration, streamed into the same per-wire output file.
 inline void pcEnergyCalibrationAccumulateProton(const std::vector<Event> &PC_Events, const std::vector<Event> &QQQ_Events, const std::vector<Event> &SX3_Events)
 {
   if (!ta_foil_run)
@@ -902,9 +979,9 @@ inline void pcEnergyCalibrationAccumulateProton(const std::vector<Event> &PC_Eve
     // Single-wire only, so each wire's cloud maps its own charge (see the
     // source-run accumulator for the same reasoning).
     if (pcevent.multi1 == 1 && pcevent.Anodech >= 0 && pcevent.Anodech < 24)
-      pcCalibData[pcevent.Anodech].push_back({pcevent.Energy1, dE_gas});
-    if (pcevent.Cathodech >= 0 && pcevent.Cathodech < 24)
-      pcCalibData[24 + pcevent.Cathodech].push_back({pcevent.Energy2, dE_gas});
+      pcCalibWritePoint(pcevent.Anodech, pcevent.Energy1, dE_gas);
+    if (pcevent.multi2 == 1 && pcevent.Cathodech >= 0 && pcevent.Cathodech < 24)
+      pcCalibWritePoint(24 + pcevent.Cathodech, pcevent.Energy2, dE_gas);
   };
 
   for (const auto &pcevent : PC_Events)
@@ -1396,6 +1473,38 @@ Bool_t TrackRecon::Process(Long64_t entry)
 
   for (const auto &aCluster : aClusters)
   {
+    // A2 anode charge-sharing ratio: for exactly-two-fired-wire (multi-anode)
+    // clusters, the ratio of the smaller to the larger wire's energy. This
+    // characterises how the deposited charge splits between the two straddled
+    // anode wires (~0 = one wire dominates, ~1 = even split) and is filled once
+    // per anode cluster (before the cathode loop) so it isn't inflated by the
+    // cathode multiplicity.
+    if (aCluster.size() == 2)
+    {
+      double ae0 = std::get<1>(aCluster[0]);
+      double ae1 = std::get<1>(aCluster[1]);
+      double alo = std::min(ae0, ae1);
+      double ahi = std::max(ae0, ae1);
+      if (ahi > 0.0)
+      {
+        double aratio = alo / ahi;
+        plotter->Fill1D("A2_anode_ratio", 120, 0, 1.2, aratio, "hGMPC");
+        plotter->Fill2D("A2_anode_ratio_vs_sum", 800, 0, 40000, 120, 0, 1.2, ae0 + ae1, aratio, "hGMPC");
+        plotter->Fill2D("A2_anode_ratio_vs_lowerIndex", 24, 0, 24, 120, 0, 1.2,
+                        std::min(std::get<0>(aCluster[0]), std::get<0>(aCluster[1])), aratio, "hGMPC");
+      }
+      // Raw-vs-raw sanity check for the "A2 total = 2x A1 total" question, BEFORE
+      // any energy-calibration math touches it: if the raw (gain-matched-only)
+      // 2-wire sum already peaks at ~2x the raw single-wire distribution, the
+      // effect is upstream of the calibration code (neighbor-wire crosstalk on
+      // the raw signal, or a genuine double-hit) rather than introduced by how
+      // the calibration sums wires.
+      plotter->Fill1D("Raw_A2_AnodeSum", 800, 0, 40000, ae0 + ae1, "hGMPC");
+    }
+    else if (aCluster.size() == 1)
+    {
+      plotter->Fill1D("Raw_A1_AnodeSum", 800, 0, 40000, std::get<1>(aCluster[0]), "hGMPC");
+    }
     for (const auto &cCluster : cClusters)
     {
       if (aCluster.size() == 0)
@@ -1419,69 +1528,51 @@ Bool_t TrackRecon::Process(Long64_t entry)
         if (pcEnergyCalibLoaded)
         {
           Event PCEventCalibrated = PCEvent;
-
+          // Calibrate EACH anode wire's charge with its own slope and sum the
+          // results, rather than applying the first wire's factor to the raw
+          // cluster sum: the alpha's total gas dE is the charge summed over the
+          // wires it straddles, and whether it lands on one wire or two is
+          // phi-correlated, so a single-factor-on-sum made the calibrated anode
+          // energy depend on phi (unphysical: dE depends only on theta,z).
+          //
+          // The intercept, though, is a per-EVENT baseline (pedestal/threshold
+          // offset from the single-wire fit, where one wire's ADC stood for the
+          // whole dE_gas) -- not a per-wire quantity. Adding intercept[wi] once
+          // per fired wire double-counts that baseline for multi-wire clusters,
+          // reintroducing a multiplicity- (hence indirectly phi-) dependent bias
+          // through the back door. Apply it exactly once, from the primary
+          // (max-energy, i.e. aCluster[0]) wire.
           double anodeCalibSum = 0.0;
-          double primaryIntercept = 0.0;
-
-          // Vector to track individual calibrated fractional energies for A2 charge sharing
-          std::vector<double> calibWireEnergies;
+          std::vector<double> calibWireEnergies; // per-wire slope*ADC (no intercept), for the A2 ratio below
           calibWireEnergies.reserve(aCluster.size());
-
-          if (!aCluster.empty())
-          {
-            // Use the intercept of the primary (maximum energy) wire exactly ONCE.
-            // The first element of aCluster from Make_Clusters is the maximum energy wire.
-            int primaryWire = std::get<0>(aCluster[0]);
-            if (primaryWire >= 0 && primaryWire < 24)
-            {
-              primaryIntercept = pcEnergyIntercept[primaryWire];
-            }
-          }
-
-          // Apply per-wire gain slopes to the fractional charge, but DO NOT add the intercept yet
           for (const auto &w : aCluster)
           {
             int wi = std::get<0>(w);
-            if (wi >= 0 && wi < 24)
-            {
-              // Note: std::get<1>(w) already has the relative matching 'pcSlope' applied
-              double wCalibE = pcEnergySlope[wi] * std::get<1>(w);
-              anodeCalibSum += wCalibE;
-              calibWireEnergies.push_back(wCalibE);
-            }
+            double wCalibE = (wi >= 0 && wi < 24) ? pcEnergySlope[wi] * std::get<1>(w) : 0.0;
+            anodeCalibSum += wCalibE;
+            calibWireEnergies.push_back(wCalibE);
           }
-
-          // Apply the baseline offset (intercept) exactly once for the whole event
+          int primaryAnodeWire = std::get<0>(aCluster[0]);
+          double primaryIntercept = (primaryAnodeWire >= 0 && primaryAnodeWire < 24) ? pcEnergyIntercept[primaryAnodeWire] : 0.0;
           PCEventCalibrated.Energy1 = anodeCalibSum + primaryIntercept;
-
-          // Cathode uses the single max wire (cpMaxE) -- indexed by z, so it's already phi-consistent
+          // Cathode uses the single max wire (cpMaxE) -- indexed by z, so it's
+          // already phi-consistent; leave it as-is.
           PCEventCalibrated.Energy2 = pcEnergySlope[24 + PCEvent.Cathodech] * cpMaxE + pcEnergyIntercept[24 + PCEvent.Cathodech];
-
           PC_Events_calibrated.push_back(PCEventCalibrated);
 
-          // ---------------------------------------------------------
-          // A2 Anode Charge-Sharing Diagnostics
-          // ---------------------------------------------------------
-          if (aCluster.size() == 2 && calibWireEnergies.size() == 2)
+          // Calibrated-energy A2 charge-sharing ratio: same diagnostic as the raw
+          // version above (A2_anode_ratio), but on the per-wire CALIBRATED shares,
+          // so miscalibration between the two wires shows up as a ratio pulled
+          // away from what the raw-ADC ratio would give. Checks phi/energy
+          // dependence directly on the quantity that actually feeds Energy1.
+          if (calibWireEnergies.size() == 2)
           {
-            double e1 = calibWireEnergies[0];
-            double e2 = calibWireEnergies[1];
-
-            double eSmaller = std::min(e1, e2);
-            double eLarger = std::max(e1, e2);
-
-            // Ratio goes from 0.0 (almost all charge on one wire) to 1.0 (perfectly shared)
+            double eSmaller = std::min(calibWireEnergies[0], calibWireEnergies[1]);
+            double eLarger = std::max(calibWireEnergies[0], calibWireEnergies[1]);
             double ratio = (eLarger > 0.0) ? (eSmaller / eLarger) : 0.0;
-
-            // Plotting the 1D ratio distribution
             plotter->Fill1D("Calib_A2_AnodeRatio", 200, 0.0, 1.0, ratio, "hCalibPC");
-
-            // Checking phi-dependence: Should peak at ratio=1.0 strictly between wires
-            // and approach 0.0 when passing directly over a wire
             plotter->Fill2D("Calib_A2_AnodeRatio_vs_Phi", 360, -180, 180, 200, 0.0, 1.0,
                             PCEvent.pos.Phi() * 180.0 / M_PI, ratio, "hCalibPC");
-
-            // Energy dependence: Verifies if charge induction geometry changes via delta-rays/track-length
             plotter->Fill2D("Calib_A2_AnodeRatio_vs_TotalE", 400, 0, 10, 200, 0.0, 1.0,
                             PCEventCalibrated.Energy1, ratio, "hCalibPC");
           }
@@ -1541,14 +1632,18 @@ Bool_t TrackRecon::Process(Long64_t entry)
 
       if (pcEnergyCalibLoaded)
       {
-        // Per-wire-then-sum, phi-independent (same reasoning as the crossover branch).
+        // Per-wire-then-sum, intercept applied once from the primary wire --
+        // same reasoning as the crossover branch above.
         double anodeCalibSum = 0.0;
         for (const auto &w : aCl)
         {
           int wi = std::get<0>(w);
           if (wi >= 0 && wi < 24)
-            anodeCalibSum += pcEnergySlope[wi] * std::get<1>(w) + pcEnergyIntercept[wi];
+            anodeCalibSum += pcEnergySlope[wi] * std::get<1>(w);
         }
+        int primaryAnodeWireA1C0 = std::get<0>(aCl[0]);
+        double primaryInterceptA1C0 = (primaryAnodeWireA1C0 >= 0 && primaryAnodeWireA1C0 < 24) ? pcEnergyIntercept[primaryAnodeWireA1C0] : 0.0;
+        anodeCalibSum += primaryInterceptA1C0;
         Event ev(pc, anodeCalibSum, -1.0, apTSMaxE, -1.0);
         ev.multi1 = static_cast<int>(aCl.size());
         ev.multi2 = 0; // no cathode -> a{n}c0 topology in pcCalibratedHistograms
@@ -1560,20 +1655,28 @@ Bool_t TrackRecon::Process(Long64_t entry)
       // Anode-wire calibration point -- source runs only. The fixed alpha-source
       // energy is only valid there; proton-run A1C0 has no elastic tag to predict
       // its energy, so it contributes to the display but not the fit.
-      if (doPCEnergyCalibration && !ta_foil_run)
+      if (doPCEnergyCalibration && source_run)
       {
         double path = pathLengthCm(source_pos_a1c0, pc);
         double e_rem = evalElossForward(MeV_to_cm_spl, cm_to_MeV_spl, pc_calib_alpha_source_mev, path);
         double dE_gas = pc_calib_alpha_source_mev - e_rem;
         if (std::isfinite(dE_gas) && dE_gas > 0.0)
-          pcCalibData[anodeIdx].push_back({apSumE, dE_gas});
+          pcCalibWritePoint(anodeIdx, apSumE, dE_gas);
       }
     }
   }
 
   if (doPCEnergyCalibration)
   {
-    pcEnergyCalibrationAccumulate(PC_Events);
+    // pcEnergyCalibrationAccumulate assumes source_pos = the FIXED alpha-source
+    // position -- only true for the source runs. On a proton-scattering run,
+    // source_vertex is the beam-entrance placeholder, not a real source, so
+    // running this there silently wrote bogus points (huge path length, usually
+    // clamped to the full 5.486 MeV) into the same pool as the real
+    // kinematics-derived proton points. Gate it to non-proton-campaign runs;
+    // pcEnergyCalibrationAccumulateProton already self-gates the other way.
+    if (source_run)
+      pcEnergyCalibrationAccumulate(PC_Events, SX3_Events, QQQ_Events);
     pcEnergyCalibrationAccumulateProton(PC_Events, QQQ_Events, SX3_Events);
   }
 
@@ -1745,26 +1848,14 @@ void TrackRecon::Terminate()
 {
   plotter->FlushToDisk(10);
 
-  if (doPCEnergyCalibration)
+  if (doPCEnergyCalibration && pcCalibOutFile.is_open())
   {
-    gSystem->mkdir("pc_calib_raw", kTRUE); // kTRUE = create parents, no-op if it exists
-    std::string tag = getenv("RUN_NUMBER") ? std::string("run") + getenv("RUN_NUMBER")
-                                           : dataset + "_pid" + std::to_string(getpid());
-    std::string outname = "pc_calib_raw/points_" + tag + ".dat";
-    std::ofstream outfile(outname);
-    outfile << std::scientific << std::setprecision(6);
-    long long nPoints = 0;
-    for (int wire = 0; wire < 48; ++wire)
-    {
-      for (const auto &p : pcCalibData[wire])
-      {
-        outfile << wire << " " << p.first << " " << p.second << "\n";
-        ++nPoints;
-      }
-    }
-    outfile.close();
-    std::cout << "PC energy calibration: appended " << nPoints << " raw points to " << outname
-              << " -- run pccal/fit_pc_energy_calibration.C once all calibration runs are done"
+    // Points were streamed directly to disk as they were generated (see
+    // pcCalibWritePoint / Begin()) instead of buffered in memory for the
+    // whole run, so there's nothing left to write here -- just close it.
+    pcCalibOutFile.close();
+    std::cout << "PC energy calibration: closed raw points file -- run "
+              << "pccal/fit_pc_energy_calibration.C once all calibration runs are done"
               << " to (re)produce pc_energy_calibration.dat" << std::endl;
   }
 }
@@ -1890,7 +1981,7 @@ void pcCalibratedHistograms(HistPlotter *plotter, const std::vector<Event> &QQQ_
     const bool hasCathode = (pcevent.Cathodech >= 0);
     const double totalE = hasCathode ? (pcevent.Energy1 + pcevent.Energy2) : pcevent.Energy1;
     if (hasCathode)
-      plotter->Fill2D("Calib_AnodeE_vs_CathodeE_a1c1andup", 800, 0, 3, 800, 0, 3, pcevent.Energy1, pcevent.Energy2, "hCalibPC");
+      plotter->Fill2D("Calib_AnodeE_vs_CathodeE_a1c1andup",800, 0, 3, 800, 0, 3, pcevent.Energy1, pcevent.Energy2, "hCalibPC");
     for (const std::string &t : {std::string(""), topo})
     {
       plotter->Fill2D("Calib_AnodeE_vs_AnodeIndex" + t, 24, 0, 24, 800, 0, 3, pcevent.Anodech, pcevent.Energy1, "hCalibPC");
@@ -1901,7 +1992,7 @@ void pcCalibratedHistograms(HistPlotter *plotter, const std::vector<Event> &QQQ_
       {
         plotter->Fill2D("Calib_CathodeE_vs_CathodeIndex" + t, 24, 0, 24, 800, 0, 3, pcevent.Cathodech, pcevent.Energy2, "hCalibPC");
         plotter->Fill1D("Calib_CathodeE" + t, 800, 0, 3, pcevent.Energy2, "hCalibPC");
-        plotter->Fill2D("Calib_AnodeE_vs_CathodeE" + t, 800, 0, 3, 800, 0, 3, pcevent.Energy1, pcevent.Energy2, "hCalibPC");
+        plotter->Fill2D("Calib_AnodeE_vs_CathodeE" + t,800, 0, 3, 800, 0, 3, pcevent.Energy1, pcevent.Energy2, "hCalibPC");
       }
 
       for (const auto &qqqevent : QQQ_Events)
