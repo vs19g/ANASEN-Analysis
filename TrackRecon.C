@@ -45,9 +45,9 @@ bool process_alpha_proton_scattering = false,
      doPCSX3ClusterAnalysis = true,
      doPCQQQClusterAnalysis = true,
      doOldAnalysis = false,
-     BenchMark = true,
+     BenchMark = false,
      onwire_analysis = true,
-     diagnostic_eplots = true,
+     diagnostic_eplots = false,
      diagnostic_tplots = true,
      reactiondata = false,
      doPCEnergyCalibration = false,
@@ -3999,8 +3999,10 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
       plotter->Fill1D(rx + "_pczfix" + sfx, 600, -300, 300, pcz_fix, pmlabel);
       plotter->Fill1D(rx + "_Ex_from" + ejtag + sfx, 400, -20, 20, Ex, pmlabel);
       plotter->Fill2D(rx + "_Ef_vs_theta" + ejtag + sfx, 100, 0, 180, 800, 0, ef_max, theta * 180 / M_PI, Efix, pmlabel);
+      plotter->Fill2D(rx + "_Ex_vs_theta" + ejtag + sfx, 100, 0, 180, 800, -20, 20, theta * 180 / M_PI, Ex, pmlabel);
       plotter->Fill1D(rx + "_VertexReconZ" + sfx, 800, -400, 400, vertex_z, pmlabel);
       plotter->Fill2D(rx + "_VertexReconZ_vs_Ef" + ejtag + sfx, 800, -400, 400, 800, 0, ef_max, vertex_z, Efix, pmlabel);
+      plotter->Fill2D(rx + "_VertexReconZ_vs_Ex" + ejtag + sfx, 800, -400, 400, 800, -20, 20, vertex_z, Ex, pmlabel);
 
       // Gas segmentation validation
       PCPath pp = pcPath(r_rhoMin_fix, sievent.pos);
@@ -4015,6 +4017,7 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
       {
         plotter->Fill1D(rx + "_Ex_from" + ejtag + "_" + topo + sfx, 400, -20, 20, Ex, pmlabel);
         plotter->Fill2D(rx + "_VertexReconZ_vs_Ef" + ejtag + "_" + topo + sfx, 800, -400, 400, 800, 0, ef_max, vertex_z, Efix, pmlabel);
+        plotter->Fill2D(rx + "_VertexReconZ_vs_Ex" + ejtag + "_" + topo + sfx, 800, -400, 400, 800, -20, 20, vertex_z, Ex, pmlabel);
       }
     }
   }
