@@ -56,7 +56,9 @@ bool process_alpha_proton_scattering = false,
 
 // --- Geometry, Calibration, & Model Variables ---
 double source_vertex = 53.0,
-       z_entrance = -174.3 - 9.7 - 100.0,
+       //  z_entrance = -174.3 - 9.7 - 100.0,
+       z_entrance = -174.3 - 9.7 - 270.0, // new measurement of the chamber length puts the chamber at
+      // 1175mm instead of 1105, plus some part of the window actually lies outside the chamber
        dither_sigma = 8.0,
        dither_sigma_c0 = 16.0,
        cathode_gain = 1.0,
@@ -510,6 +512,8 @@ void TrackRecon::Begin(TTree * /*tree*/)
     plotter = new HistPlotter(option.Data(), "TFILE");
   else
     plotter = new HistPlotter("Analyzer_SX3.root", "TFILE");
+
+  plotter->set_barrier_limit(getenv("FLUSH_BARRIER") ? std::atoll(getenv("FLUSH_BARRIER")) : 50000);
 
   if (getenv("reactiondata"))
   {
@@ -1008,8 +1012,46 @@ inline void pcEnergyCalibrationAccumulateProton(const std::vector<Event> &PC_Eve
   }
 }
 
+// Reads VmRSS (resident memory, MB) for this process from /proc/self/status.
+// Returns -1.0 if unavailable (e.g. non-Linux) so callers can skip the check.
+inline double currentRSS_MB()
+{
+  std::ifstream statusFile("/proc/self/status");
+  std::string line;
+  while (std::getline(statusFile, line))
+  {
+    if (line.compare(0, 6, "VmRSS:") == 0)
+    {
+      std::istringstream iss(line.substr(6));
+      double kb = -1.0;
+      iss >> kb;
+      return kb > 0.0 ? kb / 1024.0 : -1.0;
+    }
+  }
+  return -1.0;
+}
+
 Bool_t TrackRecon::Process(Long64_t entry)
 {
+
+  static const double maxRSS_MB = getenv("MAX_RSS_MB") ? std::atof(getenv("MAX_RSS_MB")) : 0.0;
+  static const Long64_t checkStride = getenv("MEMCHECK_STRIDE") ? std::atoll(getenv("MEMCHECK_STRIDE")) : 5000;
+  static Long64_t processedCount = 0;
+  ++processedCount;
+
+  if (maxRSS_MB > 0.0 && (processedCount % checkStride == 0))
+  {
+    double rss = currentRSS_MB();
+    if (rss > 0.0 && rss > maxRSS_MB)
+    {
+      std::cout << "MAX_RSS_MB (" << maxRSS_MB << ") exceeded (RSS=" << rss
+                << " MB) at entry " << entry << " -- forcing a cache flush and continuing." << std::endl;
+      plotter->force_flush_caches();
+    }
+  }
+
+  plotter->barrier_increment();
+
   hitPos.Clear();
   qqqenergy = -1;
   qqqtimestamp = -1;
