@@ -885,7 +885,7 @@ inline void pcEnergyCalibrationAccumulate(const std::vector<Event> &PC_Events, c
 
     TVector3 interaction(pcevent.pos.X(), pcevent.pos.Y(), pcz);
     double path_length = pathLengthCm(source_pos, interaction);
-    double e_remaining = evalElossForward(MeV_to_cm_spl, cm_to_MeV_spl, pc_calib_alpha_source_mev, path_length);
+    double e_remaining = evalEloss(MeV_to_cm_spl, cm_to_MeV_spl, pc_calib_alpha_source_mev, path_length);
     double dE_gas = pc_calib_alpha_source_mev - e_remaining;
 
     if (!std::isfinite(dE_gas) || dE_gas <= 0.0)
@@ -903,6 +903,36 @@ inline void pcEnergyCalibrationAccumulate(const std::vector<Event> &PC_Events, c
     if (pcevent.multi2 >= 1 && pcevent.Cathodech >= 0 && pcevent.Cathodech < 24)
       pcCalibWritePoint(24 + pcevent.Cathodech, pcevent.Energy2, dE_gas);
   }
+}
+
+inline double invertBeamEnergyMeV(double m1, double m2, double m3, double m4, double t3, double angle3_deg, double assumedEx = 0.0,
+                                  double ebeamMeV_lo = 10.0, double ebeamMeV_hi = 100.0, int iters = 60)
+{
+  Kinematics kin;
+  auto excAtBeamMeV = [&](double ebeamMeV)
+  {
+    kin.setValues(m1, m2, m3, m4, ebeamMeV / m1); // Kinematics wants E/u, not total E
+    return kin.getExc(t3, angle3_deg) - assumedEx;
+  };
+  double f_lo = excAtBeamMeV(ebeamMeV_lo);
+  double f_hi = excAtBeamMeV(ebeamMeV_hi);
+  if (!std::isfinite(f_lo) || !std::isfinite(f_hi) || f_lo * f_hi > 0.0)
+    return -1.0; // no root in range
+  for (int i = 0; i < iters; ++i)
+  {
+    double mid = 0.5 * (ebeamMeV_lo + ebeamMeV_hi);
+    double f_mid = excAtBeamMeV(mid);
+    if (!std::isfinite(f_mid))
+      return -1.0;
+    if (f_mid * f_lo <= 0.0)
+      ebeamMeV_hi = mid;
+    else
+    {
+      ebeamMeV_lo = mid;
+      f_lo = f_mid;
+    }
+  }
+  return 0.5 * (ebeamMeV_lo + ebeamMeV_hi); // total MeV
 }
 
 inline double predictElasticEnergy(Kinematics &kin, double angle3_deg, double t3_lo = 0.001, double t3_hi = 60.0, int iters = 60)
@@ -970,7 +1000,7 @@ inline void pcEnergyCalibrationAccumulateProton(const std::vector<Event> &PC_Eve
 
     double theta = (sievent.pos - vertex).Theta();
     double beam_path_length = TMath::Abs(vertex.Z() - z_entrance) * 0.1;
-    double beam_energy_at_vertex = evalEloss(MeV_to_cm_p_spl, cm_to_MeVp_spl, initial_energy, beam_path_length);
+    double beam_energy_at_vertex = evalElossForward(MeV_to_cm_p_spl, cm_to_MeVp_spl, initial_energy, beam_path_length);
     beam_energy_at_vertex = applyTaFoilEloss(beam_energy_at_vertex, vertex.Z());
     if (beam_energy_at_vertex <= 0.0)
       return;
@@ -981,7 +1011,7 @@ inline void pcEnergyCalibrationAccumulateProton(const std::vector<Event> &PC_Eve
       return;
 
     double path_length = pathLengthCm(vertex, pcevent.pos);
-    double e_remaining = evalElossForward(MeV_to_cm_spl, cm_to_MeV_spl, predicted_alpha_E, path_length);
+    double e_remaining = evalEloss(MeV_to_cm_spl, cm_to_MeV_spl, predicted_alpha_E, path_length);
     double dE_gas = predicted_alpha_E - e_remaining;
     if (!std::isfinite(dE_gas) || dE_gas <= 0.0)
       return;
@@ -1743,7 +1773,7 @@ Bool_t TrackRecon::Process(Long64_t entry)
       if (doPCEnergyCalibration && source_run)
       {
         double path = pathLengthCm(source_pos_a1c0, pc);
-        double e_rem = evalElossForward(MeV_to_cm_spl, cm_to_MeV_spl, pc_calib_alpha_source_mev, path);
+        double e_rem = evalEloss(MeV_to_cm_spl, cm_to_MeV_spl, pc_calib_alpha_source_mev, path);
         double dE_gas = pc_calib_alpha_source_mev - e_rem;
         if (std::isfinite(dE_gas) && dE_gas > 0.0)
           pcCalibWritePoint(anodeIdx, apSumE, dE_gas);
@@ -3574,7 +3604,7 @@ void protonMiscHistograms(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
           double pl = pathLengthCm(qqqevent.pos, rv);
           double Ef = evalEloss(MeV_to_cm_spl, cm_to_MeV_spl, qqqevent.Energy1, pl);
           double beam_pl_cmp = TMath::Abs(rv.Z() - z_entrance) * 0.1;
-          double beam_E_cmp = evalEloss(MeV_to_cm_p_spl, cm_to_MeVp_spl, initial_energy, beam_pl_cmp);
+          double beam_E_cmp = evalElossForward(MeV_to_cm_p_spl, cm_to_MeVp_spl, initial_energy, beam_pl_cmp);
           beam_E_cmp = applyTaFoilEloss(beam_E_cmp, rv.Z());
           if (beam_E_cmp <= 0.0)
             beam_E_cmp = 0.001;
@@ -3848,7 +3878,7 @@ void protonMiscHistograms_sx3(HistPlotter *plotter, const std::vector<Event> &QQ
         double pl = pathLengthCm(sx3event.pos, rv);
         double Ef = evalEloss(MeV_to_cm_spl, cm_to_MeV_spl, sx3event.Energy1, pl);
         double beam_pl_cmp = TMath::Abs(rv.Z() - z_entrance) * 0.1;
-        double beam_E_cmp = evalEloss(MeV_to_cm_p_spl, cm_to_MeVp_spl, initial_energy, beam_pl_cmp);
+        double beam_E_cmp = evalElossForward(MeV_to_cm_p_spl, cm_to_MeVp_spl, initial_energy, beam_pl_cmp);
         beam_E_cmp = applyTaFoilEloss(beam_E_cmp, rv.Z());
         if (beam_E_cmp <= 0.0)
           beam_E_cmp = 0.001;
@@ -3908,6 +3938,30 @@ inline double a1c1_cfrac_pcz(const Event &pcevent, const TVector3 &si, bool &inb
   return best.pcz;
 }
 
+static const std::vector<double> levels_30Si_MeV = {
+    0.0, 2.235, 3.498, 6.550, 6.870, 7.043, 7.220, 8.660, 9.110,
+    9.370, 9.840, 10.430, 10.720, 10.910, 11.220, 11.460, 12.340,
+    14.240, 14.690, 15.950, 16.700};
+// 27Al levels (27Al(a,a')27Al* inelastic recoil), from Adopted Levels.
+static const std::vector<double> levels_27Al_MeV = {
+    0.0, 6.1584, 6.4773, 6.6513, 7.2272, 7.4771, 7.935, 7.948};
+
+inline double snapToNearestLevel(double ex, const std::vector<double> &levels, double &residual)
+{
+  double best = levels.front();
+  residual = std::abs(ex - best);
+  for (double lvl : levels)
+  {
+    double r = std::abs(ex - lvl);
+    if (r < residual)
+    {
+      residual = r;
+      best = lvl;
+    }
+  }
+  return best;
+}
+
 static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_Events, const std::vector<Event> &PC_Events,
                              const std::vector<std::vector<std::tuple<int, double, double>>> &aClusters, bool isQQQ,
                              const std::string &rx, const std::string &det, double si_ecut, double perp_cut, double phi_win,
@@ -3938,9 +3992,9 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
       if (beam_energy_at_vertex <= 0.0)
         return;
 
-      plotter->Fill2D(rx + "_BeamEnergy_vs_VertexZ" + sfx, 800, -400, 400, 400, 0, beamE0 * 1.1, vertex_z, beam_energy_at_vertex, globaltag + "_" + rx + "+misc_" + det);
+      plotter->Fill2D(rx + "_BeamEnergy_vs_VertexZ" + sfx, 800, -400, 400, 400, 0, beamE0, vertex_z, beam_energy_at_vertex, globaltag + "_" + rx + "+misc_" + det);
 
-      bool trueProton = (sievent.Energy1 < 8.0);
+      bool trueProton = (beam_energy_at_vertex < 10.0);
       bool isAlpha = (!trueProton && anodeE >= 2200);
 
       double m3, m4;
@@ -3970,12 +4024,24 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
       double Ex = kin.getExc(Efix, theta * 180 / M_PI);
       std::string pmlabel = globaltag + "_" + rx + "+misc_" + det + ejtag;
 
+      const double ex_gate_MeV = 0.5;
+      const std::vector<double> &levels = (ejtag == "_a") ? levels_27Al_MeV : levels_30Si_MeV;
+      double level_residual = 0.0;
+      double snapped_level = snapToNearestLevel(Ex, levels, level_residual);
+      // double ebeam_kin_MeV = (level_residual < ex_gate_MeV)
+      //                            ? invertBeamEnergyMeV(m_beam, mass_4He, m3, m4, Efix, theta * 180 / M_PI, snapped_level)
+      //                            : -1.0;
+      double ebeam_kin_MeV = invertBeamEnergyMeV(m_beam, mass_4He, m3, m4, Efix, theta * 180 / M_PI, snapped_level);
+
       auto plot_with_tag = [&](const std::string &topo)
       {
         std::string t = topo.empty() ? "" : ("_" + topo);
         plotter->Fill1D(rx + "_Ex_from" + ejtag + t + sfx, 400, -20, 20, Ex, pmlabel);
         plotter->Fill2D(rx + "_VertexReconZ_vs_Ef" + ejtag + t + sfx, 800, -400, 400, 800, 0, ef_max, vertex_z, Efix, pmlabel);
         plotter->Fill2D(rx + "_VertexReconZ_vs_Ex" + ejtag + t + sfx, 800, -400, 400, 800, -20, 20, vertex_z, Ex, pmlabel);
+        if (ebeam_kin_MeV > 0.0)
+          plotter->Fill2D(rx + "_BeamEnergy_Eloss_vs_Kin" + ejtag + t + sfx, 400, 0, beamE0 * 1.5, 400, 0, beamE0 * 1.5,
+                          beam_energy_at_vertex, ebeam_kin_MeV, pmlabel);
       };
 
       plotter->Fill2D(rx + "_dE_E_Anode" + sfx, 400, 0, dEa_max, 800, 0, 120000, sievent.Energy1, anodeE, pmlabel);
