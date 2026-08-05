@@ -101,8 +101,8 @@ if [[ 1 -eq 1 ]]; then
     echo "Starting parallel processing for 27Al proton runs..."
 
     # process_run 18
-    parallel --bar -j 8 process_run ::: 15 {17..22}
-    # parallel --bar -j 8 process_run :::  {17..22}
+    # parallel --bar -j 8 process_run ::: 15 {17..22}
+    parallel --bar -j 8 process_run :::  {17..22}
     hadd -j 4 -k ${OUT_DIR}/Al_protons.root ${OUT_DIR}/results_run0{15..22}.root
     unset CATHODE_GAIN
     # exit
