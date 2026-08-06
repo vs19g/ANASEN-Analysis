@@ -38,7 +38,7 @@ process_run() {
 export -f process_run
 
 echo "Starting parallel processing..."
-# time parallel --bar -j 6 process_run ::: {24..41} 
+time parallel --bar -j 6 process_run ::: {24..41} 
 time parallel --bar -j 8 process_run ::: {50..59}
 # time parallel --bar -j 4 process_run ::: 62 63 66 67 68
 # time parallel --bar -j 1 process_run ::: 73
