@@ -616,45 +616,71 @@ inline double PW::GetZ0()
 
   return trackVec.Z();
 }
+// Each wire family is strung as straight skew chords between two rings, so it sweeps a
+// one-sheet hyperboloid (x*x+y*y)/(a*a) - (z*z)/(c*c) = 1 whose waist 'a' is smaller than
+// the ring radius. The anode waist was fit to the measured anode crossover points; the
+// other families share the flare 'c' and scale their waist with the ring radius.
+//
+// Radial ordering, inner to outer:  guard (ring 32) < anode (ring 37) < cathode (ring 43).
+// Charge collection spans guard -> cathode. The anodes in the middle are the readout, the
+// cathodes see the induced/mirror charge, and the guard wires are field-shaping, not read out.
+const double kPCHyperbC = 301.895;
+const double kPCAnodeWaist = 32.0429;                 // ring radius 37 mm -- readout
+const double kPCCathodeWaist = 32.0429 * 43.0 / 37.0; // ring radius 43 mm -- induced charge
+const double kPCGuardWaist = 32.0429 * 32.0 / 37.0;   // ring radius 32 mm -- not read out
+
+// Intersection of the segment x1 -> x1+dx with the one-sheet hyperboloid of waist a, flare c.
+// Returns TVector3(0, 0, 54321) when the segment does not cross the surface.
+inline TVector3 pc_hyperboloid_intersect(const TVector3 &x1, const TVector3 &dx, double a, double c)
+{
+  double t2 = 1.0; // value of 't' at the destination point, by definition t=(z(t)-z0)/dz
+  auto A = pow(dx.Perp(), 2) / (a * a) - pow(dx.Z(), 2) / (c * c);
+  auto B = 2 * (dx.X() * x1.X() + dx.Y() * x1.Y()) / (a * a) - 2 * (dx.Z() * x1.Z()) / (c * c);
+  auto C = pow(x1.Perp(), 2) / (a * a) - pow(x1.Z(), 2) / (c * c) - 1.0;
+  double disc = B * B - 4 * A * C;
+  if (disc < 0)
+    return TVector3(0, 0, 54321);
+  double tsol1 = (-B + TMath::Sqrt(disc)) / (2 * A);
+  double tsol2 = (-B - TMath::Sqrt(disc)) / (2 * A);
+  if (tsol1 >= 0 && tsol1 <= t2)
+    return x1 + tsol1 * dx;
+  else if (tsol2 >= 0 && tsol2 <= t2)
+    return x1 + tsol2 * dx;
+  else
+    return TVector3(0, 0, 54321);
+}
 
 inline std::tuple<TVector3, TVector3, double> find_PC_PathLength(const TVector3 &x1, const TVector3 &x2)
 {
   /*
-      Function that finds the path length between anode and cathode surfaces, both one-sheet hyperboloids of form (x*x+y*y)/(a*a) - (z*z)/(c*c) = 1
-      * path length found for a given particle moving along a certain direction from x1 to x2
+      Anode -> cathode segment for a particle moving from x1 to x2.
       * Typical arguments here will be x1=r_rhoMin, x2=qqqevent.pos or sx3event.pos
       * Returns {cathode_intersect, anode_intersect, gap_in_cm}; gap == 54321 sentinel on failure.
+      * NOTE: this is the anode->cathode gap, NOT the full charge-collection region.
+        For the anode energy calibration use find_PC_CollectionPath() instead.
   */
   TVector3 dx = x2 - x1; // direction vector
-  double t2 = 1.0;       // The value of 't' at the destination point, by definition: t=(z(t)-z0)/dz
-  auto onesheet_hyperboloid_intersect = [&](double a, double c)
-  {
-    auto A = pow(dx.Perp(), 2) / (a * a) - pow(dx.Z(), 2) / (c * c);
-    auto B = 2 * (dx.X() * x1.X() + dx.Y() * x1.Y()) / (a * a) - 2 * (dx.Z() * x1.Z()) / (c * c);
-    auto C = pow(x1.Perp(), 2) / (a * a) - pow(x1.Z(), 2) / (c * c) - 1.0;
-    double disc = B * B - 4 * A * C;
-    if (disc < 0)
-      return TVector3(0, 0, 54321);
-    else
-    {
-      double tsol1 = (-B + TMath::Sqrt(disc)) / (2 * A);
-      double tsol2 = (-B - TMath::Sqrt(disc)) / (2 * A);
-      if (tsol1 >= 0 && tsol1 <= t2)
-        return x1 + tsol1 * dx;
-      else if (tsol2 >= 0 && tsol2 <= t2)
-        return x1 + tsol2 * dx;
-      else
-        return TVector3(0, 0, 54321);
-    }
-  };
-
-  // TODO: Magic numbers here describing waist 'a', and flare 'c' will need better treatment.
-  // Currently, these are derived by fitting the crossover points to R^2/a^2 - z^2/c^2 = 1 for anodes
-  //  Cathode a, c values are found by scaling up the anode waist by 43/37, the ratio of the outermost radii
-  TVector3 anode_intersect = onesheet_hyperboloid_intersect(32.0429, 301.895);
-  TVector3 cathode_intersect = onesheet_hyperboloid_intersect(37.239045, 301.895);
+  TVector3 anode_intersect = pc_hyperboloid_intersect(x1, dx, kPCAnodeWaist, kPCHyperbC);
+  TVector3 cathode_intersect = pc_hyperboloid_intersect(x1, dx, kPCCathodeWaist, kPCHyperbC);
   if (anode_intersect.Z() != 54321 && cathode_intersect.Z() != 54321)
     return std::tuple(cathode_intersect, anode_intersect, (cathode_intersect - anode_intersect).Mag() * 0.1);
+  else
+    return std::tuple(TVector3(0, 0, 0), TVector3(0, 0, 0), 54321);
+}
+
+inline std::tuple<TVector3, TVector3, double> find_PC_CollectionPath(const TVector3 &x1, const TVector3 &x2)
+{
+  /*
+      Charge-collection region for a particle moving from x1 to x2: it begins where the track
+      passes the guard wires and ends at the cathode. This is the segment whose energy deposit
+      the anodes actually collect, so it is the dE target for the anode energy calibration.
+      * Returns {guard_intersect, cathode_intersect, thickness_in_cm}; 54321 sentinel on failure.
+  */
+  TVector3 dx = x2 - x1;
+  TVector3 guard_intersect = pc_hyperboloid_intersect(x1, dx, kPCGuardWaist, kPCHyperbC);
+  TVector3 cathode_intersect = pc_hyperboloid_intersect(x1, dx, kPCCathodeWaist, kPCHyperbC);
+  if (guard_intersect.Z() != 54321 && cathode_intersect.Z() != 54321)
+    return std::tuple(guard_intersect, cathode_intersect, (cathode_intersect - guard_intersect).Mag() * 0.1);
   else
     return std::tuple(TVector3(0, 0, 0), TVector3(0, 0, 0), 54321);
 }
