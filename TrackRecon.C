@@ -45,7 +45,7 @@ bool process_alpha_proton_scattering = false,
      doPCSX3ClusterAnalysis = true,
      doPCQQQClusterAnalysis = true,
      doOldAnalysis = false,
-     BenchMark = false,
+     BenchMark = true,
      onwire_analysis = true,
      diagnostic_eplots = false,
      diagnostic_tplots = true,
@@ -55,11 +55,12 @@ bool process_alpha_proton_scattering = false,
      source_run = false;
 
 // --- Geometry, Calibration, & Model Variables ---
+//  z_entrance = -174.3 - 9.7 - 100.0,
+// new measurement of the chamber length puts the chamber at
+// 1175mm instead of 1105, plus some part of the window actually lies outside the chamber
 double source_vertex = 53.0,
-       //  z_entrance = -174.3 - 9.7 - 100.0,
-    z_entrance = -174.3 - 9.7 - 270.0, // new measurement of the chamber length puts the chamber at
-                                       // 1175mm instead of 1105, plus some part of the window actually lies outside the chamber
-    dither_sigma = 8.0,
+       z_entrance = -174.3 - 9.7 - 270.0,
+       dither_sigma = 8.0,
        dither_sigma_c0 = 16.0,
        cathode_gain = 1.0,
        a1c1_cfrac_split = 0.0,
@@ -114,9 +115,6 @@ inline PCPath pcPath(const TVector3 &vtx, const TVector3 &si)
   return {true, dl, a, a - dl};
 }
 
-// Charge-collection region, guard wires -> cathode. The track crosses these outward-bound
-// (vtx -> guard -> anode -> cathode -> si), so measured back from the Si end the guard is
-// the farther surface: guard_cm > cathode_cm and thick_cm = guard_cm - cathode_cm.
 struct PCCollect
 {
   bool ok;
@@ -133,10 +131,6 @@ inline PCCollect pcCollectionPath(const TVector3 &vtx, const TVector3 &si)
   return {true, dl, g, g - dl};
 }
 
-double ejectile_z_deut = -220.0;  // vertex_z below this -> deuteron
-double ejectile_e_alpha = 2000.0; // PC anode energy above this -> alpha
-// Per-ejectile (ejectile mass, recoil mass) for a reaction's (a,a)/(a,d)/(a,p)
-// channels, passed into reaction_aa_core so the right Kinematics is built.
 struct AAEjectileMasses
 {
   double m_a, m_ra; // alpha ejectile, recoil
@@ -471,7 +465,6 @@ double sx3RightGain[24][4] = {{1.}};
 double pcSlope[48];
 double pcIntercept[48];
 double pcEnergySlope[48];
-double pcEnergyIntercept[48];
 bool pcEnergyCalibLoaded = false;
 
 HistPlotter *plotter;
@@ -664,7 +657,6 @@ void TrackRecon::Begin(TTree * /*tree*/)
   for (int i = 0; i < 48; i++)
   {
     pcEnergySlope[i] = 1.0;
-    pcEnergyIntercept[i] = 0.0;
   }
   {
     std::ifstream pcEnergyFile("pc_energy_calibration.dat");
@@ -680,7 +672,6 @@ void TrackRecon::Begin(TTree * /*tree*/)
         if (index >= 0 && index <= 47)
         {
           pcEnergySlope[index] = slope;
-          pcEnergyIntercept[index] = intercept;
         }
       }
       pcEnergyFile.close();
@@ -853,9 +844,11 @@ inline void pcEnergyCalibrationAccumulate(const std::vector<Event> &PC_Events,
     if (!std::isfinite(E_entry) || E_entry <= 0.0 ||
         !std::isfinite(E_exit) || E_exit < 0.0 || E_entry <= E_exit)
       continue;
-    if (pcevent.Anodech >= 0 && pcevent.Anodech < 24)
+    if (pcevent.multi2 >= 1 && pcevent.Anodech >= 0 && pcevent.Anodech < 24)
       pcCalibData[pcevent.Anodech].push_back({pcevent.Energy1, E_entry - E_exit});
-
+    // cathodes are only there to be a relative gain match as opposed to a "true" calibration
+    if (pcevent.multi2 == 1 && pcevent.Cathodech >= 0 && pcevent.Cathodech < 24)
+      pcCalibData[24 + pcevent.Cathodech].push_back({pcevent.Energy2, E_entry - E_exit});
     // Si-coincidence supplement: for each matching Si event, project the pcz using the
     // z-dependent anode radius (FIX 2: z_to_crossover_rho, not a flat 37 mm) as a sanity
     // gate, then take the collection-region dE via pcCollectionPath(source, si).
@@ -886,8 +879,10 @@ inline void pcEnergyCalibrationAccumulate(const std::vector<Event> &PC_Events,
       double Ex = evalElossForward(MeV_to_cm_spl, cm_to_MeV_spl, pc_calib_alpha_source_mev, d_ex);
       if (!std::isfinite(Ee) || Ee <= 0.0 || !std::isfinite(Ex) || Ex < 0.0 || Ee <= Ex)
         return;
-      if (pcevent.Anodech >= 0 && pcevent.Anodech < 24)
+      if (pcevent.multi2 >= 1 && pcevent.Anodech >= 0 && pcevent.Anodech < 24)
         pcCalibData[pcevent.Anodech].push_back({pcevent.Energy1, Ee - Ex});
+      if (pcevent.multi2 == 1 && pcevent.Cathodech >= 0 && pcevent.Cathodech < 24)
+        pcCalibData[24 + pcevent.Cathodech].push_back({pcevent.Energy2, Ee - Ex});
     };
     for (const auto &qqqevent : QQQ_Events)
       considerSi(qqqevent, TMath::Pi() / 4.0);
@@ -1007,7 +1002,7 @@ inline void pcEnergyCalibrationAccumulateProton(const std::vector<Event> &PC_Eve
     beam_energy_at_vertex = applyTaFoilEloss(beam_energy_at_vertex, vertex.Z());
     if (beam_energy_at_vertex <= 0.0)
       return;
-    apkin_a.setValues(mass_1H, mass_4He, mass_4He, mass_1H, beam_energy_at_vertex);
+    apkin_a.setValues(mass_1H, mass_4He, mass_4He, mass_1H, beam_energy_at_vertex / mass_1H);
 
     double predicted_alpha_E = predictElasticEnergy(apkin_a, theta * 180.0 / M_PI);
     if (predicted_alpha_E <= 0.0)
@@ -1033,6 +1028,8 @@ inline void pcEnergyCalibrationAccumulateProton(const std::vector<Event> &PC_Eve
       return;
     if (pcevent.multi1 == 1 && pcevent.Anodech >= 0 && pcevent.Anodech < 24)
       pcCalibData[pcevent.Anodech].push_back({pcevent.Energy1, E_entry - E_exit});
+    if (pcevent.multi2 == 1 && pcevent.Cathodech >= 0 && pcevent.Cathodech < 24)
+      pcCalibData[24 + pcevent.Cathodech].push_back({pcevent.Energy2, E_entry - E_exit});
   };
 
   for (const auto &pcevent : PC_Events)
@@ -1624,12 +1621,12 @@ Bool_t TrackRecon::Process(Long64_t entry)
           {
             int wi = std::get<0>(w);
             if (wi >= 0 && wi < 24)
-              anodeCalibSum += pcEnergySlope[wi] * std::get<1>(w) + pcEnergyIntercept[wi];
+              anodeCalibSum += pcEnergySlope[wi] * std::get<1>(w);
           }
           PCEventCalibrated.Energy1 = anodeCalibSum;
           // Cathode uses the single max wire (cpMaxE) -- indexed by z, so it's
           // already phi-consistent; leave it as-is.
-          PCEventCalibrated.Energy2 = pcEnergySlope[24 + PCEvent.Cathodech] * cpMaxE + pcEnergyIntercept[24 + PCEvent.Cathodech];
+          PCEventCalibrated.Energy2 = pcEnergySlope[24 + PCEvent.Cathodech] * cpMaxE;
           PC_Events_calibrated.push_back(PCEventCalibrated);
         }
       }
@@ -1689,7 +1686,7 @@ Bool_t TrackRecon::Process(Long64_t entry)
         {
           int wi = std::get<0>(w);
           if (wi >= 0 && wi < 24)
-            anodeCalibSum += pcEnergySlope[wi] * std::get<1>(w) + pcEnergyIntercept[wi];
+            anodeCalibSum += pcEnergySlope[wi] * std::get<1>(w);
         }
         Event ev(pc, anodeCalibSum, -1.0, apTSMaxE, -1.0);
         ev.multi1 = static_cast<int>(aCl.size());
@@ -1702,10 +1699,10 @@ Bool_t TrackRecon::Process(Long64_t entry)
       // Anode-wire calibration point -- source runs only. The fixed alpha-source
       // energy is only valid there; proton-run A1C0 has no elastic tag to predict
       // its energy, so it contributes to the display but not the fit.
-      if (doPCEnergyCalibration && !ta_foil_run)
+      if (doPCEnergyCalibration && source_run)
       {
         TVector3 ray_dir = (pc - source_pos_a1c0).Unit();
-        TVector3 virt_out = source_pos_a1c0 + ray_dir * 120.0;
+        TVector3 virt_out = source_pos_a1c0 + ray_dir * 2000.0;
         PCCollect pcc = pcCollectionPath(source_pos_a1c0, virt_out);
         if (pcc.ok)
         {
@@ -1920,8 +1917,9 @@ void TrackRecon::Terminate()
   if (doPCEnergyCalibration)
   {
     gSystem->mkdir("pc_calib_raw", kTRUE);
-    std::string tag = getenv("RUN_NUMBER") ? std::string("run") + getenv("RUN_NUMBER")
-                                           : dataset + "_pid" + std::to_string(getpid());
+    std::string runTypeTag = source_run ? "src_" : (ta_foil_run ? "ap_" : "other_");
+    std::string tag = runTypeTag + (getenv("RUN_NUMBER") ? std::string("run") + getenv("RUN_NUMBER")
+                                                         : dataset + "_pid" + std::to_string(getpid()));
     std::string outname = "pc_calib_raw/points_" + tag + ".dat";
     std::ofstream outfile(outname);
     outfile << std::scientific << std::setprecision(6);
@@ -2054,7 +2052,7 @@ void pcCalibratedHistograms(HistPlotter *plotter, const std::vector<Event> &QQQ_
   {
     const std::string topo = "_a" + std::to_string(pcevent.multi1) + "c" + std::to_string(pcevent.multi2);
     const bool hasCathode = (pcevent.Cathodech >= 0);
-        if (hasCathode)
+    if (hasCathode)
       plotter->Fill2D("Calib_AnodeE_vs_CathodeE_a1c1andup", 800, 0, 3, 800, 0, 3, pcevent.Energy1, pcevent.Energy2, "hCalibPC");
     for (const std::string &t : {std::string(""), topo})
     {
@@ -2070,7 +2068,7 @@ void pcCalibratedHistograms(HistPlotter *plotter, const std::vector<Event> &QQQ_
       for (const auto &qqqevent : QQQ_Events)
       {
         plotter->Fill2D("Calib_dE_AnodeE_vs_QQQE" + t, 400, 0, 10, 800, 0, 3, qqqevent.Energy1, pcevent.Energy1, "hCalibPC");
-       if (hasCathode)
+        if (hasCathode)
           plotter->Fill2D("Calib_dE_CathodeE_vs_QQQE" + t, 400, 0, 10, 800, 0, 3, qqqevent.Energy1, pcevent.Energy2, "hCalibPC");
       }
       for (const auto &sx3event : SX3_Events)
@@ -4016,17 +4014,19 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
         plot_with_tag("trueProton"); // clean, alpha-free proton sub-sample
 
       // Gas segmentation validation
-      PCPath pp = pcPath(r_rhoMin_fix, sievent.pos);
-      if (pp.ok)
+      PCCollect pcc = pcCollectionPath(r_rhoMin_fix, sievent.pos);
+      if (pcc.ok)
       {
-        double E_an = evalEloss(ej_fwd, ej_inv, sievent.Energy1, pp.anode_cm);
-        double E_ca = evalEloss(ej_fwd, ej_inv, sievent.Energy1, pp.cathode_cm);
-        plotter->Fill2D(rx + "_dEgas_vs_Ef" + ejtag + sfx, 400, 0, ef_max, 400, 0, 1, Efix, E_an - E_ca, pmlabel);
-        if (anodeE_MeV >= 0.0 && cathodeE_MeV >= 0.0)
+        double E_gu = evalEloss(ej_fwd, ej_inv, sievent.Energy1, pcc.guard_cm);
+        double E_ca = evalEloss(ej_fwd, ej_inv, sievent.Energy1, pcc.cathode_cm);
+        double dE_pred = E_ca - E_gu;
+        plotter->Fill2D(rx + "_dEgas_vs_Ef" + ejtag + sfx, 400, 0, ef_max, 400, 0, 2, Efix, dE_pred, pmlabel);
+        if (anodeE_MeV >= 0.0)
+
         {
-          plotter->Fill2D(rx + "_dEgasCalib_vs_Ef" + ejtag + sfx, 400, 0, ef_max, 800, -2, 2, Efix, anodeE_MeV , pmlabel);
-          plotter->Fill2D(rx + "_dEgasCalib_vs_E" + ejtag + sfx, 400, 0, ef_max, 800, -2, 2, sievent.Energy1, anodeE_MeV , pmlabel);
-          plotter->Fill2D(rx + "_dEgasPred_vs_dEgasCalib" + ejtag + sfx, 800, -2, 2, 400, 0, 2, anodeE_MeV , E_an - E_ca, pmlabel);
+          plotter->Fill2D(rx + "_dEgasCalib_vs_Ef" + ejtag + sfx, 400, 0, ef_max, 800, 0, 2, Efix, anodeE_MeV, pmlabel);
+          plotter->Fill2D(rx + "_dEgasCalib_vs_E" + ejtag + sfx, 400, 0, ef_max, 800, 0, 2, sievent.Energy1, anodeE_MeV, pmlabel);
+          plotter->Fill2D(rx + "_dEgasPred_vs_dEgasCalib" + ejtag + sfx, 800, -2, 2, 400, 0, 2, anodeE_MeV, dE_pred, pmlabel);
         }
       }
     };
@@ -4038,10 +4038,10 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
       if (TMath::Abs(sievent.pos.DeltaPhi(pcevent.pos)) > phi_win)
         continue;
       double anodeE_MeV = (pcevent.Anodech >= 0 && pcevent.Anodech < 24)
-                              ? pcEnergySlope[pcevent.Anodech] * pcevent.Energy1 + pcEnergyIntercept[pcevent.Anodech]
+                              ? pcEnergySlope[pcevent.Anodech] * pcevent.Energy1
                               : -1.0;
       double cathodeE_MeV = (pcevent.Cathodech >= 0 && pcevent.Cathodech < 24)
-                                ? pcEnergySlope[24 + pcevent.Cathodech] * pcevent.Energy2 + pcEnergyIntercept[24 + pcevent.Cathodech]
+                                ? pcEnergySlope[24 + pcevent.Cathodech] * pcevent.Energy2
                                 : -1.0;
 
       if (pcevent.multi2 == 1) // A1C1

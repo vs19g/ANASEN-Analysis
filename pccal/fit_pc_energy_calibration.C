@@ -209,5 +209,4 @@ void fit_pc_energy_calibration(const std::string& dataset_filter = "")
 
   std::cout << "fit_pc_energy_calibration: wrote pc_energy_calibration.dat" << std::endl;
   std::cout << "fit_pc_energy_calibration: individual high-res PNGs saved to pc_calib_plots/" << std::endl;
-  std::cout << "fit_pc_energy_calibration: global contact sheets saved to pc_calib_anodes.pdf and pc_calib_cathodes.pdf" << std::endl;
 }
