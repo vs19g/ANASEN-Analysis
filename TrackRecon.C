@@ -73,7 +73,7 @@ double source_vertex = 53.0,
        beam_axis_x = 0.0,
        beam_axis_y = 0.0,
        ta_foil_z_mm = 0.0,
-       pc_calib_alpha_source_mev = 5.486;
+       alpha_source_mev = 5.486;
 
 // --- Immutable Constants ---
 const double qqq_z = 105.0,
@@ -542,7 +542,7 @@ void TrackRecon::Begin(TTree * /*tree*/)
     source_vertex = (double)std::atof(std::string(getenv("source_vertex")).c_str());
 
   if (doPCEnergyCalibration)
-    std::cout << "PC energy calibration ON: alpha source = " << pc_calib_alpha_source_mev
+    std::cout << "PC energy calibration ON: alpha source = " << alpha_source_mev
               << " MeV, source position = (" << beam_axis_x << ", " << beam_axis_y << ", " << source_vertex
               << ") mm -- appends raw calibration points to pc_calib_raw/ in Terminate()" << std::endl;
 
@@ -593,19 +593,13 @@ void TrackRecon::Begin(TTree * /*tree*/)
     a1c1_z_off_qqq = std::atof(getenv("A1C1_Z_OFF_QQQ"));
   if (getenv("A1C1_Z_OFF_SX3"))
     a1c1_z_off_sx3 = std::atof(getenv("A1C1_Z_OFF_SX3"));
-
-  if (dataset == "27Al" && reactiondata)
-  {
-    beam_axis_x = -15.0;
-    beam_axis_y = -5.0;
-  }
   if (getenv("BEAM_AXIS_X"))
     beam_axis_x = std::atof(getenv("BEAM_AXIS_X"));
   if (getenv("BEAM_AXIS_Y"))
     beam_axis_y = std::atof(getenv("BEAM_AXIS_Y"));
   std::cout << "Beam-axis origin (x,y) = (" << beam_axis_x << ", " << beam_axis_y << ") mm" << std::endl;
   if (doPCEnergyCalibration)
-    std::cout << "PC energy calibration ON: alpha source = " << pc_calib_alpha_source_mev
+    std::cout << "PC energy calibration ON: alpha source = " << alpha_source_mev
               << " MeV, source position = (" << beam_axis_x << ", " << beam_axis_y << ", " << source_vertex
               << ") mm -- appends raw calibration points to pc_calib_raw/ in Terminate()"
               << " (run pccal/fit_pc_energy_calibration.C afterward to produce pc_energy_calibration.dat)" << std::endl;
@@ -839,8 +833,11 @@ inline void pcEnergyCalibrationAccumulate(const std::vector<Event> &PC_Events,
         !std::isfinite(dist_to_exit) || dist_to_exit <= 0.0 ||
         dist_to_entry >= dist_to_exit)
       continue;
-    double E_entry = evalElossForward(MeV_to_cm_spl, cm_to_MeV_spl, pc_calib_alpha_source_mev, dist_to_entry);
-    double E_exit = evalElossForward(MeV_to_cm_spl, cm_to_MeV_spl, pc_calib_alpha_source_mev, dist_to_exit);
+    if (source_run)
+    {
+      double E_entry = evalElossForward(MeV_to_cm_spl, cm_to_MeV_spl, alpha_source_mev, dist_to_entry);
+      double E_exit = evalElossForward(MeV_to_cm_spl, cm_to_MeV_spl, alpha_source_mev, dist_to_exit);
+    }
     if (!std::isfinite(E_entry) || E_entry <= 0.0 ||
         !std::isfinite(E_exit) || E_exit < 0.0 || E_entry <= E_exit)
       continue;
@@ -875,8 +872,8 @@ inline void pcEnergyCalibrationAccumulate(const std::vector<Event> &PC_Events,
       if (!std::isfinite(d_en) || d_en <= 0.0 || !std::isfinite(d_ex) || d_ex <= 0.0 ||
           d_en >= d_ex)
         return;
-      double Ee = evalElossForward(MeV_to_cm_spl, cm_to_MeV_spl, pc_calib_alpha_source_mev, d_en);
-      double Ex = evalElossForward(MeV_to_cm_spl, cm_to_MeV_spl, pc_calib_alpha_source_mev, d_ex);
+      double Ee = evalElossForward(MeV_to_cm_spl, cm_to_MeV_spl, alpha_source_mev, d_en);
+      double Ex = evalElossForward(MeV_to_cm_spl, cm_to_MeV_spl, alpha_source_mev, d_ex);
       if (!std::isfinite(Ee) || Ee <= 0.0 || !std::isfinite(Ex) || Ex < 0.0 || Ee <= Ex)
         return;
       if (pcevent.multi2 >= 1 && pcevent.Anodech >= 0 && pcevent.Anodech < 24)
@@ -1481,8 +1478,8 @@ Bool_t TrackRecon::Process(Long64_t entry)
       }
       else
       {
-        if (pc.index[i] - 24 >= 15 && pc.index[i] - 24 <= 23)
-          pc.t[i] += 300;
+        if (pc.index[i] - 24 > 15)
+          pc.t[i] -= 300;
         cathodeT = static_cast<double>(pc.t[i]);
         cathodeIndex = pc.index[i] - 24;
         // cWireEvents[pc.index[i] - 24] = std::tuple(pc.index[i] - 24, pc.e[i], static_cast<double>(pc.t[i]));
@@ -1711,8 +1708,8 @@ Bool_t TrackRecon::Process(Long64_t entry)
           double dx = tc - pcc.cathode_cm; // source -> cathode, cm
           if (std::isfinite(de) && de > 0.0 && std::isfinite(dx) && dx > de)
           {
-            double Ee = evalElossForward(MeV_to_cm_spl, cm_to_MeV_spl, pc_calib_alpha_source_mev, de);
-            double Ex = evalElossForward(MeV_to_cm_spl, cm_to_MeV_spl, pc_calib_alpha_source_mev, dx);
+            double Ee = evalElossForward(MeV_to_cm_spl, cm_to_MeV_spl, alpha_source_mev, de);
+            double Ex = evalElossForward(MeV_to_cm_spl, cm_to_MeV_spl, alpha_source_mev, dx);
             if (std::isfinite(Ee) && std::isfinite(Ex) && Ee > Ex && Ex >= 0.0)
               pcCalibData[anodeIdx].push_back({apSumE, Ee - Ex});
           }
@@ -4019,13 +4016,14 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
       {
         double E_gu = evalEloss(ej_fwd, ej_inv, sievent.Energy1, pcc.guard_cm);
         double E_ca = evalEloss(ej_fwd, ej_inv, sievent.Energy1, pcc.cathode_cm);
-        double dE_pred = E_ca - E_gu;
+        double dE_pred = E_gu - E_ca;
         plotter->Fill2D(rx + "_dEgas_vs_Ef" + ejtag + sfx, 400, 0, ef_max, 400, 0, 2, Efix, dE_pred, pmlabel);
         if (anodeE_MeV >= 0.0)
 
         {
           plotter->Fill2D(rx + "_dEgasCalib_vs_Ef" + ejtag + sfx, 400, 0, ef_max, 800, 0, 2, Efix, anodeE_MeV, pmlabel);
           plotter->Fill2D(rx + "_dEgasCalib_vs_E" + ejtag + sfx, 400, 0, ef_max, 800, 0, 2, sievent.Energy1, anodeE_MeV, pmlabel);
+          plotter->Fill2D(rx + "_dEgasCalib_vs_E" + ejtag + sfx + "_E<10MeV" + std::to_string(beam_energy_at_vertex < 10), 400, 0, ef_max, 800, 0, 2, sievent.Energy1, anodeE_MeV, pmlabel);
           plotter->Fill2D(rx + "_dEgasPred_vs_dEgasCalib" + ejtag + sfx, 800, -2, 2, 400, 0, 2, anodeE_MeV, dE_pred, pmlabel);
         }
       }
