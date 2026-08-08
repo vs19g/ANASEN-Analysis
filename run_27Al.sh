@@ -39,11 +39,12 @@ export -f process_run
 
 echo "Starting parallel processing..."
 time parallel --bar -j 6 process_run ::: {24..41} 
-time parallel --bar -j 8 process_run ::: {50..59}
-time parallel --bar -j 4 process_run ::: 62 63 66 67 68
-time parallel --bar -j 1 process_run ::: 73
-time parallel --bar -j 1 process_run ::: 74
-time parallel --bar -j 4 process_run ::: {78..89}
+time parallel --bar -j 3 process_run ::: 44 45 46
+# time parallel --bar -j 8 process_run ::: {50..59}
+# time parallel --bar -j 4 process_run ::: 62 63 66 67 68
+# time parallel --bar -j 1 process_run ::: 73
+# time parallel --bar -j 1 process_run ::: 74
+# time parallel --bar -j 4 process_run ::: {78..89}
 
 echo "Merging files..."
 hadd -k -j 4 Output_27Al/output_27Al.root Output_27Al/results_run*.root
