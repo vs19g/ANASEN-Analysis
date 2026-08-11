@@ -2077,6 +2077,8 @@ void pcCalibratedHistograms(HistPlotter *plotter, const std::vector<Event> &QQQ_
 {
   for (const auto &pcevent : PC_Events_calibrated)
   {
+    if (pcevent.multi1 > 2 || pc.multi2 > 4)
+      continue;
     const std::string topo = "_a" + std::to_string(pcevent.multi1) + "c" + std::to_string(pcevent.multi2);
     const bool hasCathode = (pcevent.Cathodech >= 0);
     if (hasCathode)
@@ -4071,7 +4073,7 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
         double level_residual = 0.0;
         // double snapped_level = snapToNearestLevel(Ex, levels, level_residual);
         double ebeam_kin_MeV = (Ex < ex_gate_MeV)
-                                   ? invertBeamEnergyMeV(m_beam, mass_4He, m3, m4, Efix, theta * 180 / M_PI, Ex)
+                                   ? invertBeamEnergyMeV(m_beam, mass_4He, m3, m4, Efix, theta * 180 / M_PI, 0)
                                    : -1.0;
         // double ebeam_kin_MeV = invertBeamEnergyMeV(m_beam, mass_4He, m3, m4, Efix, theta * 180 / M_PI, snapped_level);
 
