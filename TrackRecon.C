@@ -38,6 +38,7 @@ Int_t colors[40] = {
 #include <unistd.h> // getpid(), for a unique per-process pc_calib_raw/ filename
 #include <map>
 #include <utility>
+#include <stdexcept>
 #include <algorithm>
 
 // --- Analysis Control Flags ---
@@ -492,6 +493,8 @@ inline bool clusterHasExcludedAnode(const std::vector<std::tuple<int, double, do
 
 HistPlotter *plotter;
 
+TCutG *protonLocusCut = nullptr;
+
 bool HitNonZero;
 bool sx3ecut;
 bool qqqEcut;
@@ -527,6 +530,27 @@ void TrackRecon::Begin(TTree * /*tree*/)
     plotter = new HistPlotter("Analyzer_SX3.root", "TFILE");
 
   plotter->set_barrier_limit(getenv("FLUSH_BARRIER") ? std::atoll(getenv("FLUSH_BARRIER")) : 50000);
+
+  // CUTLIST points to a plaintext cuts-list file in HistPlotter::ReadCuts() format:
+  // one "cutfile.root cutname" pair per line. It must contain a line naming one of
+  // the cuts "protonlocus" (e.g. "Output_27Al/proton_locus.root protonlocus"), where
+  // that file holds a single TCutG named "CUTG" drawn on a
+  // m27Alax_dEgasCalib_vs_VertexZ_*_sx3 plot (x=VertexZ, y=calibrated anode dEgas MeV).
+  if (getenv("CUTLIST"))
+  {
+    plotter->ReadCuts(std::string(getenv("CUTLIST")));
+    try
+    {
+      protonLocusCut = plotter->FindCut("protonlocus");
+      std::cout << "Loaded proton-locus gate 'protonlocus' (" << protonLocusCut->GetN()
+                << " points) -- gating m27Alax/sx3 Ex output into ProtonLocusGate_sx3/{p,a}" << std::endl;
+    }
+    catch (const std::out_of_range &)
+    {
+      std::cerr << "CUTLIST=" << getenv("CUTLIST")
+                << " set but no cut named 'protonlocus' found in it -- proton-locus gating disabled" << std::endl;
+    }
+  }
 
   if (getenv("reactiondata"))
   {
@@ -846,7 +870,7 @@ inline double evalElossForward(TSpline3 *fwd, TSpline3 *inv, double E, double pa
 }
 
 inline double invertBeamEnergyMeV(double m1, double m2, double m3, double m4, double t3, double angle3_deg, double assumedEx = 0.0,
-                                  double ebeamMeV_lo = 10.0, double ebeamMeV_hi = 100.0, int iters = 60)
+                                  double ebeamMeV_lo = 0.0, double ebeamMeV_hi = 100.0, int iters = 60)
 {
   Kinematics kin;
   auto excAtBeamMeV = [&](double ebeamMeV)
@@ -1080,7 +1104,7 @@ Bool_t TrackRecon::Process(Long64_t entry)
 {
 
   static const double maxRSS_MB = getenv("MAX_RSS_MB") ? std::atof(getenv("MAX_RSS_MB")) : 0.0;
-  static const Long64_t checkStride = getenv("MEMCHECK_STRIDE") ? std::atoll(getenv("MEMCHECK_STRIDE")) : 5000;
+  static const Long64_t checkStride = getenv("MEMCHECK_STRIDE") ? std::atoll(getenv("MEMCHECK_STRIDE")) : 50000;
   static Long64_t processedCount = 0;
   ++processedCount;
 
@@ -3998,6 +4022,11 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
                              const AAEjectileMasses &ej_m, const std::string &globaltag)
 {
   const std::string sfx = "_" + det + globaltag;
+  static TRandom3 rand(0); // seeded once (random seed via TUUID), not per call --
+                           // used only to dither a1c0's Z below, matching dither_sigma_c0's
+                           // established use elsewhere in this file (e.g. a1c0_hybrid_pcz).
+                           // a1c1 is deliberately left undithered: its cfrac-based sub-wire-pitch
+                           // fraction already gives continuous Z, unlike a1c0's single-wire position.
 
   for (const auto &sievent : Si_Events)
   {
@@ -4026,6 +4055,9 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
 
       bool trueProton = (beam_energy_at_vertex < 10.0);
 
+      const bool applyProtonLocusGate = (protonLocusCut != nullptr && rx == "m27Alax" && det == "sx3" && anodeE_MeV >= 0.0);
+      const bool insideProtonLocus = applyProtonLocusGate && protonLocusCut->IsInside(vertex_z, anodeE_MeV);
+
       auto fillHypothesis = [&](double m3, double m4, TSpline3 *ej_fwd, TSpline3 *ej_inv, const std::string &ejtag)
       {
         Kinematics kin(m_beam, mass_4He, m3, m4, beam_energy_at_vertex / m_beam); // beamE given as E/u
@@ -4039,9 +4071,35 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
         double level_residual = 0.0;
         // double snapped_level = snapToNearestLevel(Ex, levels, level_residual);
         double ebeam_kin_MeV = (Ex < ex_gate_MeV)
-                                   ? invertBeamEnergyMeV(m_beam, mass_4He, m3, m4, Efix, theta * 180 / M_PI, 0.0)
+                                   ? invertBeamEnergyMeV(m_beam, mass_4He, m3, m4, Efix, theta * 180 / M_PI, Ex)
                                    : -1.0;
         // double ebeam_kin_MeV = invertBeamEnergyMeV(m_beam, mass_4He, m3, m4, Efix, theta * 180 / M_PI, snapped_level);
+
+        // Gated output: only fill when this hypothesis (proton "_p" / alpha "_a") agrees
+        // with which side of the proton_locus gate the event fell on, so each event
+        // contributes exactly one entry per quantity. Tagged with the same
+        // pooled/topo1/topo2/methodGroup tiers as plot_with_tag below, so
+        // a1c0/a1c1/a1c2fix/a1c1c2 each get their own gated Ex and
+        // BeamEnergy_ETrack_vs_EKin (not BeamEnergy_vs_VertexZ).
+        if (applyProtonLocusGate && ((insideProtonLocus && ejtag == "_p") || (!insideProtonLocus && ejtag == "_a")))
+        {
+          std::string gateTag = insideProtonLocus ? "p" : "a";
+          std::string gateFolder = rx + "_ProtonLocusGate_" + det;
+          auto fillGatedTag = [&](const std::string &topo)
+          {
+            std::string t = topo.empty() ? "" : ("_" + topo);
+            plotter->Fill1D(rx + "_Ex_ProtonLocusGate_" + gateTag + t + sfx, 400, -20, 20, Ex, gateFolder);
+            if (ebeam_kin_MeV > 0.0)
+              plotter->Fill2D(rx + "_BeamEnergy_ETrack_vs_EKin_ProtonLocusGate_" + gateTag + t + sfx,
+                              400, 0, beamE0 * 1.5, 400, 0, beamE0 * 1.5, beam_energy_at_vertex, ebeam_kin_MeV, gateFolder);
+          };
+          fillGatedTag("");
+          fillGatedTag(topo1);
+          if (!topo2.empty())
+            fillGatedTag(topo2);
+          if (!methodGroup.empty())
+            fillGatedTag(methodGroup);
+        }
 
         auto plot_with_tag = [&](const std::string &topo)
         {
@@ -4183,7 +4241,13 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
       if (anodeCh_a1c0 < 0 || anodeCh_a1c0 >= 24)
         anodeCh_a1c0 = -1;
 
-      reconstructAndFill(pc.Z(), pc, apSumE, -1.0, anodeE_MeV_a1c0, -1.0, "a1c0", "", anodeCh_a1c0);
+      // a1c0 Z is a deterministic function of wire position (a1c1_zcorr is just a
+      // scale+offset) with no sub-wire-pitch information, unlike a1c1's cfrac -- so
+      // dither only the Z fed into reconstruction, matching dither_sigma_c0's use
+      // elsewhere (e.g. a1c0_hybrid_pcz). pc itself stays raw/undithered: _rawZ_a1c0,
+      // the phi cut, and _dPhi_a1c0 above are all meant to reflect the true wire position.
+      double pcz_a1c0_dith = rand.Gaus(pc.Z(), dither_sigma_c0 / 2.0);
+      reconstructAndFill(pcz_a1c0_dith, pc, apSumE, -1.0, anodeE_MeV_a1c0, -1.0, "a1c0", "", anodeCh_a1c0);
     }
   }
 }
@@ -4211,7 +4275,7 @@ void miscHistograms_27Alax(HistPlotter *plotter, const std::vector<Event> &QQQ_E
   // 27Al(a,a)/(a,d)/(a,p): ejectile + recoil masses per channel.
   AAEjectileMasses ej27Al{mass_4He, mass_27Al, mass_2H, mass_29Si_rec, mass_1H, mass_30Si};
   reaction_ax_core(plotter, QQQ_Events, PC_Events, aClusters, true, "m27Alax", "qqq", 0.6, 6.0, TMath::Pi() / 4.0,
-                   10.0, 10000.0, 20.0, 56.103, MeV_to_cm_27Al_spl, cm_to_MeV_27Al_spl, mass_27Al, ej27Al, globaltag);
+                   10.0, 10000.0, 20.0, 56.16, MeV_to_cm_27Al_spl, cm_to_MeV_27Al_spl, mass_27Al, ej27Al, globaltag);
   reaction_ax_core(plotter, SX3_Events, PC_Events, aClusters, false, "m27Alax", "sx3", 1.2, 10.0, TMath::Pi() / 3.0,
-                   10.0, 10000.0, 20.0, 56.103, MeV_to_cm_27Al_spl, cm_to_MeV_27Al_spl, mass_27Al, ej27Al, globaltag);
+                   10.0, 10000.0, 20.0, 56.16, MeV_to_cm_27Al_spl, cm_to_MeV_27Al_spl, mass_27Al, ej27Al, globaltag);
 }
