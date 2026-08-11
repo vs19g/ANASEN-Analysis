@@ -2077,7 +2077,7 @@ void pcCalibratedHistograms(HistPlotter *plotter, const std::vector<Event> &QQQ_
 {
   for (const auto &pcevent : PC_Events_calibrated)
   {
-    if (pcevent.multi1 > 2 || pc.multi2 > 4)
+    if (pcevent.multi1 > 2 || pcevent.multi2 > 4)
       continue;
     const std::string topo = "_a" + std::to_string(pcevent.multi1) + "c" + std::to_string(pcevent.multi2);
     const bool hasCathode = (pcevent.Cathodech >= 0);
