@@ -6,10 +6,11 @@ export OUT_DIR="Output_27Al"
 export reactiondata=1
 export CO2percent=3
 export pressure_in_torr=250
-export CATHODE_GAIN=3.0
+export CATHODE_GAIN=4.0
 export source_vertex=-200.0
 export BEAM_AXIS_X=-15
 export BEAM_AXIS_Y=-5
+export CUTLIST=cuts_list.txt
 
 # Clean up previous runs
 rm -f Output_27Al/*.root
@@ -38,9 +39,10 @@ process_run() {
 export -f process_run
 
 echo "Starting parallel processing..."
-time parallel --bar -j 6 process_run ::: {24..41} 
+
+# time parallel --bar -j 8 process_run ::: {24..41} 
 time parallel --bar -j 3 process_run ::: 44 45 46
-# time parallel --bar -j 8 process_run ::: {50..59}
+time parallel --bar -j 8 process_run ::: {50..59}
 # time parallel --bar -j 4 process_run ::: 62 63 66 67 68
 # time parallel --bar -j 1 process_run ::: 73
 # time parallel --bar -j 1 process_run ::: 74
@@ -65,4 +67,5 @@ unset A1C1_Z_OFF_QQQ
 unset A1C1_Z_OFF_SX3
 unset BEAM_AXIS_X
 unset BEAM_AXIS_Y
+unset CUTLIST
 echo "Script execution finished."
