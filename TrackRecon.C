@@ -51,7 +51,7 @@ bool process_alpha_proton_scattering = false,
      diagnostic_eplots = false,
      diagnostic_tplots = true,
      reactiondata = false,
-     doPCEnergyCalibration = true,
+     doPCEnergyCalibration = false,
      ta_foil_run = false,
      source_run = false;
 
@@ -346,7 +346,7 @@ bool pcEnergyCalibLoaded = false;
 // mask. Set DISABLE_BAD_ANODE_WIRES=1 in the environment to exclude them from
 // every anode cluster (A1C1/A1C2/A1C0) across the whole analysis, so the
 // impact on downstream histograms can be compared against the default (off).
-static const std::set<int> badAnodeWires = { 6, 12, 19, 21, 22, 23};
+static const std::set<int> badAnodeWires = {6, 12, 19, 21, 22, 23};
 bool excludeBadAnodeWires = false; // set in Begin() from DISABLE_BAD_ANODE_WIRES
 inline bool isAnodeWireExcluded(int wire)
 {
@@ -3718,7 +3718,8 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
       double beam_path_length = TMath::Abs(vertex_z - z_entrance) * 0.1; // mm -> cm
       double beam_energy_at_vertex = evalElossForward(beam_MeV_to_cm, beam_cm_to_MeV, beamE0, beam_path_length);
       if (beam_energy_at_vertex <= 0.0)
-        return;
+        // return;
+        beam_energy_at_vertex = 0.001;
 
       plotter->Fill2D(rx + "_BeamEnergy_vs_VertexZ" + sfx, 800, -400, 400, 400, 0, beamE0, vertex_z, beam_energy_at_vertex, globaltag + "_" + rx + "+misc_" + det);
 
@@ -3768,14 +3769,19 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
                               400, 0, beamE0 * 1.5, 400, 0, beamE0 * 1.5, beam_energy_at_vertex, ebeam_kin_MeV, gateFolder);
 
             int thetabin = std::floor((theta * 180.0 / M_PI) / 6.0);
+            int zbin = std::floor((vertex_z + 450) / 10.0);
             plotter->Fill2D(rx + " _BeamEnergy_vs_Ef_" + gateTag + t + sfx + "thetabin" + std::to_string(thetabin),
-                            400, 0, beamE0 * 1.5, 800, 0, ef_max, beam_energy_at_vertex, Efix, gateFolder);
+                            400, 0, beamE0 * 1.5, 800, 0, ef_max, beam_energy_at_vertex, Efix, "BeamE_vs_Ef_pgated");
             plotter->Fill2D(rx + " _BeamEnergy_vs_Ef_" + gateTag + t + sfx,
-                            400, 0, beamE0 * 1.5, 800, 0, ef_max, beam_energy_at_vertex, Efix, gateFolder);
+                            400, 0, beamE0 * 1.5, 800, 0, ef_max, beam_energy_at_vertex, Efix, "BeamE_vs_Ef_pgated");
+            // plotter->Fill2D(rx + " _theta_vs_Ef_" + gateTag + sfx + "zbin" + pad2(zbin),
+            //                 100, 0, 180, 800, 0, ef_max, theta * 180.0 / M_PI, Efix, "Theta_vs_Ef_p_gated");
+            plotter->Fill1D(rx + " _Ef_" + gateTag + sfx + "zbin" + pad2(zbin),
+                            400, 0, ef_max, Efix, "Ef_p_gated");
             plotter->Fill2D(rx + " _BeamEnergy_vs_Ex_" + gateTag + t + sfx + "thetabin" + std::to_string(thetabin),
-                            400, 0, beamE0 * 1.5, 400, -20, 20, beam_energy_at_vertex, Ex, gateFolder);
+                            400, 0, beamE0 * 1.5, 400, -20, 20, beam_energy_at_vertex, Ex, "BeamE_vs_Ex_pgated");
             plotter->Fill2D(rx + " _BeamEnergy_vs_Ex_" + gateTag + t + sfx,
-                            400, 0, beamE0 * 1.5, 400, -20, 20, beam_energy_at_vertex, Ex, gateFolder);
+                            400, 0, beamE0 * 1.5, 400, -20, 20, beam_energy_at_vertex, Ex, "BeamE_vs_Ex_pgated");
             plotter->Fill2D(rx + "_VertexReconZ_vs_snapped_level" + ejtag + t + sfx, 800, -400, 400, 800, -20, 20, vertex_z, snapped_level, gateFolder);
             plotter->Fill2D(rx + "_BeamEnergy_vs_snapped_level" + ejtag + t + sfx, 400, 0, beamE0 * 1.5, 800, -20, 20, beam_energy_at_vertex, snapped_level, gateFolder);
           };
@@ -3823,6 +3829,8 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
           plotter->Fill2D(rx + "_dEgas_vs_Ef" + ejtag + sfx, 400, 0, ef_max, 800, 0, 0.6, Efix, dE_pred, pmlabel);
           if (anodeE_MeV >= 0.0)
           {
+            plotter->Fill2D(rx + "_dEgasCalib_vs_E" + sfx, 400, 0, ef_max, 800, 0, 0.6, sievent.Energy1, anodeE_MeV, "EdEComparison");
+            plotter->Fill2D(rx + "_dEgasCalib*sintheta_vs_E" + sfx, 400, 0, ef_max, 800, 0, 0.6, sievent.Energy1, anodeE_MeV * sin(theta), "EdEComparison");
             plotter->Fill2D(rx + "_dEgasCalib_vs_Ef" + ejtag + sfx, 400, 0, ef_max, 800, 0, 0.6, Efix, anodeE_MeV, pmlabel);
             plotter->Fill2D(rx + "_dEgasCalib_vs_EBeam" + ejtag + sfx, 400, 0, beamE0 * 1.5, 800, 0, 0.6, beam_energy_at_vertex, anodeE_MeV, pmlabel);
             plotter->Fill2D(rx + "_dEgasRaw_vs_EBeam" + ejtag + sfx, 400, 0, beamE0 * 1.5, 800, 0, 20000, beam_energy_at_vertex, anodeE, pmlabel);
