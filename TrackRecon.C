@@ -46,7 +46,7 @@ bool process_alpha_proton_scattering = false,
      doPCSX3ClusterAnalysis = true,
      doPCQQQClusterAnalysis = true,
      doOldAnalysis = false,
-     BenchMark = false,
+     BenchMark = true,
      onewire_analysis = true,
      diagnostic_eplots = false,
      diagnostic_tplots = true,
@@ -141,8 +141,8 @@ const double a1c1_zg[8] = {147.998, 101.946, 59.7634, 19.6965, -19.6965, -59.763
 
 static const double a1c1_cfmin_17F[7] = {0.20, 0.20, 0.20, 0.20, 0.20, 0.20, 0.20};
 static const double a1c1_k_17F[7] = {0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25};
-static const double a1c1_cfmin_27Al[7] = {0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15};
-static const double a1c1_k_27Al[7] = {0.20, 0.20, 0.20, 0.20, 0.20, 0.20, 0.20};
+static const double a1c1_cfmin_27Al[7] = {0.42, 0.42, 0.42, 0.40, 0.42, 0.43, 0.43};
+static const double a1c1_k_27Al[7] = {0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06};
 
 // active per-cell set, populated by dataset in Begin()
 double a1c1_cfmin_cell[7] = {0.20, 0.20, 0.20, 0.20, 0.20, 0.20, 0.20};
@@ -309,6 +309,8 @@ public:
   double Energy1 = -1; // Front for QQQ, Anode for PC
   double Energy2 = -1; // Back for QQQ, Cathode for PC
   double EnergySum = -1;
+  double rawEnergy1 = -1; // pre-calibration Energy1 (apSumE), for cfrac -- MeV-scale Energy1 is wrong for this
+  double rawEnergy2 = -1; // pre-calibration Energy2 (cpMaxE), for cfrac
   double Time1 = -1;
   double Time2 = -1;
   int Anodech = -1;
@@ -392,6 +394,7 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
                           const std::vector<std::vector<std::tuple<int, double, double>>> &aClusters, const std::vector<std::vector<std::tuple<int, double, double>>> &cClusters);
 void PCQQQClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Events, const std::vector<Event> &SX3_Events, const std::vector<Event> &PC_Events,
                           const std::vector<std::vector<std::tuple<int, double, double>>> &aClusters, const std::vector<std::vector<std::tuple<int, double, double>>> &cClusters);
+void a1c1CalibDiagnostic(HistPlotter *plotter, const std::vector<Event> &PC_Events);
 
 void TrackRecon::Begin(TTree * /*tree*/)
 {
@@ -500,8 +503,8 @@ void TrackRecon::Begin(TTree * /*tree*/)
   a1c1_dead_cathode = &a1c1_dead_cathode_17F;
   if (dataset == "27Al")
   {
-    cfmin_src = a1c1_cfmin_17F;
-    k_src = a1c1_k_17F;
+    cfmin_src = a1c1_cfmin_27Al;
+    k_src = a1c1_k_27Al;
     cfmin2_src = a1c1_cfmin2_27Al;
     k2_src = a1c1_k2_27Al;
     a1c1_cfrac_split = 0.0;
@@ -1528,6 +1531,8 @@ Bool_t TrackRecon::Process(Long64_t entry)
         if (pcEnergyCalibLoaded)
         {
           Event PCEventCalibrated = PCEvent;
+          PCEventCalibrated.rawEnergy1 = PCEvent.Energy1; // stash BEFORE overwriting -- see rawEnergy1/2 comment on Event
+          PCEventCalibrated.rawEnergy2 = PCEvent.Energy2;
           double anodeCalibSum = 0.0;
           for (const auto &w : aCluster)
           {
@@ -1727,6 +1732,8 @@ Bool_t TrackRecon::Process(Long64_t entry)
 
   if (pcEnergyCalibLoaded)
     pcCalibratedHistograms(plotter, QQQ_Events, SX3_Events, PC_Events_calibrated);
+
+  a1c1CalibDiagnostic(plotter, PC_Events); // <-- new, unconditional
 
   auto hasPCCoincidence = [&](const TVector3 &pos)
   {
@@ -1942,8 +1949,49 @@ void protonAlphaHistograms(HistPlotter *plotter, const std::vector<Event> &QQQ_E
   return;
 }
 
+void a1c1CalibDiagnostic(HistPlotter *plotter, const std::vector<Event> &PC_Events)
+{
+  for (const auto &pcevent : PC_Events)
+  {
+    if (!(pcevent.multi1 == 1 && pcevent.multi2 == 2))
+      continue; // a1c2 only -- two cathode wires give unambiguous ground truth
+    if (pcevent.Anodech < 0 || pcevent.Anodech >= 24)
+      continue;
+
+    double ac = pcevent.Energy1 + pcevent.Energy2; // Energy1=apSumE, Energy2=cpMaxE
+    if (ac <= 0.0)
+      continue;
+    double cfrac = pcevent.Energy2 / ac;
+
+    double z = a1c2_zfix(pcevent.pos.Z());
+    plotter->Fill2D("A1C1Calib_cfrac_vs_a1c2z", 600, -200, 200, 220, -0.05, 1.05, z, cfrac, "A1C1Calib");
+
+    for (int cell = 0; cell < 7; ++cell)
+    {
+      if (!(z <= a1c1_zg[cell] && z > a1c1_zg[cell + 1]))
+        continue;
+
+      double zc = 0.5 * (a1c1_zg[cell] + a1c1_zg[cell + 1]);
+      double half = 0.5 * (a1c1_zg[cell] - a1c1_zg[cell + 1]);
+      if (half <= 0.0)
+        break;
+
+      double fracPos_signed = (z - zc) / half; // + toward zg[cell] (high-z edge), - toward zg[cell+1]
+      double fracPos = TMath::Abs(fracPos_signed);
+
+      plotter->Fill1D(Form("A1C1Calib_cfrac_cell%d", cell), 220, -0.05, 1.05, cfrac, "A1C1Calib");
+      plotter->Fill2D("A1C1Calib_cfrac_vs_cellFrac", 120, 0, 1.2, 220, -0.05, 1.05, fracPos, cfrac, "A1C1Calib");
+      plotter->Fill2D(Form("A1C1Calib_cfrac_vs_cellFrac_signed_cell%d", cell), 240, -1.2, 1.2, 220, -0.05, 1.05,
+                      fracPos_signed, cfrac, "A1C1Calib");
+      break;
+    }
+  }
+}
+
 void pcCalibratedHistograms(HistPlotter *plotter, const std::vector<Event> &QQQ_Events, const std::vector<Event> &SX3_Events, const std::vector<Event> &PC_Events_calibrated)
 {
+  static TRandom3 rand(0); // seeded once, not per call -- for Si-side pixel/strip dithering below
+
   for (const auto &pcevent : PC_Events_calibrated)
   {
     if (pcevent.multi1 > 2 || pcevent.multi2 > 4)
@@ -1982,6 +2030,90 @@ void pcCalibratedHistograms(HistPlotter *plotter, const std::vector<Event> &QQQ_
           plotter->Fill2D("Calib_dE_CathodeE_vs_SX3E" + t, 400, 0, 10, 800, 0, 0.6, sx3event.Energy1, pcevent.Energy2, "hCalibPC");
       }
     }
+
+    // --- Predicted vs. calculated dEgas, a1c1/a1c2 only (a1c0 has no cathode charge
+    // division, so no cfrac-based z to correct here). a1c1's z MUST come from
+    // rawEnergy1/2 (pre-calibration scale) -- pcevent.Energy1/2 are already MeV-scaled
+    // by this point, which is the wrong scale for cfmin_cell/k_cell. a1c2 is unambiguous
+    // via a1c2_zfix and doesn't need cfrac at all.
+    if (pcevent.multi2 == 1 || pcevent.multi2 == 2)
+    {
+      double z_corrected;
+      bool haveZ = true;
+      if (pcevent.multi2 == 2)
+      {
+        z_corrected = a1c2_zfix(pcevent.pos.Z());
+      }
+      else
+      {
+        double ac = pcevent.rawEnergy1 + pcevent.rawEnergy2;
+        haveZ = (ac > 0.0);
+        if (haveZ)
+        {
+          double cfrac = pcevent.rawEnergy2 / ac;
+          A1C1PickedSol picked = a1c1_solve_pick(cfrac, pcevent.pos.Z(), QQQ_Events.empty() ? TVector3() : QQQ_Events.front().pos,
+                                                 pcevent.pos.X(), pcevent.pos.Y(), pcevent.Cathodech, pcevent.rawEnergy1, pcevent.Anodech);
+          // si/cx/cy in a1c1_solve_pick's signature aren't used by the pick itself
+          // (see a1c1_pick_side) so the placeholder si point above is harmless.
+          haveZ = (picked.best().inband && picked.side_status != 2);
+          if (haveZ)
+            z_corrected = picked.best().pcz;
+        }
+      }
+
+      if (haveZ)
+      {
+        for (const auto &qqqevent : QQQ_Events)
+        {
+          bool phicut = TMath::Abs(qqqevent.pos.DeltaPhi(pcevent.pos)) <= TMath::Pi() / 4.0;
+          bool timecut = TMath::Abs(qqqevent.Time1 - pcevent.Time1) < 150;
+          if (!(phicut && timecut))
+            continue;
+
+          double smeared_phi = qqqevent.pos.Phi() + rand.Uniform(-qqq_wedge_pitch / 2.0, qqq_wedge_pitch / 2.0);
+          double smeared_rho = qqqevent.pos.Perp() + rand.Uniform(-qqq_ring_pitch / 2.0, qqq_ring_pitch / 2.0);
+          TVector3 smeared_qqq_pos(smeared_rho * TMath::Cos(smeared_phi), smeared_rho * TMath::Sin(smeared_phi), qqqevent.pos.Z());
+
+          TVector3 vtx = beamVertex(smeared_qqq_pos, TVector3(pcevent.pos.X(), pcevent.pos.Y(), z_corrected) - smeared_qqq_pos);
+          PCCollect pcc = pcCollectionPath(vtx, smeared_qqq_pos);
+          if (!pcc.ok)
+            continue;
+
+          double Egu_p = evalEloss(MeV_to_cm_p_spl, cm_to_MeVp_spl, qqqevent.Energy1, pcc.guard_cm);
+          double Eca_p = evalEloss(MeV_to_cm_p_spl, cm_to_MeVp_spl, qqqevent.Energy1, pcc.cathode_cm);
+          plotter->Fill2D("Calib_dEgasPred_vs_dEgasCalib_asProton" + topo, 800, 0, 2, 400, 0, 0.6, pcevent.Energy1, Egu_p - Eca_p, "hCalibPC");
+
+          double Egu_a = evalEloss(MeV_to_cm_spl, cm_to_MeV_spl, qqqevent.Energy1, pcc.guard_cm);
+          double Eca_a = evalEloss(MeV_to_cm_spl, cm_to_MeV_spl, qqqevent.Energy1, pcc.cathode_cm);
+          plotter->Fill2D("Calib_dEgasPred_vs_dEgasCalib_asAlpha" + topo, 800, 0, 2, 400, 0, 0.6, pcevent.Energy1, Egu_a - Eca_a, "hCalibPC");
+        }
+        for (const auto &sx3event : SX3_Events)
+        {
+          bool phicut = TMath::Abs(sx3event.pos.DeltaPhi(pcevent.pos)) <= TMath::Pi() / 4.0;
+          bool timecut = TMath::Abs(sx3event.Time1 - pcevent.Time1) < 150;
+          if (!(phicut && timecut))
+            continue;
+
+          // SX3's radial coordinate is already continuous via front-strip charge
+          // division, so only phi gets dithered here (matches the benchmark convention).
+          double smeared_phi = sx3event.pos.Phi() + rand.Uniform(-sx3_phi_pitch / 2.0, sx3_phi_pitch / 2.0);
+          TVector3 smeared_sx3_pos(sx3event.pos.Perp() * TMath::Cos(smeared_phi), sx3event.pos.Perp() * TMath::Sin(smeared_phi), sx3event.pos.Z());
+
+          TVector3 vtx = beamVertex(smeared_sx3_pos, TVector3(pcevent.pos.X(), pcevent.pos.Y(), z_corrected) - smeared_sx3_pos);
+          PCCollect pcc = pcCollectionPath(vtx, smeared_sx3_pos);
+          if (!pcc.ok)
+            continue;
+
+          double Egu_p = evalEloss(MeV_to_cm_p_spl, cm_to_MeVp_spl, sx3event.Energy1, pcc.guard_cm);
+          double Eca_p = evalEloss(MeV_to_cm_p_spl, cm_to_MeVp_spl, sx3event.Energy1, pcc.cathode_cm);
+          plotter->Fill2D("Calib_dEgasPred_vs_dEgasCalib_asProton" + topo, 800, 0, 2, 400, 0, 0.6, pcevent.Energy1, Egu_p - Eca_p, "hCalibPC");
+
+          double Egu_a = evalEloss(MeV_to_cm_spl, cm_to_MeV_spl, sx3event.Energy1, pcc.guard_cm);
+          double Eca_a = evalEloss(MeV_to_cm_spl, cm_to_MeV_spl, sx3event.Energy1, pcc.cathode_cm);
+          plotter->Fill2D("Calib_dEgasPred_vs_dEgasCalib_asAlpha" + topo, 800, 0, 2, 400, 0, 0.6, pcevent.Energy1, Egu_a - Eca_a, "hCalibPC");
+        }
+      }
+    }
   }
 }
 
@@ -2001,14 +2133,14 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
     for (const auto &sx3event : SX3_Events)
     {
       bool PCSX3TimeCut = (sx3event.Time1 - anodeTS < 150);
-      TVector3 pc = a1c0_wirePos(apwire_bm, sx3event.pos.Phi(), true);
+      TVector3 pc = a1c0_wirePos(apwire_bm, sx3event.pos.Phi(), false);
       bool phicut = TMath::Abs(sx3event.pos.DeltaPhi(pc)) <= TMath::Pi() / 4.0;
       if (!(phicut && PCSX3TimeCut))
         continue;
       double smeared_phi = sx3event.pos.Phi() + rand.Uniform(-sx3_phi_pitch / 2.0, sx3_phi_pitch / 2.0);
       TVector3 smeared_sx3(sx3event.pos.Perp() * TMath::Cos(smeared_phi), sx3event.pos.Perp() * TMath::Sin(smeared_phi), sx3event.pos.Z());
       // A1C0 hybrid z (shared with the QQQ twin block + miscHistograms_oneWire).
-      TVector3 pc_hybrid = a1c0_hybrid_pcz(apwire_bm, sx3event.pos.Phi(), true, dither_sigma, rand);
+      TVector3 pc_hybrid = a1c0_hybrid_pcz(apwire_bm, sx3event.pos.Phi(), false, dither_sigma, rand);
       TVector3 vtx0 = beamVertex(sx3event.pos, pc - sx3event.pos);
       TVector3 vtx1 = beamVertex(smeared_sx3, pc_hybrid - smeared_sx3);
 
@@ -2439,6 +2571,10 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
               plotter->Fill2D("Benchmark_SX3_trueA1C1_cfrac_vs_cell", 7, 0, 7, 220, -0.05, 1.05, cell + 0.5, cfrac, "A1C1True_SX3");
               plotter->Fill2D("Benchmark_SX3_trueA1C1_f_vs_cell", 7, 0, 7, 260, -1.5, 2.5, cell + 0.5, f, "A1C1True_SX3");
               plotter->Fill1D("Benchmark_SX3_trueA1C1_f", 260, -1.5, 2.5, f, "A1C1True_SX3");
+              plotter->Fill1D("Benchmark_SX3_trueA1C1_sideStatus", 4, -1, 3, picked.side_status + 0.5, "A1C1True_SX3");
+              plotter->Fill1D("Benchmark_SX3_VertexZ_trueA1C1_Cfrac_status" + std::to_string(picked.side_status),
+                              800, -400, 400, vtx_cf.Z(), "A1C1True_SX3");
+
               plotter->Fill1D("Benchmark_SX3_trueA1C1_valid", 2, 0, 2, valid ? 1.0 : 0.0, "Benchmark_SX3_trueA1C1");
               int reason;
               if (cell < 0 || cell > 6 || a1c1_k_cell[cell] <= 0.0)

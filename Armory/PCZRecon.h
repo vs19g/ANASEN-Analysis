@@ -177,8 +177,6 @@ inline A1C1Sol a1c1_solve(double cfrac, double zf, int cwire = -1, double anodeE
   return s;
 }
 
-double a1c1_side_perp_max = 20.0; // beam-axis Perp gate (mm)
-
 // Which of the two candidate cells the beam-axis test selects.
 enum class SideChoice
 {
@@ -186,26 +184,32 @@ enum class SideChoice
   Low   // the cell BELOW the fired wire (pcz_lo)
 };
 
-inline SideChoice a1c1_pick_side(const TVector3 &si, double cx, double cy, double pcz_lo, double pcz_hi, int &status)
+// Picks between the two candidate cells (lo/hi) a1c1_solve returns.
+//
+// This used to compare beamVertex(si, ...)'s beamPerp for each candidate, but
+// that check is a no-op: both candidates share the same (cx, cy), so
+// beamVertex's t-parameter -- computed purely from dir.X()/dir.Y() -- comes out
+// identical for both, and therefore so does the resulting vertex X/Y and
+// beamPerp. The two disambiguating branches below were consequently dead code;
+// the function always fell through to returning Low regardless of the actual
+// physics.
+//
+// inband/pitchok DO differ between the two cells (each depends on cfrac's
+// position within that cell's own band), so they're used here for status
+// instead. The final tie-break prefers whichever candidate sits closer to the
+// fired wire itself, rather than farther into the next cell over.
+inline SideChoice a1c1_pick_side(const A1C1CellSol &lo, const A1C1CellSol &hi, double zf, int &status)
 {
-  auto vtxZP = [&](double pcz, double &z, double &perp)
-  {
-    TVector3 pc(cx, cy, pcz);
-    TVector3 vtx = beamVertex(si, pc - si);
-    z = vtx.Z();
-    perp = beamPerp(vtx);
-  };
-  double zl, pl, zh, ph;
-  vtxZP(pcz_lo, zl, pl);
-  vtxZP(pcz_hi, zh, ph);
-  bool okl = (pl <= a1c1_side_perp_max);
-  bool okh = (ph <= a1c1_side_perp_max);
+  bool okl = lo.inband && lo.pitchok;
+  bool okh = hi.inband && hi.pitchok;
   status = (okl || okh) ? ((okl && okh) ? 1 : 0) : 2;
   if (okl && !okh)
     return SideChoice::Low;
   if (okh && !okl)
     return SideChoice::High;
-  return (pl <= ph) ? SideChoice::Low : SideChoice::High; // both physical: smaller-Perp side
+  double dl = TMath::Abs(lo.pcz - zf);
+  double dh = TMath::Abs(hi.pcz - zf);
+  return (dl <= dh) ? SideChoice::Low : SideChoice::High;
 }
 
 // a1c1_solve() + a1c1_pick_side() together, with the picked cell already
@@ -225,9 +229,12 @@ struct A1C1PickedSol
 inline A1C1PickedSol a1c1_solve_pick(double cfrac, double zf, const TVector3 &si, double cx, double cy,
                                      int cwire = -1, double anodeE = -1, int awire = -1)
 {
+  // si/cx/cy are no longer used by the pick itself (see a1c1_pick_side above)
+  // but are kept in the signature so the ~10 existing call sites throughout
+  // TrackRecon.C don't need to change.
   A1C1PickedSol out;
   out.sol = a1c1_solve(cfrac, zf, cwire, anodeE, awire);
-  out.side = a1c1_pick_side(si, cx, cy, out.sol.pcz_lo, out.sol.pcz_hi, out.side_status);
+  out.side = a1c1_pick_side(out.sol.lo, out.sol.hi, zf, out.side_status);
   return out;
 }
 
