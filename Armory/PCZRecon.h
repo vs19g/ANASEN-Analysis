@@ -2,8 +2,9 @@
 #define PCZRecon_h
 
 // PC Z-position reconstruction, one section per anode/cathode topology:
-// A1C0 (anode only), A1C1 (anode + single cathode, charge division), A1C2
-// (anode + two cathodes, "step ladder" correction). Each topology gets one
+// A1C0 (single anode wire only), A2C0 (two-wire anode cluster, no cathode --
+// same math as A1C0, see that section), A1C1 (anode + single cathode, charge
+// division), A1C2 (anode + two cathodes, "step ladder" correction). Each topology gets one
 // well-defined entry point instead of the math being split across files by
 // historical accident (A1C0/A1C1 used to live in TrackRecon.C itself; A1C2's
 // underlying model lives in the separately-shared PC_StepLadder_Correction.h
@@ -81,6 +82,31 @@ inline TVector3 a1c0_hybrid_pcz(const std::pair<TVector3, TVector3> &apwire, dou
   TVector3 pc = a1c0_wirePos(apwire, phi, isQQQ);
   pc.SetZ(rand.Gaus(pc.Z(), sigma));
   return pc;
+}
+
+// ---------------------------------------------------------------------
+// A2C0: two-wire anode-cluster (charge-shared), no-cathode position
+// reconstruction
+// ---------------------------------------------------------------------
+//
+// Same math as A1C0 above -- pseudowire + phi-minimization, no dither --
+// just handed a genuine 2-wire energy-weighted pseudowire (GetPseudoWire
+// over a 2-wire anode cluster) instead of a single real wire. a1c0_wirePos
+// already treats its `apwire` argument as an opaque pseudowire pair
+// regardless of how many physical wires went into it, so this is a
+// documented, named entry point rather than new math: call sites can say
+// what topology they mean instead of reusing a1c0_wirePos silently and
+// trusting a comment to explain why.
+//
+// Deliberately no dithered twin (no a2c0_hybrid_pcz): A2C0 is meant to feed
+// the reaction-analysis plots at its raw, undithered resolution, not stand
+// in for a1c0_hybrid_pcz's benchmark-truth-comparison role. If a "genuine
+// A2C0" BenchMark validation block is ever wanted (mirroring the existing
+// aClusters.size()==1 && cClusters.size()==0 A1C0 block in TrackRecon.C),
+// add one there rather than adding dithering here.
+inline TVector3 a2c0_wirePos(const std::pair<TVector3, TVector3> &apwire, double phi, bool isQQQ)
+{
+  return a1c0_wirePos(apwire, phi, isQQQ);
 }
 
 // ---------------------------------------------------------------------

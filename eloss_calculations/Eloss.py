@@ -6,7 +6,7 @@ P_TORR = 250
 TEMP_K = 293.15 
 R = 8.3144
 MEV2U = 1.0 / 931.494
-P_CO2 = 4
+P_CO2 = 3
 
 # Gas Density Calculations
 p_pa = P_TORR * 133.322
@@ -77,7 +77,10 @@ def generate_lookup(z, mass_u, e_start_mev, label):
 
         projectile.T(e_u)
         # dedx returns MeV / (g/cm2)
-        loss_mev = catima.dedx(projectile, gas_mix) * step_g_cm2
+        if(mass_u >=10.0):
+            loss_mev = catima.dedx(projectile, gas_mix) * step_g_cm2 * 0.89
+        else:
+            loss_mev = catima.dedx(projectile, gas_mix) * step_g_cm2
 
         current_e_total = max(0.0, current_e_total - loss_mev)
         current_thickness_g_cm2 += step_g_cm2
