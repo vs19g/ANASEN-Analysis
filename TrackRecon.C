@@ -842,7 +842,7 @@ inline void pcEnergyCalibrationAccumulate(const std::vector<Event> &PC_Events,
     {
       if (TMath::Abs(sievent.pos.DeltaPhi(pcevent.pos)) > phi_win)
         return;
-      if (sievent.Time1 - pcevent.Time1 < 150) // time coincidence
+      if (sievent.Time1 - pcevent.Time1 > 150) // time coincidence
         return;
       double theta = (sievent.pos - source_pos).Theta();
       if (theta <= 0.0 || !std::isfinite(theta))
@@ -1163,6 +1163,17 @@ Bool_t TrackRecon::Process(Long64_t entry)
 
           // plotter->Fill2D("SX3CartesianPlot", 200, -100, 100, 200, -100, 100, 88.0*TMath::Cos(phi_n),88.0*TMath::Sin(phi_n), "hCalSX3");
           plotter->Fill2D("SX3CartesianPlot" + std::to_string(id), 200, -100, 100, 200, -100, 100, 88.0 * TMath::Cos(phi_n), 88.0 * TMath::Sin(phi_n), "hCalSX3");
+        }
+        if (diagnostic_tplots)
+        {
+          for (int k = 0; k < pc.multi; k++)
+          {
+            if (pc.index[k] < 24 && pc.e[k] > 10)
+            {
+              plotter->Fill2D("Timing_Difference_SX3_PC", 500, -2000, 2000, 100, 0, 100, det.ts - static_cast<double>(pc.t[k]), det.stripB + 4 * id, "hTiming");
+              plotter->Fill2D("DelT_Vs_SX3BackECal", 500, -2000, 2000, 1000, 0, 10, det.ts - static_cast<double>(pc.t[k]), backE * 0.001, "hTiming");
+            }
+          }
         }
       }
     }
@@ -2026,7 +2037,7 @@ void pcVertexByWireGeometry(HistPlotter *plotter, const std::vector<Event> &QQQ_
       {
         if (TMath::Abs(si.pos.DeltaPhi(pcevent.pos)) > phi_win)
           continue;
-        if (si.Time1 - pcevent.Time1 < 150) // loose time coincidence, same convention as elsewhere
+        if (si.Time1 - pcevent.Time1 > 150) // loose time coincidence, same convention as elsewhere
           continue;
 
         double pcz;
@@ -3978,7 +3989,7 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
                              const AAEjectileMasses &ej_m, const std::string &globaltag)
 {
   const std::string sfx = "_" + det + globaltag;
-  static TRandom3 rand(0); 
+  static TRandom3 rand(0);
   for (const auto &sievent : Si_Events)
   {
     if (sievent.Energy1 < si_ecut)
@@ -4178,9 +4189,9 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
 
     for (const auto &aCl : aClusters)
     {
-      if (aCl.size() < 1 || aCl.size() > 2) 
-        continue;                          
-                                          
+      if (aCl.size() < 1 || aCl.size() > 2)
+        continue;
+
       if (clusterHasExcludedAnode(aCl))
         continue;
       auto aPw = pwinstance.GetPseudoWire(aCl, "ANODE");
