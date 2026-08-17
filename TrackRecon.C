@@ -397,7 +397,7 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
 void PCQQQClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Events, const std::vector<Event> &SX3_Events, const std::vector<Event> &PC_Events,
                           const std::vector<std::vector<std::tuple<int, double, double>>> &aClusters, const std::vector<std::vector<std::tuple<int, double, double>>> &cClusters);
 void a1c1CalibDiagnostic(HistPlotter *plotter, const std::vector<Event> &PC_Events);
-void pcVertexByWireGeometry(HistPlotter *plotter, const std::vector<Event> &QQQ_Events, const std::vector<Event> &SX3_Events, const std::vector<Event> &PC_Events);
+void pcVertexByWireGeometry(HistPlotter *plotter, const std::vector<Event> &QQQ_Events, const std::vector<Event> &SX3_Events, const std::vector<Event> &PC_Events_calibrated);
 
 void TrackRecon::Begin(TTree * /*tree*/)
 {
@@ -1756,7 +1756,7 @@ Bool_t TrackRecon::Process(Long64_t entry)
     pcCalibratedHistograms(plotter, QQQ_Events, SX3_Events, PC_Events_calibrated);
 
   a1c1CalibDiagnostic(plotter, PC_Events);                            // <-- new, unconditional
-  pcVertexByWireGeometry(plotter, QQQ_Events, SX3_Events, PC_Events); // <-- new, unconditional
+  pcVertexByWireGeometry(plotter, QQQ_Events, SX3_Events, PC_Events_calibrated); // <-- new, unconditional
 
   auto hasPCCoincidence = [&](const TVector3 &pos)
   {
@@ -2011,7 +2011,7 @@ void a1c1CalibDiagnostic(HistPlotter *plotter, const std::vector<Event> &PC_Even
   }
 }
 
-void pcVertexByWireGeometry(HistPlotter *plotter, const std::vector<Event> &QQQ_Events, const std::vector<Event> &SX3_Events, const std::vector<Event> &PC_Events)
+void pcVertexByWireGeometry(HistPlotter *plotter, const std::vector<Event> &QQQ_Events, const std::vector<Event> &SX3_Events, const std::vector<Event> &PC_Events_calibrated)
 {
   static TRandom3 rand(0); // seeded once, not per call -- dithers A1C0's Z below
 
@@ -2021,7 +2021,7 @@ void pcVertexByWireGeometry(HistPlotter *plotter, const std::vector<Event> &QQQ_
     double perp_max = isQQQ ? 6.0 : 10.0;                           // tolerances used
     const std::string det = isQQQ ? "_QQQ" : "_SX3";                // elsewhere in this file
 
-    for (const auto &pcevent : PC_Events)
+    for (const auto &pcevent : PC_Events_calibrated)
     {
       // Only topologies with an established pcz method below -- A2C1/A2C2 etc.
       // don't have one yet, so they're skipped here rather than silently
@@ -2060,13 +2060,13 @@ void pcVertexByWireGeometry(HistPlotter *plotter, const std::vector<Event> &QQQ_
 
         std::string topo = "_a" + std::to_string(pcevent.multi1) + "c" + std::to_string(pcevent.multi2);
 
-        plotter->Fill2D("WireGeometry_dE_vs_VertexZ" + topo, 800, -400, 400, 800, 0, 40000, vtx.Z(), pcevent.Energy1, "WireGeometry");
-        plotter->Fill2D("WireGeometry_dE_vs_VertexZ" + topo + det, 800, -400, 400, 800, 0, 40000, vtx.Z(), pcevent.Energy1, "WireGeometry");
+        plotter->Fill2D("WireGeometry_dE_vs_VertexZ" + topo, 800, -400, 400, 800, 0, 1.5, vtx.Z(), pcevent.Energy1, "WireGeometry");
+        plotter->Fill2D("WireGeometry_dE_vs_VertexZ" + topo + det, 800, -400, 400, 800, 0, 1.5, vtx.Z(), pcevent.Energy1, "WireGeometry");
 
         if (pcevent.multi1 == 1 && pcevent.multi2 == 1 && a1c1_inband)
         {
-          plotter->Fill2D("WireGeometry_dE_vs_VertexZ_a1c1_inband", 800, -400, 400, 800, 0, 40000, vtx.Z(), pcevent.Energy1, "WireGeometry");
-          plotter->Fill2D("WireGeometry_dE_vs_VertexZ_a1c1_inband" + det, 800, -400, 400, 800, 0, 40000, vtx.Z(), pcevent.Energy1, "WireGeometry");
+          plotter->Fill2D("WireGeometry_dE_vs_VertexZ_a1c1_inband", 800, -400, 400, 800, 0, 1.5, vtx.Z(), pcevent.Energy1, "WireGeometry");
+          plotter->Fill2D("WireGeometry_dE_vs_VertexZ_a1c1_inband" + det, 800, -400, 400, 800, 0, 1.5, vtx.Z(), pcevent.Energy1, "WireGeometry");
         }
       }
     }
