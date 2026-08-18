@@ -1,5 +1,9 @@
 import pycatima as catima
 import numpy as np
+import os
+
+DEDX_SCALE = float(os.environ.get("DEDX_SCALE", "1.0"))
+print(f"Using dEdX scale factor: {DEDX_SCALE}")
 
 # --- 1. Constants ---
 P_TORR = 250
@@ -32,7 +36,7 @@ fine_step_cm = 0.03     # row spacing near the Bragg peak
 fine_zone_frac = 0.085   # fraction of the *total* range treated as "near the peak"
 
 def generate_lookup(z, mass_u, e_start_mev, label):
-    filename = f"{label}_lookup_{e_start_mev}MeV_{P_TORR}torr_{P_CO2}pc.dat"
+    filename = f"/home/vsitaraman/ANASEN_analysis/eloss_calculations/{label}_lookup_{e_start_mev}MeV_{P_TORR}torr_{P_CO2}pc.dat"
     header = f"Energy(MeV) \tmg/cm2 \tcm\nStarting Energy: {e_start_mev} MeV"
 
     # Pass 1: integrate at full precision just to find the total range (needed
@@ -78,7 +82,7 @@ def generate_lookup(z, mass_u, e_start_mev, label):
         projectile.T(e_u)
         # dedx returns MeV / (g/cm2)
         if(mass_u >=10.0):
-            loss_mev = catima.dedx(projectile, gas_mix) * step_g_cm2 * 0.89
+            loss_mev = catima.dedx(projectile, gas_mix) * step_g_cm2 * DEDX_SCALE
         else:
             loss_mev = catima.dedx(projectile, gas_mix) * step_g_cm2
 

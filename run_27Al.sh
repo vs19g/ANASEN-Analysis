@@ -6,14 +6,15 @@ export OUT_DIR="Output_27Al"
 export reactiondata=1
 export CO2percent=3
 export pressure_in_torr=250
-export CATHODE_GAIN=4.0
+export CATHODE_GAIN=3.0
 export source_vertex=-200.0
-export BEAM_AXIS_X=-15
-export BEAM_AXIS_Y=-5
+export DEDX_SCALE=0.90
+# export BEAM_AXIS_X=-15
+# export BEAM_AXIS_Y=-5
 export CUTLIST=cuts_list.txt
 
 # Clean up previous runs
-rm -f Output_27Al/*.root
+rm -f Output_27Al_$DEDX/*.root
 
 echo "Pre-compiling TrackRecon.C safely on a single core..."
 root -q -l -b -e '.L TrackRecon.C++O'
@@ -22,9 +23,9 @@ process_run() {
     local wrun=$(printf "%03d" "$1")
     local prefix="${PREFIX:-Run_}"
     local infile="../ANASEN_analysis/data/${DATASET}_Data/${prefix}${wrun}_mapped.root"
-    local out="Output_27Al/results_run${wrun}.root"
+    local out="Output_27Al_$DEDX_SCALE/results_run${wrun}.root"
 
-    mkdir -p Output_27Al
+    mkdir -p Output_27Al_$DEDX_SCALE
 
     root -q -l -b -x "$infile" \
          -e "tree->Process(\"TrackRecon.C+\", \"${out}\")" > /dev/null 2>&1
@@ -38,9 +39,11 @@ process_run() {
 
 export -f process_run
 
+echo "Running Eloss.py with a scaling parameter of $DEDX_SCALE"
+python3 eloss_calculations/Eloss.py
 echo "Starting parallel processing..."
 
-# time parallel --bar -j 8 process_run ::: {24..41} 
+time parallel --bar -j 8 process_run ::: {24..41} 
 time parallel --bar -j 3 process_run ::: 44 45 46
 time parallel --bar -j 8 process_run ::: {50..59}
 # time parallel --bar -j 4 process_run ::: 62 63 66 67 68
@@ -49,7 +52,7 @@ time parallel --bar -j 8 process_run ::: {50..59}
 # time parallel --bar -j 4 process_run ::: {78..89}
 
 echo "Merging files..."
-hadd -k -j 4 Output_27Al/output_27Al.root Output_27Al/results_run*.root
+hadd -k -j 4 Output_27Al_$DEDX_SCALE/output_27Al.root Output_27Al_$DEDX_SCALE/results_run*.root
 
 # rootbrowse Output_27Al/output_27Al.root
 
@@ -68,4 +71,5 @@ unset A1C1_Z_OFF_SX3
 unset BEAM_AXIS_X
 unset BEAM_AXIS_Y
 unset CUTLIST
+unset DEDX_SCALE
 echo "Script execution finished."
