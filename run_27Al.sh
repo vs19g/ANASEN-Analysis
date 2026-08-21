@@ -8,13 +8,13 @@ export CO2percent=3
 export pressure_in_torr=250
 export CATHODE_GAIN=3.0
 export source_vertex=-200.0
-export DEDX_SCALE=0.90
+export DEDX_SCALE=0.80
 # export BEAM_AXIS_X=-15
 # export BEAM_AXIS_Y=-5
 export CUTLIST=cuts_list.txt
 
 # Clean up previous runs
-rm -f Output_27Al_$DEDX/*.root
+
 
 echo "Pre-compiling TrackRecon.C safely on a single core..."
 root -q -l -b -e '.L TrackRecon.C++O'
@@ -39,20 +39,27 @@ process_run() {
 
 export -f process_run
 
-echo "Running Eloss.py with a scaling parameter of $DEDX_SCALE"
-python3 eloss_calculations/Eloss.py
-echo "Starting parallel processing..."
+for i in 0.75 0.80 0.85 0.87 0.88 0.89 0.90 0.91 0.92 0.95 1.00 1.05 1.10 1.15
+do
+    DEDX_SCALE=$i
+    rm -f Output_27Al_$DEDX_SCALE/*.root
 
-time parallel --bar -j 8 process_run ::: {24..41} 
-time parallel --bar -j 3 process_run ::: 44 45 46
-time parallel --bar -j 8 process_run ::: {50..59}
-# time parallel --bar -j 4 process_run ::: 62 63 66 67 68
-# time parallel --bar -j 1 process_run ::: 73
-# time parallel --bar -j 1 process_run ::: 74
-# time parallel --bar -j 4 process_run ::: {78..89}
+    echo "Running Eloss.py with a scaling parameter of $DEDX_SCALE"
+    python3 eloss_calculations/Eloss.py
+    echo "Starting parallel processing..."
 
-echo "Merging files..."
-hadd -k -j 4 Output_27Al_$DEDX_SCALE/output_27Al.root Output_27Al_$DEDX_SCALE/results_run*.root
+    time parallel --bar -j 10 process_run ::: {24..41} 
+    time parallel --bar -j 3 process_run ::: 44 45 46
+    time parallel --bar -j 8 process_run ::: {50..59}
+    # time parallel --bar -j 4 process_run ::: 62 63 66 67 68
+    # time parallel --bar -j 1 process_run ::: 73
+    # time parallel --bar -j 1 process_run ::: 74
+    # time parallel --bar -j 4 process_run ::: {78..89}
+
+    echo "Merging files..."
+    hadd -k -j 4 Output_27Al_$DEDX_SCALE/output_27Al.root Output_27Al_$DEDX_SCALE/results_run*.root
+
+done
 
 # rootbrowse Output_27Al/output_27Al.root
 

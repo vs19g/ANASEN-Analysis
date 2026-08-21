@@ -43,13 +43,13 @@ Int_t colors[40] = {
 // --- Analysis Control Flags ---
 bool process_alpha_proton_scattering = false,
      doMiscHistograms = true,
-     doPCSX3ClusterAnalysis = true,
-     doPCQQQClusterAnalysis = true,
+     doPCSX3ClusterAnalysis = false,
+     doPCQQQClusterAnalysis = false,
      doOldAnalysis = false,
-     BenchMark = true,
+     BenchMark = false,
      onewire_analysis = true,
      diagnostic_eplots = false,
-     diagnostic_tplots = true,
+     diagnostic_tplots = false,
      reactiondata = false,
      doPCEnergyCalibration = false,
      ta_foil_run = false,
@@ -4113,12 +4113,7 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
 
       bool trueProton = (beam_energy_at_vertex < 10.0);
 
-      // Proton-locus PID gate: restricted to m27Alax/sx3, the exact branch/dataset
-      // the cut in Begin() was drawn from. "active" means the gate applies to this
-      // event at all; "insideLocus" is only meaningful when active is true.
-      const bool locusGateActive = (protonLocusCut != nullptr && rx == "m27Alax" && det == "sx3" && anodeE_MeV >= 0.0);
-      const bool insideProtonLocus = locusGateActive && protonLocusCut->IsInside(vertex_z, anodeE_MeV);
-
+      double ex_as_proton = 0.0, ex_as_alpha = 0.0;
       auto fillHypothesis = [&](double m3, double m4, TSpline3 *ej_fwd, TSpline3 *ej_inv, const std::string &ejtag)
       {
         // ---- kinematics for this mass hypothesis ----
@@ -4126,6 +4121,12 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
         double path_length = pathLengthCm(sievent.pos, r_rhoMin_fix);
         double Efix = evalEloss(ej_fwd, ej_inv, sievent.Energy1, path_length);
         double Ex = kin.getExc(Efix, theta * 180 / M_PI);
+
+        if (ejtag == "_p")
+          ex_as_proton = Ex;
+        else if (ejtag == "_a")
+          ex_as_alpha = Ex;
+
         std::string pmlabel = globaltag + "_" + rx + "+misc_" + det + ejtag;
 
         const double ex_gate_MeV = 1.5;
@@ -4136,6 +4137,11 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
         //                            ? invertBeamEnergyMeV(m_beam, mass_4He, m3, m4, Efix, theta * 180 / M_PI, 0)
         //                            : -1.0;
         double ebeam_kin_MeV = invertBeamEnergyMeV(m_beam, mass_4He, m3, m4, Efix, theta * 180 / M_PI, snapped_level);
+        double ebeam_kin_GS = invertBeamEnergyMeV(m_beam, mass_4He, m3, m4, Efix, theta * 180 / M_PI, 0.0);
+        double ebeam_kin_2235keV = invertBeamEnergyMeV(m_beam, mass_4He, m3, m4, Efix, theta * 180 / M_PI, 2.235);
+        double ebeam_kin_3498keV = invertBeamEnergyMeV(m_beam, mass_4He, m3, m4, Efix, theta * 180 / M_PI, 3.498);
+        double ebeam_kin_3774keV = invertBeamEnergyMeV(m_beam, mass_4He, m3, m4, Efix, theta * 180 / M_PI, 3.774);
+        double ebeam_kin_4809keV = invertBeamEnergyMeV(m_beam, mass_4He, m3, m4, Efix, theta * 180 / M_PI, 4.809);
 
         // Gated output: only fill when this hypothesis (proton "_p" / alpha "_a") agrees
         // with which side of the proton_locus gate the event fell on, so each event
@@ -4143,49 +4149,30 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
         // pooled/topo1/topo2/methodGroup tiers as plot_with_tag below, so
         // a1c0/a1c1/a1c2fix/a1c1c2 each get their own gated Ex and
         // BeamEnergy_ETrack_vs_EKin (not BeamEnergy_vs_VertexZ).
-        if (locusGateActive && ((insideProtonLocus && ejtag == "_p") || (!insideProtonLocus && ejtag == "_a")))
-        {
-          std::string gateTag = insideProtonLocus ? "p" : "a";
-          std::string gateFolder = rx + "_ProtonLocusGate_" + det;
-          double theta_deg = theta * 180.0 / M_PI;
-          auto fillGatedTag = [&](const std::string &topo)
-          {
-            std::string t = topo.empty() ? "" : ("_" + topo);
-            plotter->Fill1D(rx + "_Ex_PGate_" + gateTag + t + sfx, 400, -20, 20, Ex, gateFolder);
-            if (ebeam_kin_MeV > 0.0)
-              plotter->Fill2D(rx + "_BeamEnergy_ETrack_vs_EKin_PGate_" + gateTag + t + sfx,
-                              400, 0, beamE0 * 1.5, 400, 0, beamE0 * 1.5, beam_energy_at_vertex, ebeam_kin_MeV, gateFolder);
-
-            int thetabin = std::floor((theta * 180.0 / M_PI) / 6.0);
-            int zbin = std::floor((vertex_z + 450) / 10.0);
-            plotter->Fill2D(rx + " _BeamEnergy_vs_Ef_" + gateTag + t + sfx + "thetabin" + std::to_string(thetabin),
-                            400, 0, beamE0 * 1.5, 800, 0, ef_max, beam_energy_at_vertex, Efix, "BeamE_vs_Ef_pgated");
-            plotter->Fill2D(rx + " _BeamEnergy_vs_Ef_" + gateTag + t + sfx,
-                            400, 0, beamE0 * 1.5, 800, 0, ef_max, beam_energy_at_vertex, Efix, "BeamE_vs_Ef_pgated");
-            // plotter->Fill2D(rx + " _theta_vs_Ef_" + gateTag + sfx + "zbin" + pad2(zbin),
-            //                 100, 0, 180, 800, 0, ef_max, theta * 180.0 / M_PI, Efix, "Theta_vs_Ef_p_gated");
-            plotter->Fill1D(rx + " _Ef_" + gateTag + sfx + "zbin" + pad2(zbin),
-                            400, 0, ef_max, Efix, "Ef_p_gated");
-            plotter->Fill2D(rx + " _BeamEnergy_vs_Ex_" + gateTag + t + sfx + "thetabin" + std::to_string(thetabin),
-                            400, 0, beamE0 * 1.5, 400, -20, 20, beam_energy_at_vertex, Ex, "BeamE_vs_Ex_pgated");
-            plotter->Fill2D(rx + " _BeamEnergy_vs_Ex_" + gateTag + t + sfx,
-                            400, 0, beamE0 * 1.5, 400, -20, 20, beam_energy_at_vertex, Ex, "BeamE_vs_Ex_pgated");
-            plotter->Fill2D(rx + "_VertexReconZ_vs_snapped_level" + ejtag + t + sfx, 800, -400, 400, 800, -20, 20, vertex_z, snapped_level, gateFolder);
-            plotter->Fill2D(rx + "_BeamEnergy_vs_snapped_level" + ejtag + t + sfx, 400, 0, beamE0 * 1.5, 800, -20, 20, beam_energy_at_vertex, snapped_level, gateFolder);
-          };
-          forEachTier(topo1, topo2, methodGroup, fillGatedTag);
-        }
 
         auto plot_with_tag = [&](const std::string &topo)
         {
           std::string t = topo.empty() ? "" : ("_" + topo);
-          plotter->Fill1D(rx + "_Ex_from" + ejtag + t + sfx, 400, -20, 20, Ex, pmlabel);
+          plotter->Fill1D(rx + "_Ex_from" + ejtag + t + sfx, 600, -15, 15, Ex, pmlabel);
           plotter->Fill2D(rx + "_VertexReconZ_vs_Ef" + ejtag + t + sfx, 800, -400, 400, 800, 0, ef_max, vertex_z, Efix, pmlabel);
           plotter->Fill2D(rx + "_VertexReconZ_vs_Ex" + ejtag + t + sfx, 800, -400, 400, 800, -20, 20, vertex_z, Ex, pmlabel);
 
           if (ebeam_kin_MeV > 0.0)
             plotter->Fill2D(rx + "_BeamEnergy_ETrack_vs_EKin" + ejtag + t + sfx, 400, 0, beamE0 * 1.5, 400, 0, beamE0 * 1.5,
                             beam_energy_at_vertex, ebeam_kin_MeV, pmlabel);
+          if (ejtag == "_p")
+          {
+            plotter->Fill2D(rx + "_BeamEnergy_ETrack_vs_EKinGS" + ejtag + t + sfx, 400, 0, beamE0 * 1.5, 400, 0, beamE0 * 1.5,
+                            beam_energy_at_vertex, ebeam_kin_GS, "ETrackvsKin_assumed");
+            plotter->Fill2D(rx + "_BeamEnergy_ETrack_vs_EKin2235keV" + ejtag + t + sfx, 400, 0, beamE0 * 1.5, 400, 0, beamE0 * 1.5,
+                            beam_energy_at_vertex, ebeam_kin_2235keV, "ETrackvsKin_assumed");
+            plotter->Fill2D(rx + "_BeamEnergy_ETrack_vs_EKin3498kev" + ejtag + t + sfx, 400, 0, beamE0 * 1.5, 400, 0, beamE0 * 1.5,
+                            beam_energy_at_vertex, ebeam_kin_3498keV, "ETrackvsKin_assumed");
+            plotter->Fill2D(rx + "_BeamEnergy_ETrack_vs_EKin3774keV" + ejtag + t + sfx, 400, 0, beamE0 * 1.5, 400, 0, beamE0 * 1.5,
+                            beam_energy_at_vertex, ebeam_kin_3774keV, "ETrackvsKin_assumed");
+            plotter->Fill2D(rx + "_BeamEnergy_ETrack_vs_EKin4809keV" + ejtag + t + sfx, 400, 0, beamE0 * 1.5, 400, 0, beamE0 * 1.5,
+                            beam_energy_at_vertex, ebeam_kin_4809keV, "ETrackvsKin_assumed");
+          }
         };
 
         plotter->Fill2D(rx + "_dE_E_Anode" + sfx, 400, 0, dEa_max, 800, 0, 40000, sievent.Energy1, anodeE, pmlabel);
@@ -4201,6 +4188,7 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
         plotter->Fill1D(rx + "_pczfix" + sfx, 600, -300, 300, pcz_fix, pmlabel);
         plotter->Fill2D(rx + "_Ef_vs_theta" + ejtag + sfx, 100, 0, 180, 800, 0, ef_max, theta * 180 / M_PI, Efix, pmlabel);
         plotter->Fill2D(rx + "_Ex_vs_theta" + ejtag + sfx, 180, 0, 180, 800, -20, 20, theta * 180 / M_PI, Ex, pmlabel);
+        plotter->Fill2D(rx + "_Ex_vs_phi" + ejtag + sfx, 180, -180, 180, 800, -20, 20, phi * 180 / M_PI, Ex, pmlabel);
         plotter->Fill1D(rx + "_VertexReconZ" + sfx, 800, -400, 400, vertex_z, pmlabel);
 
         forEachTier(topo1, topo2, methodGroup, plot_with_tag);
@@ -4226,8 +4214,8 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
             plotter->Fill2D(rx + "_dEgasCalib_vs_VertexZ" + ejtag + sfx, 800, -400, 400, 800, 0, 0.6, vertex_z, anodeE_MeV, pmlabel);
             plotter->Fill2D(rx + "_dEgasRaw_vs_VertexZ" + ejtag + sfx, 800, -400, 400, 800, 0, 20000, vertex_z, anodeE, pmlabel);
             plotter->Fill2D(rx + "_dEgasRaw_vs_theta" + ejtag + sfx, 180, 0, 180, 800, 0, 20000, theta * 180 / M_PI, anodeE, pmlabel);
-            plotter->Fill2D(rx + "_dEgasCalib_vs_theta" + ejtag + sfx, 180, 0, 180, 800, 0, 0.6, theta * 180 / M_PI, anodeE_MeV, pmlabel);
-            plotter->Fill2D(rx + "_dEgasCalib_vs_phi" + ejtag + sfx, 180, -200, 200, 800, 0, 0.6, phi * 180 / M_PI, anodeE_MeV, pmlabel);
+            plotter->Fill2D(rx + "_dEgasCalib_vs_theta" + ejtag + sfx, 360, 0, 180, 800, 0, 0.6, theta * 180 / M_PI, anodeE_MeV, pmlabel);
+            plotter->Fill2D(rx + "_dEgasCalib_vs_phi" + ejtag + sfx, 90, -200, 200, 800, 0, 0.6, phi * 180 / M_PI, anodeE_MeV, pmlabel);
             plotter->Fill2D(rx + "_dEgasCalib_vs_E" + ejtag + sfx + "_E<10MeV" + std::to_string(beam_energy_at_vertex < 10), 400, 0, ef_max, 800, 0, 0.6, sievent.Energy1, anodeE_MeV, pmlabel);
             if (anodeCh >= 0)
               plotter->Fill2D(rx + "_dEgasCalib_vs_E" + ejtag + sfx + "_anode" + pad2(anodeCh),
@@ -4240,7 +4228,16 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
       };
 
       fillHypothesis(ej_m.m_p, ej_m.m_rp, MeV_to_cm_p_spl, cm_to_MeVp_spl, "_p");
-      fillHypothesis(ej_m.m_a, ej_m.m_ra, MeV_to_cm_spl, cm_to_MeV_spl, "_a");
+      // fillHypothesis(ej_m.m_a, ej_m.m_ra, MeV_to_cm_spl, cm_to_MeV_spl, "_a");
+
+      // std::string corrLabel = globaltag + "_" + rx + "+misc_" + det;
+      // auto fillExCorr = [&](const std::string &topo)
+      // {
+      //   std::string t = topo.empty() ? "" : ("_" + topo);
+      //   plotter->Fill2D(rx + "_Ex_as_proton_vs_Ex_as_alpha" + t + sfx, 400, -20, 20, 400, -20, 20,
+      //                   ex_as_proton, ex_as_alpha, corrLabel);
+      // };
+      // forEachTier(topo1, topo2, methodGroup, fillExCorr);
     };
 
     for (const auto &pcevent : PC_Events)
