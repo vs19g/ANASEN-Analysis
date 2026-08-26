@@ -4142,6 +4142,7 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
         double ebeam_kin_3498keV = invertBeamEnergyMeV(m_beam, mass_4He, m3, m4, Efix, theta * 180 / M_PI, 3.498);
         double ebeam_kin_3774keV = invertBeamEnergyMeV(m_beam, mass_4He, m3, m4, Efix, theta * 180 / M_PI, 3.774);
         double ebeam_kin_4809keV = invertBeamEnergyMeV(m_beam, mass_4He, m3, m4, Efix, theta * 180 / M_PI, 4.809);
+        double ebeam_kin_5614keV = invertBeamEnergyMeV(m_beam, mass_4He, m3, m4, Efix, theta * 180 / M_PI, 5.164);
 
         // Gated output: only fill when this hypothesis (proton "_p" / alpha "_a") agrees
         // with which side of the proton_locus gate the event fell on, so each event
@@ -4162,16 +4163,18 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
                             beam_energy_at_vertex, ebeam_kin_MeV, pmlabel);
           if (ejtag == "_p")
           {
-            plotter->Fill2D(rx + "_BeamEnergy_ETrack_vs_EKinGS" + ejtag + t + sfx, 400, 0, beamE0 * 1.5, 400, 0, beamE0 * 1.5,
+            plotter->Fill2D(rx + "_ETrack_vs_EKinGS" + ejtag + t + sfx, 400, 0, beamE0 * 1.5, 400, 0, beamE0 * 1.5,
                             beam_energy_at_vertex, ebeam_kin_GS, "ETrackvsKin_assumed");
-            plotter->Fill2D(rx + "_BeamEnergy_ETrack_vs_EKin2235keV" + ejtag + t + sfx, 400, 0, beamE0 * 1.5, 400, 0, beamE0 * 1.5,
+            plotter->Fill2D(rx + "_ETrack_vs_EKin2235keV" + ejtag + t + sfx, 400, 0, beamE0 * 1.5, 400, 0, beamE0 * 1.5,
                             beam_energy_at_vertex, ebeam_kin_2235keV, "ETrackvsKin_assumed");
-            plotter->Fill2D(rx + "_BeamEnergy_ETrack_vs_EKin3498kev" + ejtag + t + sfx, 400, 0, beamE0 * 1.5, 400, 0, beamE0 * 1.5,
+            plotter->Fill2D(rx + "_ETrack_vs_EKin3498kev" + ejtag + t + sfx, 400, 0, beamE0 * 1.5, 400, 0, beamE0 * 1.5,
                             beam_energy_at_vertex, ebeam_kin_3498keV, "ETrackvsKin_assumed");
-            plotter->Fill2D(rx + "_BeamEnergy_ETrack_vs_EKin3774keV" + ejtag + t + sfx, 400, 0, beamE0 * 1.5, 400, 0, beamE0 * 1.5,
+            plotter->Fill2D(rx + "_ETrack_vs_EKin3774keV" + ejtag + t + sfx, 400, 0, beamE0 * 1.5, 400, 0, beamE0 * 1.5,
                             beam_energy_at_vertex, ebeam_kin_3774keV, "ETrackvsKin_assumed");
-            plotter->Fill2D(rx + "_BeamEnergy_ETrack_vs_EKin4809keV" + ejtag + t + sfx, 400, 0, beamE0 * 1.5, 400, 0, beamE0 * 1.5,
+            plotter->Fill2D(rx + "_ETrack_vs_EKin4809keV" + ejtag + t + sfx, 400, 0, beamE0 * 1.5, 400, 0, beamE0 * 1.5,
                             beam_energy_at_vertex, ebeam_kin_4809keV, "ETrackvsKin_assumed");
+            plotter->Fill2D(rx + "_ETrack_vs_EKin5614keV" + ejtag + t + sfx, 400, 0, beamE0 * 1.5, 400, 0, beamE0 * 1.5,
+                            beam_energy_at_vertex, ebeam_kin_5614keV, "ETrackvsKin_assumed");
           }
         };
 

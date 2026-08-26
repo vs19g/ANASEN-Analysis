@@ -8,13 +8,8 @@ export CO2percent=3
 export pressure_in_torr=250
 export CATHODE_GAIN=3.0
 export source_vertex=-200.0
-export DEDX_SCALE=0.80
-# export BEAM_AXIS_X=-15
-# export BEAM_AXIS_Y=-5
+export DEDX_SCALE=0.89
 export CUTLIST=cuts_list.txt
-
-# Clean up previous runs
-
 
 echo "Pre-compiling TrackRecon.C safely on a single core..."
 root -q -l -b -e '.L TrackRecon.C++O'
@@ -23,15 +18,16 @@ process_run() {
     local wrun=$(printf "%03d" "$1")
     local prefix="${PREFIX:-Run_}"
     local infile="../ANASEN_analysis/data/${DATASET}_Data/${prefix}${wrun}_mapped.root"
-    local out="Output_27Al_$DEDX_SCALE/results_run${wrun}.root"
-
-    mkdir -p Output_27Al_$DEDX_SCALE
+    
+    # Dynamically point to the correct output directory for this X/Y iteration
+    local current_out_dir="Output_27Al_X${BEAM_AXIS_X}_Y${BEAM_AXIS_Y}"
+    local out="${current_out_dir}/results_run${wrun}.root"
 
     root -q -l -b -x "$infile" \
          -e "tree->Process(\"TrackRecon.C+\", \"${out}\")" > /dev/null 2>&1
 
     if [ -f "$out" ]; then
-        echo "Run $wrun completed successfully in Output_27Al."
+        echo "Run $wrun completed successfully in ${current_out_dir}."
     else
         echo "ERROR: Run $wrun failed to generate $out"
     fi
@@ -39,30 +35,37 @@ process_run() {
 
 export -f process_run
 
-for i in 0.75 0.80 0.85 0.87 0.88 0.89 0.90 0.91 0.92 0.95 1.00 1.05 1.10 1.15
-do
-    DEDX_SCALE=$i
-    rm -f Output_27Al_$DEDX_SCALE/*.root
+for x in -5 5
+do 
+    export BEAM_AXIS_X=$x  
+    for y in -5 5 
+    do 
+        export BEAM_AXIS_Y=$y  
 
-    echo "Running Eloss.py with a scaling parameter of $DEDX_SCALE"
-    python3 eloss_calculations/Eloss.py
-    echo "Starting parallel processing..."
+        # Define and create a clean directory name BEFORE running parallel tasks
+        CURRENT_OUT_DIR="Output_27Al_X${BEAM_AXIS_X}_Y${BEAM_AXIS_Y}"
+        mkdir -p "$CURRENT_OUT_DIR"
 
-    time parallel --bar -j 10 process_run ::: {24..41} 
-    time parallel --bar -j 3 process_run ::: 44 45 46
-    time parallel --bar -j 8 process_run ::: {50..59}
+        echo "Running Eloss.py with a scaling parameter of $DEDX_SCALE"
+        echo "running with a beam offset of $BEAM_AXIS_X $BEAM_AXIS_Y"
+        python3 eloss_calculations/Eloss.py
+        
+        echo "Starting parallel processing..."
+        time parallel --bar -j 10 process_run ::: {24..41} 
+        time parallel --bar -j 3 process_run ::: 44 45 46
+        time parallel --bar -j 8 process_run ::: {50..59}
     # time parallel --bar -j 4 process_run ::: 62 63 66 67 68
     # time parallel --bar -j 1 process_run ::: 73
     # time parallel --bar -j 1 process_run ::: 74
     # time parallel --bar -j 4 process_run ::: {78..89}
 
-    echo "Merging files..."
-    hadd -k -j 4 Output_27Al_$DEDX_SCALE/output_27Al.root Output_27Al_$DEDX_SCALE/results_run*.root
-
+        echo "Merging files..."
+        # Fixed: Safely merge using the clean directory variable (added -f to overwrite if re-running)
+        hadd -k -f -j 4 "${CURRENT_OUT_DIR}/output_27Al.root" "${CURRENT_OUT_DIR}/results_run"*.root
+    done
 done
 
-# rootbrowse Output_27Al/output_27Al.root
-
+# Cleanup
 unset DATASET
 unset PREFIX
 unset OUT_DIR
@@ -79,4 +82,5 @@ unset BEAM_AXIS_X
 unset BEAM_AXIS_Y
 unset CUTLIST
 unset DEDX_SCALE
+unset CURRENT_OUT_DIR
 echo "Script execution finished."

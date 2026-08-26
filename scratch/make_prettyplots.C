@@ -194,7 +194,10 @@ void make_prettyplots(const char *rootFile,
 // ---------------------------------------------------------------------------
 // Multi-File Overlay Function
 // ---------------------------------------------------------------------------
-void make_prettyplots(TString filesCSV, TString labelsCSV, TString histName, TString xAxisLabel="", TString yAxisLabel="", double yMin=-9999, double yMax=-9999, double xMin=-9999, double xMax=-9999)
+// NOTE: canvasW/canvasH added as trailing optional args (default = old
+// hardcoded values, so every existing call site keeps working unchanged).
+// Pass larger values for a bigger/higher-resolution output image.
+void make_prettyplots(TString filesCSV, TString labelsCSV, TString histName, TString xAxisLabel="", TString yAxisLabel="", double yMin=-9999, double yMax=-9999, double xMin=-9999, double xMax=-9999, int canvasW=2100, int canvasH=1575)
 {
     SetStyle();
 
@@ -259,7 +262,7 @@ void make_prettyplots(TString filesCSV, TString labelsCSV, TString histName, TSt
     }
 
     // --- Draw ---
-    TCanvas c("c", "", 0, 0, 2100, 1575);
+    TCanvas c("c", "", 0, 0, canvasW, canvasH);
     c.cd();
 
     // Create Legend (Positioned top right)
