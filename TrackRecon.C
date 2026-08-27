@@ -43,13 +43,13 @@ Int_t colors[40] = {
 // --- Analysis Control Flags ---
 bool process_alpha_proton_scattering = false,
      doMiscHistograms = true,
-     doPCSX3ClusterAnalysis = false,
-     doPCQQQClusterAnalysis = false,
+     doPCSX3ClusterAnalysis = true,
+     doPCQQQClusterAnalysis = true,
      doOldAnalysis = false,
-     BenchMark = false,
+     BenchMark = true,
      onewire_analysis = true,
-     diagnostic_eplots = false,
-     diagnostic_tplots = false,
+     diagnostic_eplots = true,
+     diagnostic_tplots = true,
      reactiondata = false,
      doPCEnergyCalibration = false,
      ta_foil_run = false,
@@ -106,6 +106,30 @@ constexpr double kSiPcDtMax = 150.0;
 inline bool siPcCoincident(double t_si, double t_pc)
 {
   return (t_si - t_pc) < kSiPcDtMax;
+}
+
+// PC anode dE gate, gas-region proton/alpha separation for the p(a,a)p elastic
+// branches (protonMiscHistograms / protonMiscHistograms_sx3). Rough,
+// energy-independent threshold read off Calib_dE_AnodeE_vs_QQQE (calibrated
+// anode dE, MeV, vs QQQ/SX3 E): proton and alpha loci are well separated below
+// ~5-6 MeV Si energy but converge at high Si energy/high dE (the bright
+// corner near the top of the plot) -- events there are NOT reliably
+// classified by a flat cut. Revisit with a TCutG/polygon if that corner
+// matters. anodeE_MeV < 0 means no valid per-wire calibration was available
+// for this hit, not "low dE" -- kUnknown must be handled as its own case,
+// never silently folded into kProton.
+constexpr double kProtonAlphaAnodeDeGate_MeV = 0.045;
+enum class SiPcPid
+{
+  kUnknown = -1,
+  kProton = 0,
+  kAlpha = 1
+};
+inline SiPcPid classifyByAnodeDe(double anodeE_MeV)
+{
+  if (anodeE_MeV < 0.0)
+    return SiPcPid::kUnknown;
+  return (anodeE_MeV < kProtonAlphaAnodeDeGate_MeV) ? SiPcPid::kProton : SiPcPid::kAlpha;
 }
 
 inline TVector3 beamVertex(const TVector3 &si, const TVector3 &dir)
@@ -1553,7 +1577,8 @@ Bool_t TrackRecon::Process(Long64_t entry)
       {
         double aratio = alo / ahi;
         plotter->Fill1D("A2_anode_ratio", 120, 0, 1.2, aratio, "hGMPC");
-        plotter->Fill2D("A2_anode_ratio_vs_sum", 800, 0, 40000, 120, 0, 1.2, ae0 + ae1, aratio, "hGMPC");
+        // plotter->Fill2D("A2_anode_ratio_vs_sum", 800, 0, 40000, 120, 0, 1.2, ae0 + ae1, aratio, "hGMPC");
+        plotter->Fill2D("A1_vs_A2", 800, 0, 40000,  800, 0, 40000, ae0, ae1, "hGMPC");
         plotter->Fill2D("A2_anode_ratio_vs_lowerIndex", 24, 0, 24, 120, 0, 1.2,
                         std::min(std::get<0>(aCluster[0]), std::get<0>(aCluster[1])), aratio, "hGMPC");
       }
@@ -2183,18 +2208,18 @@ void pcCalibratedHistograms(HistPlotter *plotter, const std::vector<Event> &QQQ_
       for (const auto &qqqevent : QQQ_Events)
       {
         plotter->Fill2D("Calib_dE_AnodeE_vs_QQQE" + t, 400, 0, 10, 800, 0, 0.6, qqqevent.Energy1, pcevent.Energy1, "hCalibPC");
-        if (pcevent.Anodech >= 0 && pcevent.Anodech < 24)
-          plotter->Fill2D("Calib_dE_AnodeE_vs_QQQE" + t + "_anode" + pad2(pcevent.Anodech),
-                          400, 0, 10, 800, 0, 0.6, qqqevent.Energy1, pcevent.Energy1, "EdE_wire");
+        // if (pcevent.Anodech >= 0 && pcevent.Anodech < 24)
+        //   plotter->Fill2D("Calib_dE_AnodeE_vs_QQQE" + t + "_anode" + pad2(pcevent.Anodech),
+        //                   400, 0, 10, 800, 0, 0.6, qqqevent.Energy1, pcevent.Energy1, "EdE_wire");
         if (hasCathode)
           plotter->Fill2D("Calib_dE_CathodeE_vs_QQQE" + t, 400, 0, 10, 800, 0, 0.6, qqqevent.Energy1, pcevent.Energy2, "hCalibPC");
       }
       for (const auto &sx3event : SX3_Events)
       {
         plotter->Fill2D("Calib_dE_AnodeE_vs_SX3E" + t, 400, 0, 10, 800, 0, 0.6, sx3event.Energy1, pcevent.Energy1, "hCalibPC");
-        if (pcevent.Anodech >= 0 && pcevent.Anodech < 24)
-          plotter->Fill2D("Calib_dE_AnodeE_vs_SX3E" + t + "_anode" + pad2(pcevent.Anodech),
-                          400, 0, 10, 800, 0, 0.6, sx3event.Energy1, pcevent.Energy1, "EdE_wire");
+        // if (pcevent.Anodech >= 0 && pcevent.Anodech < 24)
+        //   plotter->Fill2D("Calib_dE_AnodeE_vs_SX3E" + t + "_anode" + pad2(pcevent.Anodech),
+        //                   400, 0, 10, 800, 0, 0.6, sx3event.Energy1, pcevent.Energy1, "EdE_wire");
         if (hasCathode)
           plotter->Fill2D("Calib_dE_CathodeE_vs_SX3E" + t, 400, 0, 10, 800, 0, 0.6, sx3event.Energy1, pcevent.Energy2, "hCalibPC");
       }
@@ -3592,9 +3617,26 @@ void protonMiscHistograms(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
       // if(pcevent.Energy1 > 11000) continue; //coarse gating
 
       bool phicut = TMath::Abs(qqqevent.pos.DeltaPhi(pcevent.pos)) <= TMath::Pi() / 4.0;
-      if (!phicut)
+      bool timecut = siPcCoincident(qqqevent.Time1, pcevent.Time1);
+      if (!(phicut && timecut))
         continue;
-      // if(pcevent.Time1-qqqevent.Time1<-150 || pcevent.Time1-qqqevent.Time1 >850) continue;
+
+      // Calibrated anode energy and proton/alpha PID, computed once up front so
+      // both the a1c1 Z-method comparison below and the main proton/alpha
+      // dispatch use the same classification. Previously this was cathode-charge
+      // (pcevent.Energy2 > 1400 raw ADC), which only exists for a1c2 topology and
+      // silently defaulted every a1c0/a1c1 event to "proton". Anode dE is
+      // available for every topology, so this now classifies all of them
+      // consistently -- see classifyByAnodeDe() for the 0.045 MeV gate and its
+      // caveats. kUnknown (no valid anode calibration) falls back to the old
+      // proton-only default but is counted separately so it's visible.
+      double anodeE_MeV = (pcevent.Anodech >= 0 && pcevent.Anodech < 24)
+                              ? pcEnergySlope[pcevent.Anodech] * pcevent.Energy1
+                              : -1.0;
+      SiPcPid pid = classifyByAnodeDe(anodeE_MeV);
+      if (pid == SiPcPid::kUnknown)
+        plotter->Fill1D("pmisc_pidUnknown", 2, 0, 2, 1.0, "proton+misc");
+      bool anode_dE_alpha_select = (pid == SiPcPid::kAlpha);
 
       double pcz_fix, pcz_dith = pcevent.pos.Z();
       if (pcevent.multi2 == 2)
@@ -3605,7 +3647,7 @@ void protonMiscHistograms(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
         pcz_dith = pcz_fix;
       }
 
-      if (pcevent.multi2 == 1 && pcevent.Energy2 > 1400)
+      if (pcevent.multi2 == 1 && pid == SiPcPid::kAlpha)
       {
         const std::string wcat = a1c1_missing_neighbor(pcevent.Anodech, pcevent.Cathodech) ? "_missingw" : "_true1w";
         auto fillCmp = [&](double pcz, const std::string &m)
@@ -3670,7 +3712,6 @@ void protonMiscHistograms(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
       double theta_q = (qqqevent.pos - r_rhoMin_fix).Theta();
       double sinTheta_customV = TMath::Sin(theta_q);
       // if(beamPerp(r_rhoMin_fix)>6) continue;
-      bool cathode_alpha_select = (pcevent.Energy2 > 1400);
       if (vertex_z < z_entrance || vertex_z > 100)
         continue;
 
@@ -3692,19 +3733,12 @@ void protonMiscHistograms(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
                                  TMath::Tan((qqqevent.pos - beamAxisPoint(source_vertex)).Theta()) +
                              source_vertex;
 
-      // Calibrated anode energy, same lookup reaction_ax_core uses for its dEgasCalib plots.
-      double anodeE_MeV = (pcevent.Anodech >= 0 && pcevent.Anodech < 24)
-                              ? pcEnergySlope[pcevent.Anodech] * pcevent.Energy1
-                              : -1.0;
-
       // What's below: radial cut, time coincident, phi-correlated events with possible energy selection applied to both E_si and dE_Anodes
       auto plot_with_tag = [&](std::string tag = "")
       {
         std::string pmlabel = "proton+misc" + tag;
         plotter->Fill2D("pmisc_dE_E_AnodeQQQ" + tag, 400, 0, 10, 800, 0, 40000, qqqevent.Energy1, pcevent.Energy1, pmlabel);
         plotter->Fill2D("pmisc_dE_E_CathodeQQQ" + tag, 400, 0, 10, 800, 0, 10000, qqqevent.Energy1, pcevent.Energy2, pmlabel);
-        plotter->Fill2D("pmisc_dE3_E_AnodeQQQ" + tag, 400, 0, 10, 400, 0, 40000, qqqevent.Energy1, pcevent.Energy1 * sinTheta_customV * 3., pmlabel);
-        plotter->Fill2D("pmisc_dE3_E_CathodeQQQ" + tag, 400, 0, 10, 400, 0, 10000, qqqevent.Energy1, pcevent.Energy2 * sinTheta_customV, pmlabel);
         plotter->Fill2D("pmisc_dPhi_QQQ_PC" + tag, 100, -200, 200, 100, -200, 200, pcevent.pos.Phi() * 180 / M_PI, qqqevent.pos.Phi() * 180 / M_PI, pmlabel);
         plotter->Fill1D("pmisc_dt_Anode_QQQ_PC" + std::to_string(phicut) + tag, 600, -2000, 2000, pcevent.Time1 - qqqevent.Time1, pmlabel);
         plotter->Fill1D("pmisc_dt_Cathode_QQQ" + tag, 600, -2000, 2000, pcevent.Time2 - qqqevent.Time1, pmlabel);
@@ -3738,41 +3772,19 @@ void protonMiscHistograms(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
         else
           qqqEfix = evalEloss(MeV_to_cm_p_spl, cm_to_MeVp_spl, qqqevent.Energy1, path_length_q);
         // plotter->Fill2D("qqqEf_sx3E_matrix_all"+tag,400,0,10,400,0,10,qqqEfix,sx3event.Energy1,pmlabel);
-        plotter->Fill2D("pmisc_dE3_Ef_AnodeQQQ" + tag, 400, 0, 10, 400, 0, 40000, qqqEfix, pcevent.Energy1 * sinTheta_customV * 3, pmlabel);
-        plotter->Fill2D("pmisc_dE3_Ef_CathodeQQQ" + tag, 400, 0, 10, 400, 0, 10000, qqqEfix, pcevent.Energy2 * sinTheta_customV, pmlabel);
-
+       
         plotter->Fill1D("pmisc_VertexReconZ" + tag, 800, -400, 400, vertex_z, pmlabel);
         plotter->Fill2D("pmisc_VertexReconXY" + tag, 200, -100, 100, 200, -100, 100, r_rhoMin_fix.X(), r_rhoMin_fix.Y(), pmlabel);
         plotter->Fill2D("pmisc_VertexReconZ_vs_Ef" + tag, 800, -400, 400, 800, 0, 20, vertex_z, qqqEfix, pmlabel);
         plotter->Fill2D("pmisc_VertexReconZ_vs_Ef" + tag + "_a" + std::to_string(pcevent.multi1), 800, -400, 400, 800, 0, 20, vertex_z, qqqEfix, pmlabel);
 
-        plotter->Fill2D("pmisc_Ef_vs_theta_qqq" + tag, 100, 0, 180, 800, 0, 20, theta_q * 180 / M_PI, qqqEfix, pmlabel);
+        plotter->Fill2D("pmisc_Ef_vs_theta_qqq" + tag, 180, 0, 180, 800, 0, 20, theta_q * 180 / M_PI, qqqEfix, pmlabel);
         if (pcevent.multi2 == 1)
         {
           plotter->Fill2D("pmisc_Ef_vs_theta_qqq_a1c1" + tag, 100, 0, 180, 800, 0, 20, theta_q * 180 / M_PI, qqqEfix, pmlabel);
           plotter->Fill2D("pmisc_VertexReconZ_vs_Ef_a1c1" + tag, 800, -400, 400, 800, 0, 20, vertex_z, qqqEfix, pmlabel);
         }
-
-        if (pa_have_seg)
-        {
-          // Per-electrode Eloss-corrected dE across the PC gas (proton table).
-          double E_an = evalEloss(MeV_to_cm_p_spl, cm_to_MeVp_spl, qqqevent.Energy1, pa_anode_cm);
-          double E_ca = evalEloss(MeV_to_cm_p_spl, cm_to_MeVp_spl, qqqevent.Energy1, pa_cathode_cm);
-          plotter->Fill2D("pmisc_dEa_guess_vs_dEa" + tag, 400, 0, 5, 800, 0, 40000, E_an - E_ca, pcevent.Energy1, pmlabel);
-        }
-        if (pa_pathfraction > 0.0)
-        {
-          plotter->Fill2D("pmisc_dEapf_E_AnodeQQQ" + tag, 400, 0, 10, 400, 0, 40000, qqqevent.Energy1, pcevent.Energy1 / (20 * pa_pathfraction), pmlabel);
-          plotter->Fill2D("pmisc_dEapf_Theta_TC1" + tag, 180, 0, 180, 800, 0, 40000, theta_q * 180 / M_PI, pcevent.Energy1 / (20 * pa_pathfraction), pmlabel);
-        }
-        if (pa_dl_cm > 0.0)
-        {
-          plotter->Fill2D("pmisc_dE4_E_AnodeQQQ" + tag, 400, 0, 10, 400, 0, 40000, qqqevent.Energy1, pcevent.Energy1 * 1.72 / pa_dl_cm, pmlabel);
-          plotter->Fill2D("pmisc_dE4_Theta_TC1_" + tag, 180, 0, 180, 800, 0, 40000, theta_q * 180 / M_PI, pcevent.Energy1 * 1.72 / pa_dl_cm, pmlabel);
-          plotter->Fill2D("pmisc_dE4_Rho_TC1_" + tag, 100, 0, 40, 400, 0, 40000, r_rhoMin_fix.Perp(), pcevent.Energy1 * 1.72 / pa_dl_cm, pmlabel);
-        }
         plotter->Fill2D("pmisc_pcz_vs_pczguess" + tag, 600, -300, 300, 600, -300, 300, pcz_guess_int, pcevent.pos.Z(), pmlabel);
-
         // Gas segmentation validation, mirroring reaction_ax_core's dEgas family.
         // Uses whichever ejectile table produced the qqqEfix/qqqEx above for this tag
         // (alpha table for "_cathode_alphas", proton table otherwise).
@@ -3797,13 +3809,13 @@ void protonMiscHistograms(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
                               400, 0, 20, 800, 0, 0.6, qqqevent.Energy1, anodeE_MeV, pmlabel);
             plotter->Fill2D("pmisc_dEgasCalib_vs_Ex" + tag, 800, -10, 10, 800, 0, 0.6, qqqEx, anodeE_MeV, pmlabel);
             plotter->Fill2D("pmisc_dEgasCalib_vs_Z" + tag, 800, -400, 400, 800, 0, 0.6, vertex_z, anodeE_MeV, pmlabel);
-            plotter->Fill2D("pmisc_dEgasPred_vs_dEgasCalib" + tag, 800, 0, 2, 400, 0, 0.6, anodeE_MeV, dE_pred, pmlabel);
+            plotter->Fill2D("pmisc_dEgasPred_vs_dEgasCalib" + tag, 400, 0, 0.6, 400, 0, 0.6, anodeE_MeV, dE_pred, pmlabel);
           }
         }
       };
 
       plot_with_tag();
-      if (cathode_alpha_select)
+      if (anode_dE_alpha_select)
         plot_with_tag("_cathode_alphas");
       else
         plot_with_tag("_cathode_protons");
@@ -3832,10 +3844,9 @@ void protonMiscHistograms_sx3(HistPlotter *plotter, const std::vector<Event> &QQ
       // if(pcevent.Energy1 > 11000) continue; //coarse gating
 
       bool phicut = TMath::Abs(sx3event.pos.DeltaPhi(pcevent.pos)) <= TMath::Pi() / 3.0;
-
-      if (!phicut)
+      bool timecut = siPcCoincident(sx3event.Time1, pcevent.Time1);
+      if (!(phicut && timecut))
         continue;
-      // if(pcevent.Time1-sx3event.Time1<-150 || pcevent.Time1-sx3event.Time1 >850) continue;
 
       double pcz_fix = a1c2_zfix(pcevent.pos.Z());
       TVector3 x2f(pcevent.pos.X(), pcevent.pos.Y(), pcz_fix);
@@ -3850,7 +3861,18 @@ void protonMiscHistograms_sx3(HistPlotter *plotter, const std::vector<Event> &QQ
         continue; // same beam-region acceptance as the QQQ branch
       double theta_s = (sx3event.pos - r_rhoMin_fix).Theta();
       double sinTheta_customV = TMath::Sin(theta_s);
-      bool cathode_alpha_select = (pcevent.Energy2 > 1400);
+      // Calibrated anode energy and proton/alpha PID -- previously cathode-charge
+      // (pcevent.Energy2 > 1400 raw ADC). See classifyByAnodeDe() (shared with the
+      // QQQ branch) for the 0.045 MeV gate and its caveats. kUnknown (no valid
+      // anode calibration) falls back to the old proton-only default but is
+      // counted separately so it's visible.
+      double anodeE_MeV = (pcevent.Anodech >= 0 && pcevent.Anodech < 24)
+                              ? pcEnergySlope[pcevent.Anodech] * pcevent.Energy1
+                              : -1.0;
+      SiPcPid pid = classifyByAnodeDe(anodeE_MeV);
+      if (pid == SiPcPid::kUnknown)
+        plotter->Fill1D("pmiscs_pidUnknown", 2, 0, 2, 1.0, "proton+miscsx3");
+      bool anode_dE_alpha_select = (pid == SiPcPid::kAlpha);
       double beam_path_length_s = TMath::Abs(vertex_z - z_entrance) * 0.1;
       double beam_energy_at_vertex_s = evalElossForward(MeV_to_cm_p_spl, cm_to_MeVp_spl, initial_energy, beam_path_length_s);
       beam_energy_at_vertex_s = applyTaFoilEloss(beam_energy_at_vertex_s, vertex_z);
@@ -3864,9 +3886,7 @@ void protonMiscHistograms_sx3(HistPlotter *plotter, const std::vector<Event> &QQ
         std::string pmlabel = "proton+miscsx3" + tag;
         plotter->Fill2D("pmiscs_dE_E_Anodesx3" + tag, 400, 0, 10, 800, 0, 40000, sx3event.Energy1, pcevent.Energy1, pmlabel);
         plotter->Fill2D("pmiscs_dE_E_Cathodesx3" + tag, 400, 0, 10, 800, 0, 10000, sx3event.Energy1, pcevent.Energy2, pmlabel);
-        plotter->Fill2D("pmiscs_dE3_E_Anodesx3" + tag, 400, 0, 10, 400, 0, 40000, sx3event.Energy1, pcevent.Energy1 * sinTheta_customV * 3., pmlabel);
-        plotter->Fill2D("pmiscs_dE3_E_Cathodesx3" + tag, 400, 0, 10, 400, 0, 10000, sx3event.Energy1, pcevent.Energy2 * sinTheta_customV, pmlabel);
-        plotter->Fill2D("pmiscs_dPhi_sx3_PC" + tag, 100, -200, 200, 100, -200, 200, pcevent.pos.Phi() * 180 / M_PI, sx3event.pos.Phi() * 180 / M_PI, pmlabel);
+       plotter->Fill2D("pmiscs_dPhi_sx3_PC" + tag, 100, -200, 200, 100, -200, 200, pcevent.pos.Phi() * 180 / M_PI, sx3event.pos.Phi() * 180 / M_PI, pmlabel);
         plotter->Fill1D("pmiscs_dt_Anode_sx3_PC" + std::to_string(phicut) + tag, 600, -2000, 2000, pcevent.Time1 - sx3event.Time1, pmlabel);
         plotter->Fill1D("pmiscs_dt_Cathode_sx3" + tag, 600, -2000, 2000, pcevent.Time2 - sx3event.Time1, pmlabel);
         plotter->Fill2D("pmiscs_dt_Anode_E_sx3_PC" + std::to_string(phicut) + tag, 600, -2000, 2000, 400, 0, 10, pcevent.Time1 - sx3event.Time1, sx3event.Energy1, pmlabel);
@@ -3876,14 +3896,14 @@ void protonMiscHistograms_sx3(HistPlotter *plotter, const std::vector<Event> &QQ
         plotter->Fill1D("pmiscs_pcz" + tag, 600, -300, 300, pcevent.pos.Z(), pmlabel);
 
         double path_length_s = pathLengthCm(sx3event.pos, r_rhoMin_fix);
-        // alpha Eloss table for cathode-alpha events, proton otherwise (matches QQQ).
-        double sx3Efix = cathode_alpha_select
+        // alpha Eloss table for anode-dE-tagged alpha events, proton otherwise (matches QQQ).
+        double sx3Efix = anode_dE_alpha_select
                              ? evalEloss(MeV_to_cm_spl, cm_to_MeV_spl, sx3event.Energy1, path_length_s)
                              : evalEloss(MeV_to_cm_p_spl, cm_to_MeVp_spl, sx3event.Energy1, path_length_s);
 
         // plotter->Fill2D("sx3Ef_sx3E_matrix_all"+tag,400,0,10,400,0,10,sx3Efix,sx3event.Energy1,pmlabel);
-        plotter->Fill2D("pmiscs_dE3_Ef_Anodesx3" + tag, 400, 0, 10, 400, 0, 40000, sx3Efix, pcevent.Energy1 * sinTheta_customV * 3, pmlabel);
-        plotter->Fill2D("pmiscs_dE3_Ef_Cathodesx3" + tag, 400, 0, 10, 400, 0, 10000, sx3Efix, pcevent.Energy2 * sinTheta_customV, pmlabel);
+        plotter->Fill2D("pmiscs_dE_Ef_Anodesx3" + tag, 400, 0, 10, 400, 0, 40000, sx3Efix, pcevent.Energy1 , pmlabel);
+        plotter->Fill2D("pmiscs_dE_Ef_Cathodesx3" + tag, 400, 0, 10, 400, 0, 10000, sx3Efix, pcevent.Energy2, pmlabel);
 
         plotter->Fill2D("pmiscs_Ef_vs_theta_sx3" + tag, 100, 0, 180, 800, 0, 20, theta_s * 180 / M_PI, sx3Efix, pmlabel);
         plotter->Fill1D("pmiscs_VertexReconZ" + tag, 800, -400, 400, vertex_z, pmlabel);
@@ -3895,7 +3915,7 @@ void protonMiscHistograms_sx3(HistPlotter *plotter, const std::vector<Event> &QQ
       };
 
       plot_with_tag();
-      if (cathode_alpha_select)
+      if (anode_dE_alpha_select)
         plot_with_tag("_cathode_alphas");
       else
         plot_with_tag("_cathode_protons");
@@ -3908,9 +3928,13 @@ void protonMiscHistograms_sx3(HistPlotter *plotter, const std::vector<Event> &QQ
       if (!(pcevent.multi1 == 1 && pcevent.multi2 == 1))
         continue;
       bool phicut = sx3event.pos.Phi() <= pcevent.pos.Phi() + TMath::Pi() / 3. && sx3event.pos.Phi() >= pcevent.pos.Phi() - TMath::Pi() / 3.;
-      if (!phicut)
+      bool timecut = siPcCoincident(sx3event.Time1, pcevent.Time1);
+      if (!(phicut && timecut))
         continue;
-      if (!(pcevent.Energy2 > 1400))
+      double anodeE_MeV = (pcevent.Anodech >= 0 && pcevent.Anodech < 24)
+                              ? pcEnergySlope[pcevent.Anodech] * pcevent.Energy1
+                              : -1.0;
+      if (classifyByAnodeDe(anodeE_MeV) != SiPcPid::kAlpha)
         continue;
 
       const std::string wcat = a1c1_missing_neighbor(pcevent.Anodech, pcevent.Cathodech) ? "_missingw" : "_true1w";
@@ -3940,8 +3964,8 @@ void protonMiscHistograms_sx3(HistPlotter *plotter, const std::vector<Event> &QQ
           plotter->Fill2D("pmiscs_a1c1cmp_VertexZ_vs_Ex_" + m + w, 800, -400, 400, 800, -10, 10, rv.Z(), Ex, lbl);
           plotter->Fill2D("pmiscs_a1c1cmp_phi_vs_Ef_" + m + w, 90, -180, 180, 800, 0, 20, sx3event.pos.Phi() * 180 / M_PI, Ef, lbl);
           plotter->Fill2D("pmiscs_a1c1cmp_phi_vs_Ex_" + m + w, 90, -180, 180, 800, -10, 10, sx3event.pos.Phi() * 180 / M_PI, Ex, lbl);
-          plotter->Fill2D("pmiscs_a1c1cmp_Ef_vs_theta_" + m + w, 100, 0, 180, 800, 0, 20, th * 180 / M_PI, Ef, lbl);
-          plotter->Fill2D("pmiscs_a1c1cmp_Ex_vs_theta_" + m + w, 100, 0, 180, 800, -10, 10, th * 180 / M_PI, Ex, lbl);
+          plotter->Fill2D("pmiscs_a1c1cmp_Ef_vs_theta_" + m + w, 180, 0, 180, 800, 0, 20, th * 180 / M_PI, Ef, lbl);
+          plotter->Fill2D("pmiscs_a1c1cmp_Ex_vs_theta_" + m + w, 180, 0, 180, 800, -10, 10, th * 180 / M_PI, Ex, lbl);
         }
       };
 
@@ -3974,7 +3998,8 @@ void protonMiscHistograms_sx3(HistPlotter *plotter, const std::vector<Event> &QQ
         continue;
 
       bool phicut = TMath::Abs(sx3event.pos.DeltaPhi(pcevent.pos)) <= TMath::Pi() / 3.0;
-      if (!phicut)
+      bool timecut = siPcCoincident(sx3event.Time1, pcevent.Time1);
+      if (!(phicut && timecut))
         continue;
 
       TVector3 x1(sx3event.pos);
@@ -3989,19 +4014,24 @@ void protonMiscHistograms_sx3(HistPlotter *plotter, const std::vector<Event> &QQ
       double theta_s = (sx3event.pos - r_rhoMin).Theta();
       double sinTheta_customV = TMath::Sin(theta_s);
       double path_length_s = pathLengthCm(sx3event.pos, r_rhoMin);
-      // No cathode signal to pick an ejectile hypothesis from (there's no
-      // Energy2 to test against the 1400 threshold) -- proton table only,
-      // the same default the A1C2/A1C1 loops fall back to for their
-      // "_cathode_protons" tag.
-      double sx3Efix = evalEloss(MeV_to_cm_p_spl, cm_to_MeVp_spl, sx3event.Energy1, path_length_s);
+      // A1C0/A2C0 has no cathode signal, so this used to always default to the
+      // proton table. Anode dE doesn't need a cathode, so it can classify these
+      // events too now -- see classifyByAnodeDe() (shared with the other loops).
+      double anodeE_MeV = (pcevent.Anodech >= 0 && pcevent.Anodech < 24)
+                              ? pcEnergySlope[pcevent.Anodech] * pcevent.Energy1
+                              : -1.0;
+      SiPcPid pid = classifyByAnodeDe(anodeE_MeV);
+      if (pid == SiPcPid::kUnknown)
+        plotter->Fill1D("pmiscs_pidUnknown", 2, 0, 2, 1.0, "proton+miscsx3");
+      double sx3Efix = (pid == SiPcPid::kAlpha)
+                            ? evalEloss(MeV_to_cm_spl, cm_to_MeV_spl, sx3event.Energy1, path_length_s)
+                            : evalEloss(MeV_to_cm_p_spl, cm_to_MeVp_spl, sx3event.Energy1, path_length_s);
 
-      std::string tag = "_a" + std::to_string(pcevent.multi1) + "c0";
+      std::string tag = "_a" + std::to_string(pcevent.multi1) + "c0" + (pid == SiPcPid::kAlpha ? "_cathode_alphas" : "_cathode_protons");
       std::string pmlabel = "proton+miscsx3" + tag;
 
       plotter->Fill2D("pmiscs_dE_E_Anodesx3" + tag, 400, 0, 10, 800, 0, 40000, sx3event.Energy1, pcevent.Energy1, pmlabel);
-      plotter->Fill2D("pmiscs_dE3_E_Anodesx3" + tag, 400, 0, 10, 400, 0, 40000, sx3event.Energy1, pcevent.Energy1 * sinTheta_customV * 3., pmlabel);
-      plotter->Fill1D("pmiscs_pcz" + tag, 600, -300, 300, pcevent.pos.Z(), pmlabel);
-      plotter->Fill2D("pmiscs_dE3_Ef_Anodesx3" + tag, 400, 0, 10, 400, 0, 40000, sx3Efix, pcevent.Energy1 * sinTheta_customV * 3, pmlabel);
+       plotter->Fill1D("pmiscs_pcz" + tag, 600, -300, 300, pcevent.pos.Z(), pmlabel);
       plotter->Fill2D("pmiscs_Ef_vs_theta_sx3" + tag, 100, 0, 180, 800, 0, 20, theta_s * 180 / M_PI, sx3Efix, pmlabel);
       plotter->Fill1D("pmiscs_VertexReconZ" + tag, 800, -400, 400, vertex_z, pmlabel);
       plotter->Fill2D("pmiscs_VertexReconXY" + tag, 200, -100, 100, 200, -100, 100, r_rhoMin.X(), r_rhoMin.Y(), pmlabel);
@@ -4015,9 +4045,8 @@ void protonMiscHistograms_sx3(HistPlotter *plotter, const std::vector<Event> &QQ
         double E_ca = evalEloss(MeV_to_cm_p_spl, cm_to_MeVp_spl, sx3event.Energy1, pcc.cathode_cm);
         double dE_pred = E_gu - E_ca;
         plotter->Fill2D("pmiscs_dEgas_vs_Ef" + tag, 400, 0, 20, 400, 0, 0.6, sx3Efix, dE_pred, pmlabel);
-        if (pcevent.Anodech >= 0 && pcevent.Anodech < 24)
+        if (anodeE_MeV >= 0.0)
         {
-          double anodeE_MeV = pcEnergySlope[pcevent.Anodech] * pcevent.Energy1;
           plotter->Fill2D("pmiscs_dEgasCalib_vs_Ef" + tag, 400, 0, 20, 800, 0, 0.6, sx3Efix, anodeE_MeV, pmlabel);
           plotter->Fill2D("pmiscs_dEgasCalib_vs_VertexZ" + tag, 800, -400, 400, 800, 0, 0.6, vertex_z, anodeE_MeV, pmlabel);
           plotter->Fill2D("pmiscs_dEgasPred_vs_dEgasCalib" + tag, 800, 0, 2, 400, 0, 0.6, anodeE_MeV, dE_pred, pmlabel);
@@ -4190,7 +4219,7 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
         }
         plotter->Fill1D(rx + "_pczfix" + sfx, 600, -300, 300, pcz_fix, pmlabel);
         plotter->Fill2D(rx + "_Ef_vs_theta" + ejtag + sfx, 100, 0, 180, 800, 0, ef_max, theta * 180 / M_PI, Efix, pmlabel);
-        plotter->Fill2D(rx + "_Ex_vs_theta" + ejtag + sfx, 180, 0, 180, 800, -20, 20, theta * 180 / M_PI, Ex, pmlabel);
+        plotter->Fill2D(rx + "_Ex_vs_theta" + ejtag + sfx, 360, 0, 180, 800, -20, 20, theta * 180 / M_PI, Ex, pmlabel);
         plotter->Fill2D(rx + "_Ex_vs_phi" + ejtag + sfx, 180, -180, 180, 800, -20, 20, phi * 180 / M_PI, Ex, pmlabel);
         plotter->Fill1D(rx + "_VertexReconZ" + sfx, 800, -400, 400, vertex_z, pmlabel);
 
