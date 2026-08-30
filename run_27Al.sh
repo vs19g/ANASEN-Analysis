@@ -22,7 +22,8 @@ process_run() {
     local infile="../ANASEN_analysis/data/${DATASET}_Data/${prefix}${wrun}_mapped.root"
     
     # Dynamically point to the correct output directory for this X/Y iteration
-    local current_out_dir="Output_27Al_X${BEAM_AXIS_X}_Y${BEAM_AXIS_Y}"
+    # local current_out_dir="Output_27Al_X${BEAM_AXIS_X}_Y${BEAM_AXIS_Y}"
+    local current_out_dir="Output_27Al"
     local out="${current_out_dir}/results_run${wrun}.root"
 
     root -q -l -b -x "$infile" \
