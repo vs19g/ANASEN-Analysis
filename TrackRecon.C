@@ -1577,14 +1577,35 @@ Bool_t TrackRecon::Process(Long64_t entry)
       double ae1 = std::get<1>(aCluster[1]);
       double alo = std::min(ae0, ae1);
       double ahi = std::max(ae0, ae1);
+
+      // Calibrated (MeV) wire energies for the same pair -- same pcEnergySlope
+      // lookup used everywhere else (e.g. anodeE_MeV in protonAlphaElastic_core).
+      int wi0 = std::get<0>(aCluster[0]);
+      int wi1 = std::get<0>(aCluster[1]);
+      double ae0_MeV = (wi0 >= 0 && wi0 < 24) ? pcEnergySlope[wi0] * ae0 : -1.0;
+      double ae1_MeV = (wi1 >= 0 && wi1 < 24) ? pcEnergySlope[wi1] * ae1 : -1.0;
+
       if (ahi > 0.0)
       {
         double aratio = alo / ahi;
-        plotter->Fill1D("A2_anode_ratio", 120, 0, 1.2, aratio, "hGMPC");
+        plotter->Fill1D("A2_anode_ratio_raw", 120, 0, 1.2, aratio, "hGMPC");
         // plotter->Fill2D("A2_anode_ratio_vs_sum", 800, 0, 40000, 120, 0, 1.2, ae0 + ae1, aratio, "hGMPC");
-        plotter->Fill2D("A1_vs_A2", 800, 0, 40000, 800, 0, 40000, ae0, ae1, "hGMPC");
+        plotter->Fill2D("A1_vs_A2_raw", 800, 0, 40000, 800, 0, 40000, ae0, ae1, "hGMPC");
         plotter->Fill2D("A2_anode_ratio_vs_lowerIndex", 24, 0, 24, 120, 0, 1.2,
                         std::min(std::get<0>(aCluster[0]), std::get<0>(aCluster[1])), aratio, "hGMPC");
+      }
+
+      // Calibrated equivalents -- guarded independently since a wire can lack
+      // a valid pcEnergySlope entry even when its raw ADC value is fine.
+      if (ae0_MeV >= 0.0 && ae1_MeV >= 0.0 && std::max(ae0_MeV, ae1_MeV) > 0.0)
+      {
+        double alo_MeV = std::min(ae0_MeV, ae1_MeV);
+        double ahi_MeV = std::max(ae0_MeV, ae1_MeV);
+        double aratio_MeV = alo_MeV / ahi_MeV;
+        plotter->Fill1D("A2_anode_ratio_calib", 120, 0, 1.2, aratio_MeV, "hGMPC");
+        plotter->Fill2D("A1_vs_A2_calib", 800, 0, 0.6, 800, 0, 0.6, ae0_MeV, ae1_MeV, "hGMPC");
+        plotter->Fill2D("A2_anode_ratio_calib_vs_lowerIndex", 24, 0, 24, 120, 0, 1.2,
+                        std::min(wi0, wi1), aratio_MeV, "hGMPC");
       }
 
       plotter->Fill1D("Raw_A2_AnodeSum", 800, 0, 40000, ae0 + ae1, "hGMPC");
@@ -2362,8 +2383,8 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
   {
     for (const auto &sx3event : SX3_Events)
     {
-      plotter->Fill1D("dt_pcA_sx3B" + std::to_string(sx3event.ch2), 640, -2000, 2000, sx3event.Time1 - pcevent.Time1, "Timing");
-      plotter->Fill1D("dt_pcC_sx3B" + std::to_string(sx3event.ch2), 640, -2000, 2000, sx3event.Time1 - pcevent.Time2, "Timing");
+      // plotter->Fill1D("dt_pcA_sx3B" + std::to_string(sx3event.ch2), 640, -2000, 2000, sx3event.Time1 - pcevent.Time1, "Timing");
+      // plotter->Fill1D("dt_pcC_sx3B" + std::to_string(sx3event.ch2), 640, -2000, 2000, sx3event.Time1 - pcevent.Time2, "Timing");
 
       bool PCASX3TimeCut = siPcCoincident(sx3event.Time1, pcevent.Time1);
       bool PCCSX3TimeCut = siPcCoincident(sx3event.Time1, pcevent.Time2);
@@ -3505,6 +3526,25 @@ void TrackRecon::OldAnalysis()
   }
 }
 
+// Every reconstructed point contributes to a fixed set of output tiers:
+// always the pooled fill (""), always topo1 (the finest-grained method tag,
+// e.g. "a1c1"/"a1c2fix"/"a1c0"/"a2c0"), and optionally topo2 (a variant like
+// "a1c1_inband") and methodGroup (a coarser grouping like "a1c1c2"). Shared by
+// reaction_ax_core and protonAlphaElastic_core (below) so this tier list only
+// has to be spelled out once; relocated here (from just above
+// reaction_ax_core) so both can see it.
+template <typename FillOneTier>
+static void forEachTier(const std::string &topo1, const std::string &topo2,
+                        const std::string &methodGroup, FillOneTier &&fillOneTier)
+{
+  fillOneTier("");
+  fillOneTier(topo1);
+  if (!topo2.empty())
+    fillOneTier(topo2);
+  if (!methodGroup.empty())
+    fillOneTier(methodGroup);
+}
+
 void protonAlphaElastic_core(HistPlotter *plotter, const std::vector<Event> &Si_Events, const std::vector<Event> &PC_Events,
                              const std::vector<std::vector<std::tuple<int, double, double>>> &aClusters,
                              bool isQQQ, const std::string &det, double si_ecut, double perp_cut, double phi_win,
@@ -3562,27 +3602,45 @@ void protonAlphaElastic_core(HistPlotter *plotter, const std::vector<Event> &Si_
         plotter->Fill1D(rx + "_pczfix" + ejtag + sfx, 600, -300, 300, pcz_fix, pmlabel);
         plotter->Fill1D(rx + "_VertexReconZ" + ejtag + sfx, 800, -400, 400, vertex_z, pmlabel);
         plotter->Fill2D(rx + "_VertexReconXY" + ejtag + sfx, 200, -100, 100, 200, -100, 100, r_rhoMin_fix.X(), r_rhoMin_fix.Y(), pmlabel);
-        plotter->Fill2D(rx + "_VertexReconZ_vs_Ef" + ejtag + sfx, 800, -400, 400, 800, 0, 10, vertex_z, Efix, pmlabel);
-        plotter->Fill2D(rx + "_VertexReconZ_vs_Ef" + ejtag + "_a" + std::to_string(multi1) + sfx, 800, -400, 400, 800, 0, 20, vertex_z, Efix, pmlabel);
         plotter->Fill2D(rx + "_Ef_vs_theta" + ejtag + sfx, 100, 0, 180, 800, 0, 10, theta * 180 / M_PI, Efix, pmlabel);
         plotter->Fill2D(rx + "_Ex_vs_theta" + ejtag + sfx, 180, 0, 180, 800, -10, 10, theta * 180 / M_PI, Ex, pmlabel);
         plotter->Fill2D(rx + "_Ex_vs_phi" + ejtag + sfx, 180, -180, 180, 800, -10, 10, sievent.pos.Phi() * 180 / M_PI, Ex, pmlabel);
-        plotter->Fill1D(rx + "_Ex_from" + ejtag + sfx, 800, -10, 10, Ex, pmlabel);
-        if (multi2 == 1)
-        {
-          plotter->Fill2D(rx + "_Ef_vs_theta_a1c1" + ejtag + sfx, 180, 0, 180, 800, 0, 10, theta * 180 / M_PI, Efix, pmlabel);
-          plotter->Fill2D(rx + "_VertexReconZ_vs_Ef_a1c1" + ejtag + sfx, 800, -400, 400, 800, 0, 20, vertex_z, Efix, pmlabel);
-        }
 
         // Ground-state beam-energy consistency check -- elastic scattering has
         // no excited levels, so there's only ever a "ground state" hypothesis
         // here, unlike the (a,p) reaction branch's snapped levels.
         double m3 = alphaHyp ? mass_4He : mass_1H, m4 = alphaHyp ? mass_1H : mass_4He;
-        double theta_deg =  (theta * 180 / M_PI);
-        double ebeam_kin = invertBeamEnergyMeV(mass_1H, mass_4He, m3, m4, Efix,theta_deg, 0.0);
-        if (ebeam_kin > 0.0)
-          plotter->Fill2D(rx + "_BeamEnergy_ETrack_vs_EKin" + ejtag + sfx, 800, 0, initial_energy * 1.5, 800, 0, initial_energy * 1.5, beam_energy_at_vertex, ebeam_kin, pmlabel);
-        plotter->Fill2D(rx + "_EKin_vs_ESi" + ejtag + sfx, 400, 0, initial_energy * 1.5, 800, 0, 10, ebeam_kin, sievent.Energy1, pmlabel);
+        double theta_deg = (theta * 180 / M_PI);
+        double ebeam_kin = invertBeamEnergyMeV(mass_1H, mass_4He, m3, m4, Efix, theta_deg, 0.0);
+
+        // Per-topology tiering, matching reaction_ax_core exactly: pooled ("")
+        // plus a separate copy per topo1 (a1c1/a1c2fix/a1c0/a2c0) and, for
+        // a1c1/a1c2, the coarser methodGroup "a1c1c2" grouping them together
+        // as distinct from a1c0/a2c0. topo2 ("a1c1_inband") is intentionally
+        // left empty here -- reaction_ax_core's a1c1 uses the cfrac-based Z
+        // (a1c1_cfrac_pcz) as its PRIMARY reconstruction and inband-ness comes
+        // straight out of that call; this branch's primary a1c1 Z is still the
+        // Gaussian dither (see the a1c1cmp comparison block above for where
+        // cfrac-pick is checked instead), so there's no equivalent inband flag
+        // on the primary path to tag with. Say the word if you'd rather switch
+        // a1c1's primary Z to a1c1_cfrac_pcz to close that gap too.
+        auto plot_with_tag = [&](const std::string &topo)
+        {
+          std::string t = topo.empty() ? "" : ("_" + topo);
+          plotter->Fill1D(rx + "_Ex_from" + ejtag + t + sfx, 800, -10, 10, Ex, pmlabel);
+          plotter->Fill2D(rx + "_VertexReconZ_vs_Ef" + ejtag + t + sfx, 800, -400, 400, 800, 0, 10, vertex_z, Efix, pmlabel);
+          plotter->Fill2D(rx + "_VertexReconZ_vs_Ex" + ejtag + t + sfx, 800, -400, 400, 400, -10, 10, vertex_z, Ex, pmlabel);
+          if (ebeam_kin > 0.0)
+          {
+            plotter->Fill2D(rx + "_BeamEnergy_ETrack_vs_EKin" + ejtag + t + sfx, 800, 0, initial_energy * 1.5, 800, 0, initial_energy * 1.5,
+                            beam_energy_at_vertex, ebeam_kin, pmlabel);
+            plotter->Fill2D(rx + "_EKin_vs_ESi" + ejtag + t + sfx, 400, 0, initial_energy * 1.5, 800, 0, 10, ebeam_kin, sievent.Energy1, pmlabel);
+          }
+        };
+        std::string topo1 = (multi2 == 2) ? "a1c2fix" : (multi2 == 1) ? "a1c1"
+                                                                      : (multi1 == 2 ? "a2c0" : "a1c0");
+        std::string methodGroup = (multi2 == 1 || multi2 == 2) ? "a1c1c2" : "";
+        forEachTier(topo1, "", methodGroup, plot_with_tag);
 
         // Gas segmentation validation (dEgas family), uniform for every
         // topology including a1c0/a2c0.
@@ -3601,8 +3659,8 @@ void protonAlphaElastic_core(HistPlotter *plotter, const std::vector<Event> &Si_
             plotter->Fill2D(rx + "_dEgasCalib_vs_theta" + ejtag + sfx, 100, 0, 180, 800, 0, 0.6, theta * 180 / M_PI, anodeE_MeV, pmlabel);
             plotter->Fill2D(rx + "_dEgasCalib_vs_phi" + ejtag + sfx, 100, -200, 200, 800, 0, 0.6, sievent.pos.Phi() * 180 / M_PI, anodeE_MeV, pmlabel);
             if (anodeCh >= 0 && anodeCh < 24)
-              plotter->Fill2D(rx + "_dEgasCalib_vs_E" + ejtag + sfx + "_anode" + pad2(anodeCh),
-                              400, 0, 10, 800, 0, 0.6, sievent.Energy1, anodeE_MeV, pmlabel);
+              // plotter->Fill2D(rx + "_dEgasCalib_vs_E" + ejtag + sfx + "_anode" + pad2(anodeCh),
+                              // 400, 0, 10, 800, 0, 0.6, sievent.Energy1, anodeE_MeV, pmlabel);
             plotter->Fill2D(rx + "_dEgasCalib_vs_Ex" + ejtag + sfx, 800, -10, 10, 800, 0, 0.6, Ex, anodeE_MeV, pmlabel);
             plotter->Fill2D(rx + "_dEgasCalib_vs_Z" + ejtag + sfx, 800, -400, 400, 800, 0, 0.6, vertex_z, anodeE_MeV, pmlabel);
             plotter->Fill2D(rx + "_dEgasPred_vs_dEgasCalib" + ejtag + sfx, 800, 0, 0.6, 800, 0, 0.6, anodeE_MeV, dE_pred, pmlabel);
@@ -3753,6 +3811,15 @@ void protonAlphaElastic_core(HistPlotter *plotter, const std::vector<Event> &Si_
         plotter->Fill2D(rx + "_dPhi" + sfx, 100, -200, 200, 100, -200, 200, pc.Phi() * 180 / M_PI, sievent.pos.Phi() * 180 / M_PI, misclabel);
         plotter->Fill1D(rx + "_dt_Anode" + sfx, 600, -2000, 2000, apTSMaxE - sievent.Time1, misclabel);
 
+        // Per-topology diagnostics (matches reaction_ax_core's a1c0/a2c0 loop
+        // exactly): dE_E_Anode, dPhi, and the raw (undithered) wire-lookup Z,
+        // each tagged by a0tag rather than pooled.
+        const std::string a0tag = isA2C0 ? "a2c0" : "a1c0";
+        std::string a0label = misclabel + "_" + a0tag;
+        plotter->Fill2D(rx + "_dE_E_Anode_" + a0tag + sfx, 400, 0, 10, 800, 0, 40000, sievent.Energy1, apSumE, a0label);
+        plotter->Fill2D(rx + "_dPhi_" + a0tag + sfx, 100, -200, 200, 100, -200, 200, pc.Phi() * 180 / M_PI, sievent.pos.Phi() * 180 / M_PI, a0label);
+        plotter->Fill1D(rx + "_rawZ_" + a0tag + sfx, 600, -300, 300, pc.Z(), a0label);
+
         int anodeCh_a0 = std::get<0>(aCl[0]);
         if (anodeCh_a0 < 0 || anodeCh_a0 >= 24)
           anodeCh_a0 = -1;
@@ -3812,24 +3879,6 @@ inline double snapToNearestLevel(double ex, const std::vector<double> &levels, d
     }
   }
   return best;
-}
-
-// Every reconstructed point contributes to a fixed set of output tiers:
-// always the pooled fill (""), always topo1 (the finest-grained method tag,
-// e.g. "a1c1"/"a1c2fix"/"a1c0"), and optionally topo2 (a variant like
-// "a1c1_inband") and methodGroup (a coarser grouping like "a1c1c2"). Used
-// by reaction_ax_core for both its always-on fills and its proton-locus
-// gated fills below, so this tier list only has to be spelled out once.
-template <typename FillOneTier>
-static void forEachTier(const std::string &topo1, const std::string &topo2,
-                        const std::string &methodGroup, FillOneTier &&fillOneTier)
-{
-  fillOneTier("");
-  fillOneTier(topo1);
-  if (!topo2.empty())
-    fillOneTier(topo2);
-  if (!methodGroup.empty())
-    fillOneTier(methodGroup);
 }
 
 static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_Events, const std::vector<Event> &PC_Events,
@@ -3913,6 +3962,7 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
           plotter->Fill1D(rx + "_Ex_from" + ejtag + t + sfx, 600, -15, 15, Ex, pmlabel);
           plotter->Fill2D(rx + "_VertexReconZ_vs_Ef" + ejtag + t + sfx, 800, -400, 400, 800, 0, ef_max, vertex_z, Efix, pmlabel);
           plotter->Fill2D(rx + "_VertexReconZ_vs_Ex" + ejtag + t + sfx, 800, -400, 400, 800, -20, 20, vertex_z, Ex, pmlabel);
+          plotter->Fill2D(rx + "_Ex_vs_theta" + ejtag + t + sfx, 360, 0, 180, 800, -20, 20, theta * 180 / M_PI, Ex, pmlabel);
 
           if (ebeam_kin_MeV > 0.0)
             plotter->Fill2D(rx + "_BeamEnergy_ETrack_vs_EKin" + ejtag + t + sfx, 400, 0, beamE0 * 1.5, 400, 0, beamE0 * 1.5,
@@ -3946,7 +3996,6 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
         }
         plotter->Fill1D(rx + "_pczfix" + sfx, 600, -300, 300, pcz_fix, pmlabel);
         plotter->Fill2D(rx + "_Ef_vs_theta" + ejtag + sfx, 100, 0, 180, 800, 0, ef_max, theta * 180 / M_PI, Efix, pmlabel);
-        plotter->Fill2D(rx + "_Ex_vs_theta" + ejtag + sfx, 360, 0, 180, 800, -20, 20, theta * 180 / M_PI, Ex, pmlabel);
         plotter->Fill2D(rx + "_Ex_vs_phi" + ejtag + sfx, 180, -180, 180, 800, -20, 20, phi * 180 / M_PI, Ex, pmlabel);
         plotter->Fill1D(rx + "_VertexReconZ" + sfx, 800, -400, 400, vertex_z, pmlabel);
 
@@ -3987,7 +4036,8 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
       };
 
       fillHypothesis(ej_m.m_p, ej_m.m_rp, MeV_to_cm_p_spl, cm_to_MeVp_spl, "_p");
-      // fillHypothesis(ej_m.m_a, ej_m.m_ra, MeV_to_cm_spl, cm_to_MeV_spl, "_a");
+      if (dataset == "17F")
+        fillHypothesis(ej_m.m_a, ej_m.m_ra, MeV_to_cm_spl, cm_to_MeV_spl, "_a");
 
       // std::string corrLabel = globaltag + "_" + rx + "+misc_" + det;
       // auto fillExCorr = [&](const std::string &topo)
