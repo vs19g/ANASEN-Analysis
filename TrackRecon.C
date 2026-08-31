@@ -88,20 +88,8 @@ std::string dataset;
 int co2pc = 3;      // default to 3% CO2; also selects the Eloss table pc suffix.
 int pressure = 250; // gas pressure (torr) for the Eloss-table filenames;
                     // overridable via the pressure_in_torr env var.
-
-// One analysis-wide RNG. Previously every dithering/smearing site declared its
-// own `static TRandom3 x(0)`, and ROOT reads seed 0 as "seed from a TUUID" -- so
-// each of the 11 generators picked a fresh stream on every run and the same input
-// file produced different dithered histograms each time, making it impossible to
-// separate a real change from dither noise. Fixed default seed, overridable via
-// RNG_SEED when an independent stream is genuinely wanted.
 TRandom3 anasenRandom(4357);
 
-// Si <-> PC time coincidence. Kept in one place because this gate was previously
-// spelled five different ways (`< 0`, `< 150`, `< -200`, `> 150`-reject,
-// `!(< 150)`-reject) across 15 sites, which is how a sign inversion went unnoticed.
-// One-sided by design: the real coincidence band sits well below zero (see the
-// DelT_Vs_*ECal diagnostics), so only the late side needs rejecting.
 constexpr double kSiPcDtMax = 150.0;
 inline bool siPcCoincident(double t_si, double t_pc)
 {
@@ -499,6 +487,7 @@ void TrackRecon::Begin(TTree * /*tree*/)
   std::string outdir = getenv("OUT_DIR") ? getenv("OUT_DIR") : "";
   ta_foil_run = (outdir == "Output_p");
   source_run = (outdir == "Output_a");
+
   if (ta_foil_run && getenv("RUN_NUMBER"))
   {
     int run_number = std::atoi(getenv("RUN_NUMBER"));
@@ -1768,6 +1757,7 @@ Bool_t TrackRecon::Process(Long64_t entry)
       if (SX3_Events.size())
         plotter->Fill1D("channels_misc_sx3", 20, -0.5, 19.5, misc.ch[j], "misc");
     }
+
     int ctr = 0;
     for (const auto &qqqevent : QQQ_Events)
     {
@@ -3660,8 +3650,8 @@ void protonAlphaElastic_core(HistPlotter *plotter, const std::vector<Event> &Si_
             plotter->Fill2D(rx + "_dEgasCalib_vs_phi" + ejtag + sfx, 100, -200, 200, 800, 0, 0.6, sievent.pos.Phi() * 180 / M_PI, anodeE_MeV, pmlabel);
             if (anodeCh >= 0 && anodeCh < 24)
               // plotter->Fill2D(rx + "_dEgasCalib_vs_E" + ejtag + sfx + "_anode" + pad2(anodeCh),
-                              // 400, 0, 10, 800, 0, 0.6, sievent.Energy1, anodeE_MeV, pmlabel);
-            plotter->Fill2D(rx + "_dEgasCalib_vs_Ex" + ejtag + sfx, 800, -10, 10, 800, 0, 0.6, Ex, anodeE_MeV, pmlabel);
+              // 400, 0, 10, 800, 0, 0.6, sievent.Energy1, anodeE_MeV, pmlabel);
+              plotter->Fill2D(rx + "_dEgasCalib_vs_Ex" + ejtag + sfx, 800, -10, 10, 800, 0, 0.6, Ex, anodeE_MeV, pmlabel);
             plotter->Fill2D(rx + "_dEgasCalib_vs_Z" + ejtag + sfx, 800, -400, 400, 800, 0, 0.6, vertex_z, anodeE_MeV, pmlabel);
             plotter->Fill2D(rx + "_dEgasPred_vs_dEgasCalib" + ejtag + sfx, 800, 0, 0.6, 800, 0, 0.6, anodeE_MeV, dE_pred, pmlabel);
           }
@@ -4036,8 +4026,7 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
       };
 
       fillHypothesis(ej_m.m_p, ej_m.m_rp, MeV_to_cm_p_spl, cm_to_MeVp_spl, "_p");
-      if (dataset == "17F")
-        fillHypothesis(ej_m.m_a, ej_m.m_ra, MeV_to_cm_spl, cm_to_MeV_spl, "_a");
+      // fillHypothesis(ej_m.m_a, ej_m.m_ra, MeV_to_cm_spl, cm_to_MeV_spl, "_a");
 
       // std::string corrLabel = globaltag + "_" + rx + "+misc_" + det;
       // auto fillExCorr = [&](const std::string &topo)
