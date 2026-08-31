@@ -432,7 +432,7 @@ void protonAlphaElastic_core(HistPlotter *plotter, const std::vector<Event> &Si_
                              bool isQQQ, const std::string &det, double si_ecut, double perp_cut, double phi_win,
                              double initial_energy, const std::string &globaltag = "");
 void miscHistograms_17Fax(HistPlotter *plotter, const std::vector<Event> &QQQ_Events, const std::vector<Event> &SX3_Events, const std::vector<Event> &PC_Events,
-                          const std::vector<std::vector<std::tuple<int, double, double>>> &aClusters, std::string globaltag = "");
+                          const std::vector<std::vector<std::tuple<int, double, double>>> &aClusters, std::string globaltag = "", double dt_rf_mcp = -987654321);
 void miscHistograms_27Alax(HistPlotter *plotter, const std::vector<Event> &QQQ_Events, const std::vector<Event> &SX3_Events, const std::vector<Event> &PC_Events,
                            const std::vector<std::vector<std::tuple<int, double, double>>> &aClusters, std::string globaltag = "");
 void PCSX3ClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Events, const std::vector<Event> &SX3_Events, const std::vector<Event> &PC_Events,
@@ -1746,6 +1746,19 @@ Bool_t TrackRecon::Process(Long64_t entry)
   //////Timing stuff for F data
 
   TRandom3 &rnd = anasenRandom;
+  double dt_rf_mcp_event = -987654321;
+  {
+    double ts_rf_tmp = -987654321, ts_mcp_tmp = -987654321;
+    for (int j = 0; j < misc.multi; j++)
+    {
+      if (misc.ch[j] == 3)
+        ts_rf_tmp = static_cast<double>(misc.t[j]) + static_cast<double>(misc.tf[j]);
+      if (misc.ch[j] == 4)
+        ts_mcp_tmp = static_cast<double>(misc.t[j]) + static_cast<double>(misc.tf[j]);
+    }
+    if (ts_rf_tmp > -987654321 && ts_mcp_tmp > -987654321)
+      dt_rf_mcp_event = ts_rf_tmp - ts_mcp_tmp;
+  }
   if (dataset == "17F" && reactiondata)
   {
     // misc.ch is a property of the event, not of any Si hit -- filled inside the
@@ -1913,7 +1926,7 @@ Bool_t TrackRecon::Process(Long64_t entry)
   if (reactiondata)
   {
     if (dataset == "17F")
-      miscHistograms_17Fax(plotter, QQQ_Events, SX3_Events, PC_Events, aClusters);
+      miscHistograms_17Fax(plotter, QQQ_Events, SX3_Events, PC_Events, aClusters, "", dt_rf_mcp_event);
     if (dataset == "27Al")
       miscHistograms_27Alax(plotter, QQQ_Events, SX3_Events, PC_Events, aClusters);
   }
@@ -3876,7 +3889,7 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
                              const std::string &rx, const std::string &det, double si_ecut, double perp_cut, double phi_win,
                              double dEa_max, double dEc_max, double ef_max,
                              double beamE0, TSpline3 *beam_MeV_to_cm, TSpline3 *beam_cm_to_MeV, double m_beam,
-                             const AAEjectileMasses &ej_m, const std::string &globaltag)
+                             const AAEjectileMasses &ej_m, const std::string &globaltag, double dt_rf_mcp = -987654321)
 {
   const std::string sfx = "_" + det + globaltag;
   TRandom3 &rand = anasenRandom;
@@ -3987,6 +4000,8 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
         plotter->Fill1D(rx + "_pczfix" + sfx, 600, -300, 300, pcz_fix, pmlabel);
         plotter->Fill2D(rx + "_Ef_vs_theta" + ejtag + sfx, 100, 0, 180, 800, 0, ef_max, theta * 180 / M_PI, Efix, pmlabel);
         plotter->Fill2D(rx + "_Ex_vs_phi" + ejtag + sfx, 180, -180, 180, 800, -20, 20, phi * 180 / M_PI, Ex, pmlabel);
+        if (dt_rf_mcp > -900000000)
+          plotter->Fill2D(rx + "_Ex_vs_TOF_rf_mcp" + ejtag + sfx, 500, -1000, 1000, 800, -20, 20, dt_rf_mcp, Ex, pmlabel);
         plotter->Fill1D(rx + "_VertexReconZ" + sfx, 800, -400, 400, vertex_z, pmlabel);
 
         forEachTier(topo1, topo2, methodGroup, plot_with_tag);
@@ -4129,7 +4144,7 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
 }
 
 void miscHistograms_17Fax(HistPlotter *plotter, const std::vector<Event> &QQQ_Events, const std::vector<Event> &SX3_Events, const std::vector<Event> &PC_Events,
-                          const std::vector<std::vector<std::tuple<int, double, double>>> &aClusters, std::string globaltag)
+                          const std::vector<std::vector<std::tuple<int, double, double>>> &aClusters, std::string globaltag, double dt_rf_mcp)
 {
 
   // 17F beam energy at the gas target, after the entrance-window foils:
@@ -4138,9 +4153,9 @@ void miscHistograms_17Fax(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
   // 17F(a,a)/(a,d)/(a,p): ejectile + recoil masses per channel.
   AAEjectileMasses ej17F{mass_4He, mass_17F, mass_2H, mass_19Ne_rec, mass_1H, mass_20Ne};
   reaction_ax_core(plotter, QQQ_Events, PC_Events, aClusters, true, "m17Fax", "qqq", 0.6, 6.0, TMath::Pi() / 4.0,
-                   30.0, 40000.0, 30.0, ebeam_17F_MeV, MeV_to_cm_17F_spl, cm_to_MeV_17F_spl, mass_17F, ej17F, globaltag);
+                   30.0, 40000.0, 30.0, ebeam_17F_MeV, MeV_to_cm_17F_spl, cm_to_MeV_17F_spl, mass_17F, ej17F, globaltag, dt_rf_mcp);
   reaction_ax_core(plotter, SX3_Events, PC_Events, aClusters, false, "m17Fax", "sx3", 1.2, 10.0, TMath::Pi() / 3.0,
-                   30.0, 40000.0, 30.0, ebeam_17F_MeV, MeV_to_cm_17F_spl, cm_to_MeV_17F_spl, mass_17F, ej17F, globaltag);
+                   30.0, 40000.0, 30.0, ebeam_17F_MeV, MeV_to_cm_17F_spl, cm_to_MeV_17F_spl, mass_17F, ej17F, globaltag, dt_rf_mcp);
 }
 
 // 27Al(a,a) excitation functions for BOTH silicon branches (QQQ + SX3), with the
