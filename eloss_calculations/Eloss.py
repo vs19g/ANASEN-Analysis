@@ -81,10 +81,11 @@ def generate_lookup(z, mass_u, e_start_mev, label):
 
         projectile.T(e_u)
         # dedx returns MeV / (g/cm2)
-        if(mass_u >=10.0):
-            loss_mev = catima.dedx(projectile, gas_mix) * step_g_cm2 * DEDX_SCALE
-        else:
-            loss_mev = catima.dedx(projectile, gas_mix) * step_g_cm2
+        loss_mev = catima.dedx(projectile, gas_mix) * step_g_cm2 * DEDX_SCALE
+        # if(mass_u >=10.0):
+            # loss_mev = catima.dedx(projectile, gas_mix) * step_g_cm2 * DEDX_SCALE
+        # else:
+        #     loss_mev = catima.dedx(projectile, gas_mix) * step_g_cm2
 
         current_e_total = max(0.0, current_e_total - loss_mev)
         current_thickness_g_cm2 += step_g_cm2
