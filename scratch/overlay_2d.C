@@ -61,7 +61,8 @@ void overlay_2d(TString rootFile, TString histsCSV, TString labelsCSV, TString x
             hists[i]->GetYaxis()->SetTitle(yAxisLabel);
             hists[i]->GetXaxis()->CenterTitle();
             hists[i]->GetYaxis()->CenterTitle();
-            hists[i]->Draw("scat");
+
+            hists[i]->Draw("colz");
             
             // Draw the y = x diagonal dashed line
             TF1 *diag = new TF1("diag", "x", -1000, 1000); 
@@ -69,7 +70,7 @@ void overlay_2d(TString rootFile, TString histsCSV, TString labelsCSV, TString x
             diag->SetLineColor(kGray+2);
             diag->Draw("same");
         } else {
-            hists[i]->Draw("scat same");
+            hists[i]->Draw("colz same");
         }
         
         TString label = ((TObjString*)labelArr->At(i))->GetString();

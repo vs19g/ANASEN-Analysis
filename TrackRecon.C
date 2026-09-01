@@ -1792,31 +1792,31 @@ Bool_t TrackRecon::Process(Long64_t entry)
           plotter->Fill2D("needle_vs_qqqE", 800, 0, 16384, 800, 0, 10, misc.e[j], qqqevent.Energy1, "misc");
           ts_needle = static_cast<double>(misc.t[j]) + static_cast<double>(misc.tf[j]);
           found_needle = 1;
-          plotter->Fill1D("dt_qqq_needle", 800, -2000, 2000, ts_qqq - ts_needle, "misc");
+          plotter->Fill1D("dt_qqq_needle", 1000, -2000, 2000, ts_qqq - ts_needle, "misc");
         }
         if (misc.ch[j] == 3)
         { // RF
           ts_rf = static_cast<double>(misc.t[j]) + static_cast<double>(misc.tf[j]);
           found_rf = 1;
-          plotter->Fill1D("dt_qqq_rf_innerring" + std::to_string(qqq_inner_ring), 800, -2000, 2000, ts_qqq - ts_rf, "misc");
+          plotter->Fill1D("dt_qqq_rf_innerring" + std::to_string(qqq_inner_ring), 1000, -2000, 2000, ts_qqq - ts_rf, "misc");
         }
         if (misc.ch[j] == 4)
         { // mcp
           ts_mcp = static_cast<double>(misc.t[j]) + static_cast<double>(misc.tf[j]);
           found_mcp = 1;
-          plotter->Fill1D("dt_qqq_mcp_innerring" + std::to_string(qqq_inner_ring), 800, -2000, 2000, ts_qqq - ts_mcp, "misc");
+          plotter->Fill1D("dt_qqq_mcp_innerring" + std::to_string(qqq_inner_ring), 1000, -2000, 2000, ts_qqq - ts_mcp, "misc");
         }
       }
       if (found_rf && found_mcp)
       {
         if (ctr == 0)
-          plotter->Fill1D("dt_rf_mcp_qqq_innerring" + std::to_string(qqq_inner_ring), 500, -1000, 1000, ts_rf - ts_mcp, "misc");
+          plotter->Fill1D("dt_rf_mcp_qqq_innerring" + std::to_string(qqq_inner_ring), 800, -1000, 1000, ts_rf - ts_mcp, "misc");
         double dt_rf_mcp = ts_rf - ts_mcp;
         double dt_qqq_rf = ts_qqq - ts_rf;
         double dt_qqq_mcp = ts_qqq - ts_mcp;
-        plotter->Fill2D("dt(qqq,rf)_vs_(rf,mcp)_innerring" + std::to_string(qqq_inner_ring), 640, -2000, 2000, 640, -2000, 2000, dt_qqq_rf, dt_rf_mcp, "misc");
-        plotter->Fill2D("dt_(qqq,mcp)_vs_(qqq,rf)_innerring" + std::to_string(qqq_inner_ring), 640, -1400, 2000, 640, -2000, 2000, dt_qqq_mcp, dt_qqq_rf, "misc");
-        plotter->Fill2D("dt_(qqq,mcp)_vs_(rf,mcp)_innerring" + std::to_string(qqq_inner_ring), 640, -1400, -600, 640, -2000, 2000, dt_qqq_mcp, dt_rf_mcp, "misc");
+        plotter->Fill2D("dt(qqq,rf)_vs_(rf,mcp)_innerring" + std::to_string(qqq_inner_ring), 800, -2000, 2000, 800, -2000, 2000, dt_qqq_rf, dt_rf_mcp, "misc");
+        plotter->Fill2D("dt_(qqq,mcp)_vs_(qqq,rf)_innerring" + std::to_string(qqq_inner_ring), 800, -1400, 2000, 800, -2000, 2000, dt_qqq_mcp, dt_qqq_rf, "misc");
+        plotter->Fill2D("dt_(qqq,mcp)_vs_(rf,mcp)_innerring" + std::to_string(qqq_inner_ring), 800, -1400, -600, 800, -2000, 2000, dt_qqq_mcp, dt_rf_mcp, "misc");
       }
       ctr += 1;
     }
@@ -1838,31 +1838,31 @@ Bool_t TrackRecon::Process(Long64_t entry)
           plotter->Fill2D("needle_vs_sx3E", 800, 0, 16384, 800, 0, 10, misc.e[j], sx3event.Energy1, "misc");
           ts_needle = static_cast<double>(misc.t[j]) + static_cast<double>(misc.tf[j]);
           found_needle = 1;
-          plotter->Fill1D("dt_sx3_needle", 800, -2000, 2000, ts_sx3 - ts_needle, "misc");
+          plotter->Fill1D("dt_sx3_needle", 1000, -2000, 2000, ts_sx3 - ts_needle, "misc");
         }
         if (misc.ch[j] == 3)
         { // RF
           ts_rf = static_cast<double>(misc.t[j]) + static_cast<double>(misc.tf[j]);
           found_rf = 1;
-          plotter->Fill1D("dt_sx3_rf", 800, -2000, 2000, ts_sx3 - ts_rf, "misc");
+          plotter->Fill1D("dt_sx3_rf", 1000, -2000, 2000, ts_sx3 - ts_rf, "misc");
         }
         if (misc.ch[j] == 4)
         { // mcp
           ts_mcp = static_cast<double>(misc.t[j]) + static_cast<double>(misc.tf[j]);
           found_mcp = 1;
-          plotter->Fill1D("dt_sx3_mcp", 800, -2000, 2000, ts_sx3 - ts_mcp, "misc");
+          plotter->Fill1D("dt_sx3_mcp", 1000, -2000, 2000, ts_sx3 - ts_mcp, "misc");
         }
       }
       if (found_rf && found_mcp)
       {
         if (ctr == 0)
-          plotter->Fill1D("dt_rf_mcp_sx3", 500, -1000, 1000, ts_rf - ts_mcp, "misc");
+          plotter->Fill1D("dt_rf_mcp_sx3", 800, -1000, 1000, ts_rf - ts_mcp, "misc");
         double dt_rf_mcp = ts_rf - ts_mcp;
         double dt_sx3_rf = ts_sx3 - ts_rf;
         double dt_sx3_mcp = ts_sx3 - ts_mcp;
-        plotter->Fill2D("dt(sx3,rf)_vs_(rf,mcp)", 640, -2000, 2000, 640, -2000, 2000, dt_sx3_rf, dt_rf_mcp, "misc");
-        plotter->Fill2D("dt_(sx3,mcp)_vs_(sx3,rf)", 640, -1400, 2000, 640, -2000, 2000, dt_sx3_mcp, dt_sx3_rf, "misc");
-        plotter->Fill2D("dt_(sx3,mcp)_vs_(rf,mcp)", 640, -1400, -600, 640, -2000, 2000, dt_sx3_mcp, dt_rf_mcp, "misc");
+        plotter->Fill2D("dt(sx3,rf)_vs_(rf,mcp)", 800, -2000, 2000, 800, -2000, 2000, dt_sx3_rf, dt_rf_mcp, "misc");
+        plotter->Fill2D("dt_(sx3,mcp)_vs_(sx3,rf)", 800, -1400, 2000, 800, -2000, 2000, dt_sx3_mcp, dt_sx3_rf, "misc");
+        plotter->Fill2D("dt_(sx3,mcp)_vs_(rf,mcp)", 800, -1400, -600, 800, -2000, 2000, dt_sx3_mcp, dt_rf_mcp, "misc");
       }
       ctr += 1;
     }
@@ -3971,7 +3971,7 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
           if (ebeam_kin_MeV > 0.0)
             plotter->Fill2D(rx + "_BeamEnergy_ETrack_vs_EKin" + ejtag + t + sfx, 400, 0, beamE0 * 1.5, 400, 0, beamE0 * 1.5,
                             beam_energy_at_vertex, ebeam_kin_MeV, pmlabel);
-          if (ejtag == "_p")
+          if (ejtag == "_p" && ebeam_kin_MeV > 0.0 && beam_energy_at_vertex > 0.0)
           {
             if (beam_energy_at_vertex < 4.0 && beam_energy_at_vertex > 0.1)
               plotter->Fill2D(rx + "_ETrack_vs_EKinGS" + ejtag + t + sfx, 400, 0, beamE0 * 1.5, 400, 0, beamE0 * 1.5,
@@ -3981,7 +3981,7 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
                               beam_energy_at_vertex, ebeam_kin_2235keV, "ETrackvsKin_assumed");
             else if (beam_energy_at_vertex < 24.0)
             {
-              plotter->Fill2D(rx + "_ETrack_vs_EKin3498kev" + ejtag + t + sfx, 400, 0, beamE0 * 1.5, 400, 0, beamE0 * 1.5,
+              plotter->Fill2D(rx + "_ETrack_vs_EKin3498keV" + ejtag + t + sfx, 400, 0, beamE0 * 1.5, 400, 0, beamE0 * 1.5,
                               beam_energy_at_vertex, ebeam_kin_3498keV, "ETrackvsKin_assumed");
               plotter->Fill2D(rx + "_ETrack_vs_EKin3774keV" + ejtag + t + sfx, 400, 0, beamE0 * 1.5, 400, 0, beamE0 * 1.5,
                               beam_energy_at_vertex, ebeam_kin_3774keV, "ETrackvsKin_assumed");
@@ -4110,7 +4110,7 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
         continue;
       auto aPw = pwinstance.GetPseudoWire(aCl, "ANODE");
       auto apwire = std::get<0>(aPw);
-      double apSumE = std::get<1>(aPw);
+      double apSumE = std::get<1>(aPw)
 
       bool isA2C0 = (aCl.size() == 2);
       const std::string a0tag = isA2C0 ? "a2c0" : "a1c0";
@@ -4125,7 +4125,6 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
       TVector3 r_rhoMin_a0 = beamVertex(sievent.pos, pc - sievent.pos);
       double beam_path_length_a0 = TMath::Abs(r_rhoMin_a0.Z() - z_entrance) * 0.1;
       double beam_energy_at_vertex_a0 = evalElossForward(beam_MeV_to_cm, beam_cm_to_MeV, beamE0, beam_path_length_a0);
-      plotter->Fill2D(rx + "_dE_E_Anode_" + a0tag + sfx + "_10MeV" + std::to_string(beam_energy_at_vertex_a0 < 10), 400, 0, dEa_max, 800, 0, 40000, sievent.Energy1, apSumE, pmlabel);
       plotter->Fill2D(rx + "_dPhi_" + a0tag + sfx, 100, -200, 200, 100, -200, 200, pc.Phi() * 180 / M_PI, sievent.pos.Phi() * 180 / M_PI, pmlabel);
       plotter->Fill1D(rx + "_rawZ_" + a0tag + sfx, 600, -300, 300, pc.Z(), pmlabel);
 
