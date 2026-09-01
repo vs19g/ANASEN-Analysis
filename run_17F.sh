@@ -48,7 +48,8 @@ root -q -l -b -e '.L TrackRecon.C++O'
 
 # 3% CO2
 # parallel --bar -j 6 run_once ::: {325..400}
-parallel --bar -j 7 run_once ::: 351 353 355 358 359 360 362 367
+parallel --bar -j 11  run_once ::: {351..400}
+# parallel --bar -j 7 run_once ::: 351 353 355 358 359 360 362 367
 hadd -j 4 -k ${OUT_DIR}/Output_17F.root ${OUT_DIR}/results_run*.root
 
 unset source_vertex

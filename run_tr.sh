@@ -55,7 +55,7 @@ if [[ 1 -eq 0 ]]; then
 fi
 
 # --- Block 3: 27Al Alpha+Gas Runs (9, 12) ---
-if [[ 1 -eq 0 ]]; then
+if [[ 1 -eq 1 ]]; then
     export DATASET="27Al"
     export PREFIX="Run_"
     export OUT_DIR="Output_a"
@@ -70,6 +70,7 @@ if [[ 1 -eq 0 ]]; then
     unset CATHODE_GAIN
     unset timecut_low
     unset pressure_in_torr
+    exit
 fi
 
 # --- Block 4: 17F Alpha+Gas Runs (18-21) ---

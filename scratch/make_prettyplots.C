@@ -153,6 +153,9 @@ void make_prettyplots(const char *rootFile,
         h->GetYaxis()->SetTitleOffset(1.4);
         h->GetXaxis()->CenterTitle(true);
         h->GetYaxis()->CenterTitle(true);
+
+        // gPad->SetLogz();
+
         h->Draw("colz");
     }
     else
