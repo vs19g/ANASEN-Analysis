@@ -3986,10 +3986,10 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
               plotter->Fill2D(rx + "_ETrack_vs_EKin3774keV" + ejtag + t + sfx, 400, 0, beamE0 * 1.5, 400, 0, beamE0 * 1.5,
                               beam_energy_at_vertex, ebeam_kin_3774keV, "ETrackvsKin_assumed");
             }
-            else if (beam_energy_at_vertex >= 36.00)
+            else if (beam_energy_at_vertex <= 36.00)
               plotter->Fill2D(rx + "_ETrack_vs_EKin4809keV" + ejtag + t + sfx, 400, 0, beamE0 * 1.5, 400, 0, beamE0 * 1.5,
                               beam_energy_at_vertex, ebeam_kin_4809keV, "ETrackvsKin_assumed");
-            else if (beam_energy_at_vertex > 42.0)
+            else if (beam_energy_at_vertex < 42.0)
               plotter->Fill2D(rx + "_ETrack_vs_EKin5614keV" + ejtag + t + sfx, 400, 0, beamE0 * 1.5, 400, 0, beamE0 * 1.5,
                               beam_energy_at_vertex, ebeam_kin_5614keV, "ETrackvsKin_assumed");
             else
