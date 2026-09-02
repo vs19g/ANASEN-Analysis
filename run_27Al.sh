@@ -3,12 +3,13 @@
 export DATASET="27Al"
 export PREFIX="Run_"
 export OUT_DIR="Output_27Al"
+export OUT_DIR="Output_27Al"
 export reactiondata=1
 export CO2percent=3
 export pressure_in_torr=250
 export CATHODE_GAIN=3.0
 export source_vertex=-200.0
-export DEDX_SCALE=0.9
+export DEDX_SCALE=0.89
 export CUTLIST=cuts_list.txt
 export BEAM_AXIS_X=0
 export BEAM_AXIS_Y=0
@@ -48,6 +49,7 @@ export -f process_run
         # Define and create a clean directory name BEFORE running parallel tasks
         # CURRENT_OUT_DIR="Output_27Al_X${BEAM_AXIS_X}_Y${BEAM_AXIS_Y}"
         CURRENT_OUT_DIR="Output_27Al"
+        # CURRENT_OUT_DIR="Output_27Al_run_48"
         mkdir -p "$CURRENT_OUT_DIR"
 
         echo "Running Eloss.py with a scaling parameter of $DEDX_SCALE"
@@ -56,8 +58,8 @@ export -f process_run
         
         echo "Starting parallel processing..."
         time parallel --bar -j 10 process_run ::: {24..41} 
-        time parallel --bar -j 3 process_run ::: 44 45 46
-        time parallel --bar -j 8 process_run ::: {50..59}
+        time parallel --bar -j 10 process_run ::: 44 45 46 {50..59}
+        # time parallel --bar -j 10 process_run ::: 48 # pc without coincidence
         # time parallel --bar -j 4 process_run ::: 62 63 66 67 68
         # time parallel --bar -j 1 process_run ::: 73
         # time parallel --bar -j 1 process_run ::: 74

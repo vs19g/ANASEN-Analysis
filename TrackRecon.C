@@ -4018,28 +4018,28 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
                             beam_energy_at_vertex, ebeam_kin_MeV, pmlabel);
           if (ejtag == "_p")
           {
-            if (beam_energy_at_vertex < 4.0 && beam_energy_at_vertex > 0.1)
-              plotter->Fill2D(rx + "_ETrack_vs_EKinGS" + ejtag + t + sfx, 400, 0, beamE0 * 1.5, 400, 0, beamE0 * 1.5,
-                              beam_energy_at_vertex, ebeam_kin_GS, folderPrefix + "ETrackvsKin_assumed");
-            else if (beam_energy_at_vertex <= 12.0)
-              plotter->Fill2D(rx + "_ETrack_vs_EKin2235keV" + ejtag + t + sfx, 400, 0, beamE0 * 1.5, 400, 0, beamE0 * 1.5,
-                              beam_energy_at_vertex, ebeam_kin_2235keV, folderPrefix + "ETrackvsKin_assumed");
-            else if (beam_energy_at_vertex < 24.0)
+            // if (beam_energy_at_vertex < 4.0 && beam_energy_at_vertex > 0.1)
+            plotter->Fill2D(rx + "_ETrack_vs_EKinGS" + ejtag + t + sfx, 400, 0, beamE0 * 1.5, 400, 0, beamE0 * 1.5,
+                            beam_energy_at_vertex, ebeam_kin_GS, folderPrefix + "ETrackvsKin_assumed");
+            // else if (beam_energy_at_vertex <= 12.0)
+            plotter->Fill2D(rx + "_ETrack_vs_EKin2235keV" + ejtag + t + sfx, 400, 0, beamE0 * 1.5, 400, 0, beamE0 * 1.5,
+                            beam_energy_at_vertex, ebeam_kin_2235keV, folderPrefix + "ETrackvsKin_assumed");
+            // else if (beam_energy_at_vertex < 24.0)
             {
               plotter->Fill2D(rx + "_ETrack_vs_EKin3498keV" + ejtag + t + sfx, 400, 0, beamE0 * 1.5, 400, 0, beamE0 * 1.5,
                               beam_energy_at_vertex, ebeam_kin_3498keV, folderPrefix + "ETrackvsKin_assumed");
               plotter->Fill2D(rx + "_ETrack_vs_EKin3774keV" + ejtag + t + sfx, 400, 0, beamE0 * 1.5, 400, 0, beamE0 * 1.5,
                               beam_energy_at_vertex, ebeam_kin_3774keV, folderPrefix + "ETrackvsKin_assumed");
             }
-            else if (beam_energy_at_vertex <= 36.00)
-              plotter->Fill2D(rx + "_ETrack_vs_EKin4809keV" + ejtag + t + sfx, 400, 0, beamE0 * 1.5, 400, 0, beamE0 * 1.5,
-                              beam_energy_at_vertex, ebeam_kin_4809keV, folderPrefix + "ETrackvsKin_assumed");
-            else if (beam_energy_at_vertex < 42.0)
-              plotter->Fill2D(rx + "_ETrack_vs_EKin5614keV" + ejtag + t + sfx, 400, 0, beamE0 * 1.5, 400, 0, beamE0 * 1.5,
-                              beam_energy_at_vertex, ebeam_kin_5614keV, folderPrefix + "ETrackvsKin_assumed");
-            else
-              plotter->Fill2D(rx + "_ETrack_vs_EKin6550keV" + ejtag + t + sfx, 400, 0, beamE0 * 1.5, 400, 0, beamE0 * 1.5,
-                              beam_energy_at_vertex, ebeam_kin_6550keV, folderPrefix + "ETrackvsKin_assumed");
+            // else if (beam_energy_at_vertex <= 36.00)
+            plotter->Fill2D(rx + "_ETrack_vs_EKin4809keV" + ejtag + t + sfx, 400, 0, beamE0 * 1.5, 400, 0, beamE0 * 1.5,
+                            beam_energy_at_vertex, ebeam_kin_4809keV, folderPrefix + "ETrackvsKin_assumed");
+            // else if (beam_energy_at_vertex < 42.0)
+            plotter->Fill2D(rx + "_ETrack_vs_EKin5614keV" + ejtag + t + sfx, 400, 0, beamE0 * 1.5, 400, 0, beamE0 * 1.5,
+                            beam_energy_at_vertex, ebeam_kin_5614keV, folderPrefix + "ETrackvsKin_assumed");
+            // else
+            plotter->Fill2D(rx + "_ETrack_vs_EKin6550keV" + ejtag + t + sfx, 400, 0, beamE0 * 1.5, 400, 0, beamE0 * 1.5,
+                            beam_energy_at_vertex, ebeam_kin_6550keV, folderPrefix + "ETrackvsKin_assumed");
           }
         };
 
@@ -4056,6 +4056,17 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
         plotter->Fill1D(rx + "_pczfix" + sfx, 600, -300, 300, pcz_fix, pmlabel);
         plotter->Fill2D(rx + "_Ef_vs_theta" + ejtag + sfx, 100, 0, 180, 800, 0, ef_max, theta * 180 / M_PI, Efix, pmlabel);
         plotter->Fill2D(rx + "_Ex_vs_phi" + ejtag + sfx, 180, -180, 180, 600, -10, 20, phi * 180 / M_PI, Ex, pmlabel);
+
+        for (const auto &pcevent : PC_Events)
+        {
+          if (!(pcevent.multi1 == 1 && (pcevent.multi2 == 1 || pcevent.multi2 == 2)))
+            continue;
+          if (TMath::Abs(sievent.pos.DeltaPhi(pcevent.pos)) > phi_win)
+            continue;
+          plotter->Fill2D(rx + "_Ex_vs_dT" + ejtag + sfx, 500, -2000, 2000, 600, -10, 20, (sievent.Time1 - pcevent.Time1), Ex, pmlabel);
+          plotter->Fill2D(rx + "_dEgasCalib_vs_dT" + ejtag + sfx, 500, -2000, 2000, 800, 0, 0.6, (sievent.Time1 - pcevent.Time1), anodeE_MeV, pmlabel);
+        }
+
         if (dt_rf_mcp > -900000000)
           plotter->Fill2D(rx + "_Ex_vs_TOF_rf_mcp" + ejtag + sfx, 500, -1000, 1000, 800, -20, 20, dt_rf_mcp, Ex, pmlabel);
         plotter->Fill1D(rx + "_VertexReconZ" + sfx, 800, -400, 400, vertex_z, pmlabel);
