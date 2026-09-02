@@ -40,6 +40,7 @@ export CATHODE_GAIN=1
 # A1C1 cfrac low-band fold + z autocal (see TrackRecon.C Begin()). Defaults are the
 # 17F values; override here to re-tune without recompiling.
 export A1C1_LOWBAND_RFACTOR=7.0
+export CUTLIST=cuts_list.txt
 rm -f ${OUT_DIR}/*.root
 
 # Pre-compile TrackRecon.C ONCE on a single core so parallel jobs don't race on ACLiC
@@ -59,6 +60,7 @@ unset CO2percent
 unset pressure_in_torr
 unset CATHODE_GAIN
 unset A1C1_LOWBAND_RFACTOR
+unset CUTLIST
 unset A1C1_Z_SCALE_QQQ
 unset A1C1_Z_OFF_QQQ
 unset A1C1_Z_OFF_SX3
