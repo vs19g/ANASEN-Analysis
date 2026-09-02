@@ -3994,7 +3994,7 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
         double ebeam_kin_3498keV = invertBeamEnergyMeV(m_beam, mass_4He, m3, m4, Efix, theta * 180 / M_PI, 3.498);
         double ebeam_kin_3774keV = invertBeamEnergyMeV(m_beam, mass_4He, m3, m4, Efix, theta * 180 / M_PI, 3.774);
         double ebeam_kin_4809keV = invertBeamEnergyMeV(m_beam, mass_4He, m3, m4, Efix, theta * 180 / M_PI, 4.809);
-        double ebeam_kin_5614keV = invertBeamEnergyMeV(m_beam, mass_4He, m3, m4, Efix, theta * 180 / M_PI, 5.164);
+        double ebeam_kin_5614keV = invertBeamEnergyMeV(m_beam, mass_4He, m3, m4, Efix, theta * 180 / M_PI, 5.614);
         double ebeam_kin_6550keV = invertBeamEnergyMeV(m_beam, mass_4He, m3, m4, Efix, theta * 180 / M_PI, 6.550);
 
         // Gated output: only fill when this hypothesis (proton "_p" / alpha "_a") agrees
