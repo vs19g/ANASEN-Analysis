@@ -1496,483 +1496,484 @@ Bool_t TrackRecon::Process(Long64_t entry)
     for (int j = i + 1; j < pc.multi; j++)
     {
       if (doRawHistos)
+      {
         plotter->Fill2D("PC_Coincidence_Matrix", 48, 0, 48, 48, 0, 48, pc.index[i], pc.index[j], "hRawPC");
-      // only tag with anodeT-cathodeT once both are real: with the sentinels still in
-      // place the difference is -199998, which piled the early hits into the "_1" plot
-      if (anodeT != -99999 && cathodeT != 99999)
-        plotter->Fill2D("PC_Coincidence_Matrix_anodeMinusCathode_lt_-200_" + std::to_string(anodeT - cathodeT < -200), 48, 0, 48, 48, 0, 48, pc.index[i], pc.index[j], "hRawPC");
-    }
+        // only tag with anodeT-cathodeT once both are real: with the sentinels still in
+        // place the difference is -199998, which piled the early hits into the "_1" plot
+        if (anodeT != -99999 && cathodeT != 99999)
+          plotter->Fill2D("PC_Coincidence_Matrix_anodeMinusCathode_lt_-200_" + std::to_string(anodeT - cathodeT < -200), 48, 0, 48, 48, 0, 48, pc.index[i], pc.index[j], "hRawPC");
+      }
 
-    if (diagnostic_eplots)
+      if (diagnostic_eplots)
+      {
+        plotter->Fill2D("Anode_V_Anode", 24, 0, 24, 24, 0, 24, pc.index[i], pc.index[j], "hGMPC");
+      }
+    }
+  }
+
+  // anodeT - cathodeT is one number per event, so it gets filled once per event.
+  // This block used to sit inside the pc.multi loop above *and* wrap an inner loop
+  // over qqq.multi / sx3.multi, so the identical value was filled O(pc.multi x
+  // qqq.multi) times -- inflating the statistics and weighting every event by its
+  // own multiplicity. PC_Time_Vs_QQQ_ch genuinely needs the channel loop, so it
+  // keeps one; the rest do not.
+  if (diagnostic_tplots && anodeT != -99999 && cathodeT != 99999)
+  {
+    double pcDT = anodeT - cathodeT;
+    plotter->Fill1D("PC_Time", 200, -2000, 2000, pcDT, "hTiming");
+    if (qqq.multi > 0)
     {
-      plotter->Fill2D("Anode_V_Anode", 24, 0, 24, 24, 0, 24, pc.index[i], pc.index[j], "hGMPC");
+      plotter->Fill1D("PC_Time_qqq", 200, -2000, 2000, pcDT, "hTiming");
+      plotter->Fill2D("PC_Time_vs_AIndex_qqq", 200, -2000, 2000, 24, -0.5, 23.5, pcDT, anodeIndex, "hTiming");
+      plotter->Fill2D("PC_Time_vs_CIndex_qqq", 200, -2000, 2000, 24, -0.5, 23.5, pcDT, cathodeIndex, "hTiming");
+      for (int j = 0; j < qqq.multi; j++)
+        plotter->Fill2D("PC_Time_Vs_QQQ_ch", 200, -2000, 2000, 16 * 8, -0.5, 16 * 8 - 0.5, pcDT, qqq.ch[j], "hTiming");
     }
-  }
-}
-
-// anodeT - cathodeT is one number per event, so it gets filled once per event.
-// This block used to sit inside the pc.multi loop above *and* wrap an inner loop
-// over qqq.multi / sx3.multi, so the identical value was filled O(pc.multi x
-// qqq.multi) times -- inflating the statistics and weighting every event by its
-// own multiplicity. PC_Time_Vs_QQQ_ch genuinely needs the channel loop, so it
-// keeps one; the rest do not.
-if (diagnostic_tplots && anodeT != -99999 && cathodeT != 99999)
-{
-  double pcDT = anodeT - cathodeT;
-  plotter->Fill1D("PC_Time", 200, -2000, 2000, pcDT, "hTiming");
-  if (qqq.multi > 0)
-  {
-    plotter->Fill1D("PC_Time_qqq", 200, -2000, 2000, pcDT, "hTiming");
-    plotter->Fill2D("PC_Time_vs_AIndex_qqq", 200, -2000, 2000, 24, -0.5, 23.5, pcDT, anodeIndex, "hTiming");
-    plotter->Fill2D("PC_Time_vs_CIndex_qqq", 200, -2000, 2000, 24, -0.5, 23.5, pcDT, cathodeIndex, "hTiming");
-    for (int j = 0; j < qqq.multi; j++)
-      plotter->Fill2D("PC_Time_Vs_QQQ_ch", 200, -2000, 2000, 16 * 8, -0.5, 16 * 8 - 0.5, pcDT, qqq.ch[j], "hTiming");
-  }
-  if (sx3.multi > 0)
-  {
-    plotter->Fill1D("PC_Time_sx3", 200, -2000, 2000, pcDT, "hTiming");
-    plotter->Fill2D("PC_Time_vs_AIndex_sx3", 200, -2000, 2000, 24, -0.5, 23.5, pcDT, anodeIndex, "hTiming");
-    plotter->Fill2D("PC_Time_vs_CIndex_sx3", 200, -2000, 2000, 24, -0.5, 23.5, pcDT, cathodeIndex, "hTiming");
-  }
-}
-
-anodeHits.clear();
-cathodeHits.clear();
-corrcatMax.clear();
-
-for (int i = 0; i < pc.multi; i++)
-{
-  // if (pc.e[i] > 100)
-  {
-    if (pc.index[i] < 24)
+    if (sx3.multi > 0)
     {
-      anodeHits.push_back(std::pair<int, double>(pc.index[i], pc.e[i]));
-    }
-    else if (pc.index[i] >= 24)
-    {
-      cathodeHits.push_back(std::pair<int, double>(pc.index[i] - 24, pc.e[i] * cathode_gain));
+      plotter->Fill1D("PC_Time_sx3", 200, -2000, 2000, pcDT, "hTiming");
+      plotter->Fill2D("PC_Time_vs_AIndex_sx3", 200, -2000, 2000, 24, -0.5, 23.5, pcDT, anodeIndex, "hTiming");
+      plotter->Fill2D("PC_Time_vs_CIndex_sx3", 200, -2000, 2000, 24, -0.5, 23.5, pcDT, cathodeIndex, "hTiming");
     }
   }
-}
 
-std::sort(anodeHits.begin(), anodeHits.end(), [](std::pair<int, double> a, std::pair<int, double> b)
-          { return a.first < b.first; });
+  anodeHits.clear();
+  cathodeHits.clear();
+  corrcatMax.clear();
 
-std::sort(cathodeHits.begin(), cathodeHits.end(), [](std::pair<int, double> a, std::pair<int, double> b)
-          { return a.first < b.first; });
-
-// clusters = collection of (collection of wires) where each wire is (index, energy, timestamp)
-std::vector<std::vector<std::tuple<int, double, double>>> aClusters = pwinstance.Make_Clusters(aWireEvents);
-std::vector<std::vector<std::tuple<int, double, double>>> cClusters = pwinstance.Make_Clusters(cWireEvents);
-
-for (const auto &aCluster : aClusters)
-{
-  if (clusterHasExcludedAnode(aCluster))
-    continue;
-  if (aCluster.size() == 2)
+  for (int i = 0; i < pc.multi; i++)
   {
-    double ae0 = std::get<1>(aCluster[0]);
-    double ae1 = std::get<1>(aCluster[1]);
-    double alo = std::min(ae0, ae1);
-    double ahi = std::max(ae0, ae1);
-
-    // Calibrated (MeV) wire energies for the same pair -- same pcEnergySlope
-    // lookup used everywhere else (e.g. anodeE_MeV in protonAlphaElastic_core).
-    int wi0 = std::get<0>(aCluster[0]);
-    int wi1 = std::get<0>(aCluster[1]);
-    double ae0_MeV = (wi0 >= 0 && wi0 < 24) ? pcEnergySlope[wi0] * ae0 : -1.0;
-    double ae1_MeV = (wi1 >= 0 && wi1 < 24) ? pcEnergySlope[wi1] * ae1 : -1.0;
-
-    if (ahi > 0.0)
+    // if (pc.e[i] > 100)
     {
-      double aratio = alo / ahi;
-      plotter->Fill1D("A2_anode_ratio_raw", 120, 0, 1.2, aratio, "hGMPC");
-      // plotter->Fill2D("A2_anode_ratio_vs_sum", 800, 0, 40000, 120, 0, 1.2, ae0 + ae1, aratio, "hGMPC");
-      plotter->Fill2D("A1_vs_A2_raw", 800, 0, 40000, 800, 0, 40000, ae0, ae1, "hGMPC");
-      plotter->Fill2D("A2_anode_ratio_vs_lowerIndex", 24, 0, 24, 120, 0, 1.2,
-                      std::min(std::get<0>(aCluster[0]), std::get<0>(aCluster[1])), aratio, "hGMPC");
+      if (pc.index[i] < 24)
+      {
+        anodeHits.push_back(std::pair<int, double>(pc.index[i], pc.e[i]));
+      }
+      else if (pc.index[i] >= 24)
+      {
+        cathodeHits.push_back(std::pair<int, double>(pc.index[i] - 24, pc.e[i] * cathode_gain));
+      }
     }
-
-    // Calibrated equivalents -- guarded independently since a wire can lack
-    // a valid pcEnergySlope entry even when its raw ADC value is fine.
-    if (ae0_MeV >= 0.0 && ae1_MeV >= 0.0 && std::max(ae0_MeV, ae1_MeV) > 0.0)
-    {
-      double alo_MeV = std::min(ae0_MeV, ae1_MeV);
-      double ahi_MeV = std::max(ae0_MeV, ae1_MeV);
-      double aratio_MeV = alo_MeV / ahi_MeV;
-      plotter->Fill1D("A2_anode_ratio_calib", 120, 0, 1.2, aratio_MeV, "hGMPC");
-      plotter->Fill2D("A1_vs_A2_calib", 800, 0, 0.6, 800, 0, 0.6, ae0_MeV, ae1_MeV, "hGMPC");
-      plotter->Fill2D("A2_anode_ratio_calib_vs_lowerIndex", 24, 0, 24, 120, 0, 1.2,
-                      std::min(wi0, wi1), aratio_MeV, "hGMPC");
-    }
-
-    plotter->Fill1D("Raw_A2_AnodeSum", 800, 0, 40000, ae0 + ae1, "hGMPC");
   }
-  else if (aCluster.size() == 1)
+
+  std::sort(anodeHits.begin(), anodeHits.end(), [](std::pair<int, double> a, std::pair<int, double> b)
+            { return a.first < b.first; });
+
+  std::sort(cathodeHits.begin(), cathodeHits.end(), [](std::pair<int, double> a, std::pair<int, double> b)
+            { return a.first < b.first; });
+
+  // clusters = collection of (collection of wires) where each wire is (index, energy, timestamp)
+  std::vector<std::vector<std::tuple<int, double, double>>> aClusters = pwinstance.Make_Clusters(aWireEvents);
+  std::vector<std::vector<std::tuple<int, double, double>>> cClusters = pwinstance.Make_Clusters(cWireEvents);
+
+  for (const auto &aCluster : aClusters)
   {
-    plotter->Fill1D("Raw_A1_AnodeSum", 800, 0, 40000, std::get<1>(aCluster[0]), "hGMPC");
-  }
-  for (const auto &cCluster : cClusters)
-  {
-    if (aCluster.size() == 0)
+    if (clusterHasExcludedAnode(aCluster))
       continue;
-    if (cCluster.size() == 0)
-      continue;
-    // both have at least 1, here. Keep the a1, c1 events
-    auto [crossover, alpha, apSumE, cpSumE, apMaxE, cpMaxE, apTSMaxE, cpTSMaxE] = pwinstance.FindCrossoverProperties(aCluster, cCluster);
-    if (alpha != 9999999 && apSumE != -1)
+    if (aCluster.size() == 2)
     {
-      // Event PCEvent(crossover,apMaxE,cpMaxE,apTSMaxE,cpTSMaxE);
-      // Event PCEvent(crossover,apSumE,cpSumE,apTSMaxE,cpTSMaxE);
-      Event PCEvent(crossover, apSumE, cpMaxE, cpSumE, apTSMaxE, cpTSMaxE); // run12 shows cathode-max and anode-sum provide best dE signals.
-      // std::cout << apSumE << " " << crossover.Perp() << " " << apMaxE << " " << apTSMaxE << std::endl;
-      PCEvent.multi1 = aCluster.size();
-      PCEvent.multi2 = cCluster.size();
-      PCEvent.Anodech = std::get<0>(aCluster[0]);
-      PCEvent.Cathodech = std::get<0>(cCluster[0]);
-      PC_Events.push_back(PCEvent);
+      double ae0 = std::get<1>(aCluster[0]);
+      double ae1 = std::get<1>(aCluster[1]);
+      double alo = std::min(ae0, ae1);
+      double ahi = std::max(ae0, ae1);
+
+      // Calibrated (MeV) wire energies for the same pair -- same pcEnergySlope
+      // lookup used everywhere else (e.g. anodeE_MeV in protonAlphaElastic_core).
+      int wi0 = std::get<0>(aCluster[0]);
+      int wi1 = std::get<0>(aCluster[1]);
+      double ae0_MeV = (wi0 >= 0 && wi0 < 24) ? pcEnergySlope[wi0] * ae0 : -1.0;
+      double ae1_MeV = (wi1 >= 0 && wi1 < 24) ? pcEnergySlope[wi1] * ae1 : -1.0;
+
+      if (ahi > 0.0)
+      {
+        double aratio = alo / ahi;
+        plotter->Fill1D("A2_anode_ratio_raw", 120, 0, 1.2, aratio, "hGMPC");
+        // plotter->Fill2D("A2_anode_ratio_vs_sum", 800, 0, 40000, 120, 0, 1.2, ae0 + ae1, aratio, "hGMPC");
+        plotter->Fill2D("A1_vs_A2_raw", 800, 0, 40000, 800, 0, 40000, ae0, ae1, "hGMPC");
+        plotter->Fill2D("A2_anode_ratio_vs_lowerIndex", 24, 0, 24, 120, 0, 1.2,
+                        std::min(std::get<0>(aCluster[0]), std::get<0>(aCluster[1])), aratio, "hGMPC");
+      }
+
+      // Calibrated equivalents -- guarded independently since a wire can lack
+      // a valid pcEnergySlope entry even when its raw ADC value is fine.
+      if (ae0_MeV >= 0.0 && ae1_MeV >= 0.0 && std::max(ae0_MeV, ae1_MeV) > 0.0)
+      {
+        double alo_MeV = std::min(ae0_MeV, ae1_MeV);
+        double ahi_MeV = std::max(ae0_MeV, ae1_MeV);
+        double aratio_MeV = alo_MeV / ahi_MeV;
+        plotter->Fill1D("A2_anode_ratio_calib", 120, 0, 1.2, aratio_MeV, "hGMPC");
+        plotter->Fill2D("A1_vs_A2_calib", 800, 0, 0.6, 800, 0, 0.6, ae0_MeV, ae1_MeV, "hGMPC");
+        plotter->Fill2D("A2_anode_ratio_calib_vs_lowerIndex", 24, 0, 24, 120, 0, 1.2,
+                        std::min(wi0, wi1), aratio_MeV, "hGMPC");
+      }
+
+      plotter->Fill1D("Raw_A2_AnodeSum", 800, 0, 40000, ae0 + ae1, "hGMPC");
+    }
+    else if (aCluster.size() == 1)
+    {
+      plotter->Fill1D("Raw_A1_AnodeSum", 800, 0, 40000, std::get<1>(aCluster[0]), "hGMPC");
+    }
+    for (const auto &cCluster : cClusters)
+    {
+      if (aCluster.size() == 0)
+        continue;
+      if (cCluster.size() == 0)
+        continue;
+      // both have at least 1, here. Keep the a1, c1 events
+      auto [crossover, alpha, apSumE, cpSumE, apMaxE, cpMaxE, apTSMaxE, cpTSMaxE] = pwinstance.FindCrossoverProperties(aCluster, cCluster);
+      if (alpha != 9999999 && apSumE != -1)
+      {
+        // Event PCEvent(crossover,apMaxE,cpMaxE,apTSMaxE,cpTSMaxE);
+        // Event PCEvent(crossover,apSumE,cpSumE,apTSMaxE,cpTSMaxE);
+        Event PCEvent(crossover, apSumE, cpMaxE, cpSumE, apTSMaxE, cpTSMaxE); // run12 shows cathode-max and anode-sum provide best dE signals.
+        // std::cout << apSumE << " " << crossover.Perp() << " " << apMaxE << " " << apTSMaxE << std::endl;
+        PCEvent.multi1 = aCluster.size();
+        PCEvent.multi2 = cCluster.size();
+        PCEvent.Anodech = std::get<0>(aCluster[0]);
+        PCEvent.Cathodech = std::get<0>(cCluster[0]);
+        PC_Events.push_back(PCEvent);
+
+        if (pcEnergyCalibLoaded)
+        {
+          Event PCEventCalibrated = PCEvent;
+          PCEventCalibrated.rawEnergy1 = PCEvent.Energy1; // stash BEFORE overwriting -- see rawEnergy1/2 comment on Event
+          PCEventCalibrated.rawEnergy2 = PCEvent.Energy2;
+          double anodeCalibSum = 0.0;
+          for (const auto &w : aCluster)
+          {
+            int wi = std::get<0>(w);
+            if (wi >= 0 && wi < 24)
+              anodeCalibSum += pcEnergySlope[wi] * std::get<1>(w);
+          }
+          PCEventCalibrated.Energy1 = anodeCalibSum;
+          // Cathode uses the single max-energy wire (cpMaxE). That wire is NOT
+          // necessarily cCluster[0], which is all PCEvent.Cathodech records, so
+          // pcEnergySlope[24 + Cathodech] was applying the wrong wire's constant to
+          // cpMaxE for every multi-wire cathode cluster -- i.e. for A1C2, the primary
+          // topology. GetPseudoWire tracks the max energy but not its index, so find
+          // it here rather than change that signature for its five call sites.
+          int cMaxWire = PCEvent.Cathodech;
+          double cMaxE = -1.0;
+          for (const auto &w : cCluster)
+          {
+            if (std::get<1>(w) > cMaxE)
+            {
+              cMaxE = std::get<1>(w);
+              cMaxWire = std::get<0>(w);
+            }
+          }
+          PCEventCalibrated.Energy2 = (cMaxWire >= 0 && cMaxWire < 24)
+                                          ? pcEnergySlope[24 + cMaxWire] * cpMaxE
+                                          : cpMaxE;
+          PC_Events_calibrated.push_back(PCEventCalibrated);
+        }
+      }
+      else
+      {
+        ; // std::cout << "AAAA " << std::endl;
+      }
+    }
+  }
+
+  if (cClusters.empty())
+  {
+    for (const auto &aCl : aClusters)
+    {
+      if (aCl.size() < 1 || aCl.size() > 2) // A1C0 (1 wire) or A2C0 (2 wires) --
+        continue;                           // reaction_ax_core / protonAlphaElastic_core's
+                                            // a1c0 convention, one wire wider for A2C0.
+      if (clusterHasExcludedAnode(aCl))
+        continue;
+      auto aPw = pwinstance.GetPseudoWire(aCl, "ANODE");
+      auto apwire = std::get<0>(aPw);
+      double apSumE = std::get<1>(aPw);
+      double apTSMaxE = std::get<3>(aPw);
+      int anodeIdx = std::get<0>(aCl[0]); // representative wire index (tag/sanity-check only,
+      if (anodeIdx < 0 || anodeIdx >= 24) // not assumed to be "the" wire for A2C0's 2-wire cluster)
+        continue;
+
+      const Event *bestSi = nullptr;
+      bool bestIsQQQ = true;
+      double bestDphi = 1e9;
+      auto consider = [&](const std::vector<Event> &sis, bool isQQQ)
+      {
+        for (const auto &si : sis)
+        {
+          if (!siPcCoincident(si.Time1, apTSMaxE))
+            continue;
+          TVector3 pc = pwinstance.getClosestWirePosAtWirePhi(apwire, si.pos.Phi());
+          double dphi = TMath::Abs(si.pos.DeltaPhi(pc));
+          double phi_win = isQQQ ? TMath::Pi() / 4.0 : TMath::Pi() / 3.0; // per-detector, as elsewhere
+          if (dphi <= phi_win && dphi < bestDphi)
+          {
+            bestDphi = dphi;
+            bestSi = &si;
+            bestIsQQQ = isQQQ;
+          }
+        }
+      };
+      consider(QQQ_Events, true);
+      consider(SX3_Events, false);
+      if (!bestSi)
+        continue;
+
+      bool isA2C0 = (aCl.size() == 2);
+      TVector3 pc = isA2C0 ? a2c0_wirePos(apwire, bestSi->pos.Phi(), bestIsQQQ)
+                           : a1c0_wirePos(apwire, bestSi->pos.Phi(), bestIsQQQ); // same z reference as the benchmark
+
+      Event PCEventRaw(pc, apSumE, -1.0, apTSMaxE, -1.0);
+      PCEventRaw.multi1 = static_cast<int>(aCl.size());
+      PCEventRaw.multi2 = 0;
+      PCEventRaw.Anodech = anodeIdx;
+      PCEventRaw.Cathodech = -1;
+      PC_Events.push_back(PCEventRaw);
 
       if (pcEnergyCalibLoaded)
       {
-        Event PCEventCalibrated = PCEvent;
-        PCEventCalibrated.rawEnergy1 = PCEvent.Energy1; // stash BEFORE overwriting -- see rawEnergy1/2 comment on Event
-        PCEventCalibrated.rawEnergy2 = PCEvent.Energy2;
         double anodeCalibSum = 0.0;
-        for (const auto &w : aCluster)
+        for (const auto &w : aCl)
         {
           int wi = std::get<0>(w);
           if (wi >= 0 && wi < 24)
             anodeCalibSum += pcEnergySlope[wi] * std::get<1>(w);
         }
-        PCEventCalibrated.Energy1 = anodeCalibSum;
-        // Cathode uses the single max-energy wire (cpMaxE). That wire is NOT
-        // necessarily cCluster[0], which is all PCEvent.Cathodech records, so
-        // pcEnergySlope[24 + Cathodech] was applying the wrong wire's constant to
-        // cpMaxE for every multi-wire cathode cluster -- i.e. for A1C2, the primary
-        // topology. GetPseudoWire tracks the max energy but not its index, so find
-        // it here rather than change that signature for its five call sites.
-        int cMaxWire = PCEvent.Cathodech;
-        double cMaxE = -1.0;
-        for (const auto &w : cCluster)
-        {
-          if (std::get<1>(w) > cMaxE)
-          {
-            cMaxE = std::get<1>(w);
-            cMaxWire = std::get<0>(w);
-          }
-        }
-        PCEventCalibrated.Energy2 = (cMaxWire >= 0 && cMaxWire < 24)
-                                        ? pcEnergySlope[24 + cMaxWire] * cpMaxE
-                                        : cpMaxE;
-        PC_Events_calibrated.push_back(PCEventCalibrated);
+        Event ev(pc, anodeCalibSum, -1.0, apTSMaxE, -1.0);
+        ev.multi1 = static_cast<int>(aCl.size());
+        ev.multi2 = 0; // no cathode -> a1c0/a2c0 topology in pcCalibratedHistograms
+        ev.Anodech = anodeIdx;
+        ev.Cathodech = -1;
+        PC_Events_calibrated.push_back(ev);
       }
     }
-    else
-    {
-      ; // std::cout << "AAAA " << std::endl;
-    }
   }
-}
 
-if (cClusters.empty())
-{
-  for (const auto &aCl : aClusters)
+  if (doPCEnergyCalibration)
   {
-    if (aCl.size() < 1 || aCl.size() > 2) // A1C0 (1 wire) or A2C0 (2 wires) --
-      continue;                           // reaction_ax_core / protonAlphaElastic_core's
-                                          // a1c0 convention, one wire wider for A2C0.
-    if (clusterHasExcludedAnode(aCl))
-      continue;
-    auto aPw = pwinstance.GetPseudoWire(aCl, "ANODE");
-    auto apwire = std::get<0>(aPw);
-    double apSumE = std::get<1>(aPw);
-    double apTSMaxE = std::get<3>(aPw);
-    int anodeIdx = std::get<0>(aCl[0]); // representative wire index (tag/sanity-check only,
-    if (anodeIdx < 0 || anodeIdx >= 24) // not assumed to be "the" wire for A2C0's 2-wire cluster)
-      continue;
+    pcEnergyCalibrationAccumulate(PC_Events, QQQ_Events, SX3_Events);
+    pcEnergyCalibrationAccumulateProton(PC_Events, QQQ_Events, SX3_Events);
+  }
 
-    const Event *bestSi = nullptr;
-    bool bestIsQQQ = true;
-    double bestDphi = 1e9;
-    auto consider = [&](const std::vector<Event> &sis, bool isQQQ)
+  //////Timing stuff for F data
+
+  TRandom3 &rnd = anasenRandom;
+  double dt_rf_mcp_event = -987654321;
+  double ts_rf_event = -987654321, ts_mcp_event = -987654321;
+  {
+    for (int j = 0; j < misc.multi; j++)
     {
-      for (const auto &si : sis)
+      if (misc.ch[j] == 3)
+        ts_rf_event = static_cast<double>(misc.t[j]) + static_cast<double>(misc.tf[j]);
+      if (misc.ch[j] == 4)
+        ts_mcp_event = static_cast<double>(misc.t[j]) + static_cast<double>(misc.tf[j]);
+    }
+    if (ts_rf_event > -987654321 && ts_mcp_event > -987654321)
+      dt_rf_mcp_event = ts_rf_event - ts_mcp_event;
+  }
+  if (dataset == "17F" && reactiondata)
+  {
+    // misc.ch is a property of the event, not of any Si hit -- filled inside the
+    // per-QQQ and per-SX3 loops it was multiplied by the Si multiplicity.
+    for (int j = 0; j < misc.multi; j++)
+    {
+      if (QQQ_Events.size())
+        plotter->Fill1D("channels_misc_qqq", 20, -0.5, 19.5, misc.ch[j], "misc");
+      if (SX3_Events.size())
+        plotter->Fill1D("channels_misc_sx3", 20, -0.5, 19.5, misc.ch[j], "misc");
+    }
+
+    int ctr = 0;
+    for (const auto &qqqevent : QQQ_Events)
+    {
+      double ts_rf = -987654321;
+      double ts_needle = -987654321;
+      double ts_mcp = -987654321;
+      // Time1 already carries the +/-8 clock dither applied when the QQQ Event was
+      // built (tRing), so re-dithering here widened this folder's timing by sqrt(2)
+      // relative to every other timing plot in the analysis.
+      double ts_qqq = static_cast<double>(qqqevent.Time1);
+      bool found_rf = false;
+      bool found_mcp = false;
+      bool found_needle = false;
+      bool qqq_inner_ring = (qqqevent.ch1 % 16) < 8;
+      for (int j = 0; j < misc.multi; j++)
       {
-        if (!siPcCoincident(si.Time1, apTSMaxE))
-          continue;
-        TVector3 pc = pwinstance.getClosestWirePosAtWirePhi(apwire, si.pos.Phi());
-        double dphi = TMath::Abs(si.pos.DeltaPhi(pc));
-        double phi_win = isQQQ ? TMath::Pi() / 4.0 : TMath::Pi() / 3.0; // per-detector, as elsewhere
-        if (dphi <= phi_win && dphi < bestDphi)
-        {
-          bestDphi = dphi;
-          bestSi = &si;
-          bestIsQQQ = isQQQ;
+        if (misc.ch[j] == 2)
+        { // Needle
+          plotter->Fill2D("needle_vs_qqqE", 800, 0, 16384, 800, 0, 10, misc.e[j], qqqevent.Energy1, "misc");
+          ts_needle = static_cast<double>(misc.t[j]) + static_cast<double>(misc.tf[j]);
+          found_needle = 1;
+          plotter->Fill1D("dt_qqq_needle", 800, -2000, 2000, ts_qqq - ts_needle, "misc");
+        }
+        if (misc.ch[j] == 3)
+        { // RF
+          ts_rf = static_cast<double>(misc.t[j]) + static_cast<double>(misc.tf[j]);
+          found_rf = 1;
+          plotter->Fill1D("dt_qqq_rf_innerring" + std::to_string(qqq_inner_ring), 800, -2000, 2000, ts_qqq - ts_rf, "misc");
+        }
+        if (misc.ch[j] == 4)
+        { // mcp
+          ts_mcp = static_cast<double>(misc.t[j]) + static_cast<double>(misc.tf[j]);
+          found_mcp = 1;
+          plotter->Fill1D("dt_qqq_mcp_innerring" + std::to_string(qqq_inner_ring), 800, -2000, 2000, ts_qqq - ts_mcp, "misc");
         }
       }
-    };
-    consider(QQQ_Events, true);
-    consider(SX3_Events, false);
-    if (!bestSi)
-      continue;
-
-    bool isA2C0 = (aCl.size() == 2);
-    TVector3 pc = isA2C0 ? a2c0_wirePos(apwire, bestSi->pos.Phi(), bestIsQQQ)
-                         : a1c0_wirePos(apwire, bestSi->pos.Phi(), bestIsQQQ); // same z reference as the benchmark
-
-    Event PCEventRaw(pc, apSumE, -1.0, apTSMaxE, -1.0);
-    PCEventRaw.multi1 = static_cast<int>(aCl.size());
-    PCEventRaw.multi2 = 0;
-    PCEventRaw.Anodech = anodeIdx;
-    PCEventRaw.Cathodech = -1;
-    PC_Events.push_back(PCEventRaw);
-
-    if (pcEnergyCalibLoaded)
-    {
-      double anodeCalibSum = 0.0;
-      for (const auto &w : aCl)
+      if (found_rf && found_mcp)
       {
-        int wi = std::get<0>(w);
-        if (wi >= 0 && wi < 24)
-          anodeCalibSum += pcEnergySlope[wi] * std::get<1>(w);
+        if (ctr == 0)
+          plotter->Fill1D("dt_rf_mcp_qqq_innerring" + std::to_string(qqq_inner_ring), 500, -1000, 1000, ts_rf - ts_mcp, "misc");
+        double dt_rf_mcp = ts_rf - ts_mcp;
+        double dt_qqq_rf = ts_qqq - ts_rf;
+        double dt_qqq_mcp = ts_qqq - ts_mcp;
+        plotter->Fill2D("dt(qqq,rf)_vs_(rf,mcp)_innerring" + std::to_string(qqq_inner_ring), 800, -2000, 2000, 640, -2000, 2000, dt_qqq_rf, dt_rf_mcp, "misc");
+        plotter->Fill2D("dt_(qqq,mcp)_vs_(qqq,rf)_innerring" + std::to_string(qqq_inner_ring), 800, -1400, 2000, 640, -2000, 2000, dt_qqq_mcp, dt_qqq_rf, "misc");
+        plotter->Fill2D("dt_(qqq,mcp)_vs_(rf,mcp)_innerring" + std::to_string(qqq_inner_ring), 1000, -1400, 1000, 640, -2000, 2000, dt_qqq_mcp, dt_rf_mcp, "misc");
       }
-      Event ev(pc, anodeCalibSum, -1.0, apTSMaxE, -1.0);
-      ev.multi1 = static_cast<int>(aCl.size());
-      ev.multi2 = 0; // no cathode -> a1c0/a2c0 topology in pcCalibratedHistograms
-      ev.Anodech = anodeIdx;
-      ev.Cathodech = -1;
-      PC_Events_calibrated.push_back(ev);
+      ctr += 1;
+    }
+
+    for (const auto &sx3event : SX3_Events)
+    {
+      double ts_rf = -987654321;
+      double ts_needle = -987654321;
+      double ts_mcp = -987654321;
+      // as with ts_qqq: det.ts was already dithered when the SX3 Event was built
+      double ts_sx3 = static_cast<double>(sx3event.Time1);
+      bool found_rf = false;
+      bool found_mcp = false;
+      bool found_needle = false;
+      for (int j = 0; j < misc.multi; j++)
+      {
+        if (misc.ch[j] == 2)
+        { // Needle
+          plotter->Fill2D("needle_vs_sx3E", 800, 0, 16384, 800, 0, 10, misc.e[j], sx3event.Energy1, "misc");
+          ts_needle = static_cast<double>(misc.t[j]) + static_cast<double>(misc.tf[j]);
+          found_needle = 1;
+          plotter->Fill1D("dt_sx3_needle", 800, -2000, 2000, ts_sx3 - ts_needle, "misc");
+        }
+        if (misc.ch[j] == 3)
+        { // RF
+          ts_rf = static_cast<double>(misc.t[j]) + static_cast<double>(misc.tf[j]);
+          found_rf = 1;
+          plotter->Fill1D("dt_sx3_rf", 800, -2000, 2000, ts_sx3 - ts_rf, "misc");
+        }
+        if (misc.ch[j] == 4)
+        { // mcp
+          ts_mcp = static_cast<double>(misc.t[j]) + static_cast<double>(misc.tf[j]);
+          found_mcp = 1;
+          plotter->Fill1D("dt_sx3_mcp", 800, -2000, 2000, ts_sx3 - ts_mcp, "misc");
+        }
+      }
+      if (found_rf && found_mcp)
+      {
+        if (ctr == 0)
+          plotter->Fill1D("dt_rf_mcp_sx3", 500, -1000, 1000, ts_rf - ts_mcp, "misc");
+        double dt_rf_mcp = ts_rf - ts_mcp;
+        double dt_sx3_rf = ts_sx3 - ts_rf;
+        double dt_sx3_mcp = ts_sx3 - ts_mcp;
+        plotter->Fill2D("dt(sx3,rf)_vs_(rf,mcp)", 800, -2000, 2000, 640, -2000, 2000, dt_sx3_rf, dt_rf_mcp, "misc");
+        plotter->Fill2D("dt_(sx3,mcp)_vs_(sx3,rf)", 800, -1400, 2000, 640, -2000, 2000, dt_sx3_mcp, dt_sx3_rf, "misc");
+        plotter->Fill2D("dt_(sx3,mcp)_vs_(rf,mcp)", 1000, -1400, 1000, 640, -2000, 2000, dt_sx3_mcp, dt_rf_mcp, "misc");
+      }
+      ctr += 1;
     }
   }
-}
 
-if (doPCEnergyCalibration)
-{
-  pcEnergyCalibrationAccumulate(PC_Events, QQQ_Events, SX3_Events);
-  pcEnergyCalibrationAccumulateProton(PC_Events, QQQ_Events, SX3_Events);
-}
-
-//////Timing stuff for F data
-
-TRandom3 &rnd = anasenRandom;
-double dt_rf_mcp_event = -987654321;
-double ts_rf_event = -987654321, ts_mcp_event = -987654321;
-{
-  for (int j = 0; j < misc.multi; j++)
+  if (process_alpha_proton_scattering)
   {
-    if (misc.ch[j] == 3)
-      ts_rf_event = static_cast<double>(misc.t[j]) + static_cast<double>(misc.tf[j]);
-    if (misc.ch[j] == 4)
-      ts_mcp_event = static_cast<double>(misc.t[j]) + static_cast<double>(misc.tf[j]);
-  }
-  if (ts_rf_event > -987654321 && ts_mcp_event > -987654321)
-    dt_rf_mcp_event = ts_rf_event - ts_mcp_event;
-}
-if (dataset == "17F" && reactiondata)
-{
-  // misc.ch is a property of the event, not of any Si hit -- filled inside the
-  // per-QQQ and per-SX3 loops it was multiplied by the Si multiplicity.
-  for (int j = 0; j < misc.multi; j++)
-  {
-    if (QQQ_Events.size())
-      plotter->Fill1D("channels_misc_qqq", 20, -0.5, 19.5, misc.ch[j], "misc");
-    if (SX3_Events.size())
-      plotter->Fill1D("channels_misc_sx3", 20, -0.5, 19.5, misc.ch[j], "misc");
-  }
+    protonAlphaHistograms(plotter, QQQ_Events, SX3_Events, PC_Events);
+    // return kTRUE;
+  } // end if(process_alpha_proton_scattering)
 
-  int ctr = 0;
+  if (pcEnergyCalibLoaded)
+    pcCalibratedHistograms(plotter, QQQ_Events, SX3_Events, PC_Events_calibrated);
+
+  a1c1CalibDiagnostic(plotter, PC_Events);                            // <-- new, unconditional
+  pcVertexByWireGeometry(plotter, QQQ_Events, SX3_Events, PC_Events); // <-- new, unconditional
+
+  // phi_win matches every other Si-PC match in this file: SX3 sits at a longer lever
+  // arm (rho ~88mm vs the PC anode at 37mm) than QQQ, so its true phi spread is wider
+  // -- pi/4 for both detectors under-counted real SX3-PC coincidences. Also gated on
+  // siPcCoincident(): this used to be the one Si-PC match in the file with a phi
+  // window but no time gate, so "withPC" included phi-aligned but time-accidental
+  // pairs.
+  auto hasPCCoincidence = [&](const Event &sievent, bool isQQQ)
+  {
+    double phi_win = isQQQ ? TMath::Pi() / 4.0 : TMath::Pi() / 3.0;
+    for (const auto &pcevent : PC_Events)
+    {
+      if (pcevent.multi1 < 1)
+        continue;
+      if (!siPcCoincident(sievent.Time1, pcevent.Time1))
+        continue;
+      if (TMath::Abs(sievent.pos.DeltaPhi(pcevent.pos)) <= phi_win)
+        return true;
+    }
+    return false;
+  };
   for (const auto &qqqevent : QQQ_Events)
   {
-    double ts_rf = -987654321;
-    double ts_needle = -987654321;
-    double ts_mcp = -987654321;
-    // Time1 already carries the +/-8 clock dither applied when the QQQ Event was
-    // built (tRing), so re-dithering here widened this folder's timing by sqrt(2)
-    // relative to every other timing plot in the analysis.
-    double ts_qqq = static_cast<double>(qqqevent.Time1);
-    bool found_rf = false;
-    bool found_mcp = false;
-    bool found_needle = false;
-    bool qqq_inner_ring = (qqqevent.ch1 % 16) < 8;
-    for (int j = 0; j < misc.multi; j++)
-    {
-      if (misc.ch[j] == 2)
-      { // Needle
-        plotter->Fill2D("needle_vs_qqqE", 800, 0, 16384, 800, 0, 10, misc.e[j], qqqevent.Energy1, "misc");
-        ts_needle = static_cast<double>(misc.t[j]) + static_cast<double>(misc.tf[j]);
-        found_needle = 1;
-        plotter->Fill1D("dt_qqq_needle", 800, -2000, 2000, ts_qqq - ts_needle, "misc");
-      }
-      if (misc.ch[j] == 3)
-      { // RF
-        ts_rf = static_cast<double>(misc.t[j]) + static_cast<double>(misc.tf[j]);
-        found_rf = 1;
-        plotter->Fill1D("dt_qqq_rf_innerring" + std::to_string(qqq_inner_ring), 800, -2000, 2000, ts_qqq - ts_rf, "misc");
-      }
-      if (misc.ch[j] == 4)
-      { // mcp
-        ts_mcp = static_cast<double>(misc.t[j]) + static_cast<double>(misc.tf[j]);
-        found_mcp = 1;
-        plotter->Fill1D("dt_qqq_mcp_innerring" + std::to_string(qqq_inner_ring), 800, -2000, 2000, ts_qqq - ts_mcp, "misc");
-      }
-    }
-    if (found_rf && found_mcp)
-    {
-      if (ctr == 0)
-        plotter->Fill1D("dt_rf_mcp_qqq_innerring" + std::to_string(qqq_inner_ring), 500, -1000, 1000, ts_rf - ts_mcp, "misc");
-      double dt_rf_mcp = ts_rf - ts_mcp;
-      double dt_qqq_rf = ts_qqq - ts_rf;
-      double dt_qqq_mcp = ts_qqq - ts_mcp;
-      plotter->Fill2D("dt(qqq,rf)_vs_(rf,mcp)_innerring" + std::to_string(qqq_inner_ring), 800, -2000, 2000, 640, -2000, 2000, dt_qqq_rf, dt_rf_mcp, "misc");
-      plotter->Fill2D("dt_(qqq,mcp)_vs_(qqq,rf)_innerring" + std::to_string(qqq_inner_ring), 800, -1400, 2000, 640, -2000, 2000, dt_qqq_mcp, dt_qqq_rf, "misc");
-      plotter->Fill2D("dt_(qqq,mcp)_vs_(rf,mcp)_innerring" + std::to_string(qqq_inner_ring), 1000, -1400, 1000, 640, -2000, 2000, dt_qqq_mcp, dt_rf_mcp, "misc");
-    }
-    ctr += 1;
+    plotter->Fill1D("siE_qqq_calibrated_all", 800, 0, 15, qqqevent.Energy1, "siE");
+    bool coinc = hasPCCoincidence(qqqevent, true);
+    plotter->Fill1D(coinc ? "siE_qqq_calibrated_withPC" : "siE_qqq_calibrated_noPC", 800, 0, 15, qqqevent.Energy1, "siE");
   }
-
   for (const auto &sx3event : SX3_Events)
   {
-    double ts_rf = -987654321;
-    double ts_needle = -987654321;
-    double ts_mcp = -987654321;
-    // as with ts_qqq: det.ts was already dithered when the SX3 Event was built
-    double ts_sx3 = static_cast<double>(sx3event.Time1);
-    bool found_rf = false;
-    bool found_mcp = false;
-    bool found_needle = false;
-    for (int j = 0; j < misc.multi; j++)
-    {
-      if (misc.ch[j] == 2)
-      { // Needle
-        plotter->Fill2D("needle_vs_sx3E", 800, 0, 16384, 800, 0, 10, misc.e[j], sx3event.Energy1, "misc");
-        ts_needle = static_cast<double>(misc.t[j]) + static_cast<double>(misc.tf[j]);
-        found_needle = 1;
-        plotter->Fill1D("dt_sx3_needle", 800, -2000, 2000, ts_sx3 - ts_needle, "misc");
-      }
-      if (misc.ch[j] == 3)
-      { // RF
-        ts_rf = static_cast<double>(misc.t[j]) + static_cast<double>(misc.tf[j]);
-        found_rf = 1;
-        plotter->Fill1D("dt_sx3_rf", 800, -2000, 2000, ts_sx3 - ts_rf, "misc");
-      }
-      if (misc.ch[j] == 4)
-      { // mcp
-        ts_mcp = static_cast<double>(misc.t[j]) + static_cast<double>(misc.tf[j]);
-        found_mcp = 1;
-        plotter->Fill1D("dt_sx3_mcp", 800, -2000, 2000, ts_sx3 - ts_mcp, "misc");
-      }
-    }
-    if (found_rf && found_mcp)
-    {
-      if (ctr == 0)
-        plotter->Fill1D("dt_rf_mcp_sx3", 500, -1000, 1000, ts_rf - ts_mcp, "misc");
-      double dt_rf_mcp = ts_rf - ts_mcp;
-      double dt_sx3_rf = ts_sx3 - ts_rf;
-      double dt_sx3_mcp = ts_sx3 - ts_mcp;
-      plotter->Fill2D("dt(sx3,rf)_vs_(rf,mcp)", 800, -2000, 2000, 640, -2000, 2000, dt_sx3_rf, dt_rf_mcp, "misc");
-      plotter->Fill2D("dt_(sx3,mcp)_vs_(sx3,rf)", 800, -1400, 2000, 640, -2000, 2000, dt_sx3_mcp, dt_sx3_rf, "misc");
-      plotter->Fill2D("dt_(sx3,mcp)_vs_(rf,mcp)", 1000, -1400, 1000, 640, -2000, 2000, dt_sx3_mcp, dt_rf_mcp, "misc");
-    }
-    ctr += 1;
+    plotter->Fill1D("siE_sx3_calibrated_all", 800, 0, 15, sx3event.Energy1, "siE");
+    bool coinc = hasPCCoincidence(sx3event, false);
+    plotter->Fill1D(coinc ? "siE_sx3_calibrated_withPC" : "siE_sx3_calibrated_noPC", 800, 0, 15, sx3event.Energy1, "siE");
   }
-}
 
-if (process_alpha_proton_scattering)
-{
-  protonAlphaHistograms(plotter, QQQ_Events, SX3_Events, PC_Events);
+  if (doMiscHistograms && ta_foil_run)
+  {
+    // det, si_ecut, perp_cut, phi_win -- identical per-detector cuts to the
+    // m17Fax/m27Alax reaction_ax_core calls below, by design. a1c0/a2c0 (the
+    // former miscHistograms_oneWire) is folded in here now, gated on
+    // onewire_analysis internally.
+    protonAlphaElastic_core(plotter, QQQ_Events, PC_Events, aClusters, true, "QQQ", 0.4, 6.0, TMath::Pi() / 4.0, 6.88);
+    protonAlphaElastic_core(plotter, SX3_Events, PC_Events, aClusters, false, "SX3", 0.5, 10.0, TMath::Pi() / 3.0, 6.88);
+  }
+
+  if (reactiondata)
+  {
+    if (dataset == "17F")
+      miscHistograms_17Fax(plotter, QQQ_Events, SX3_Events, PC_Events, aClusters, "", dt_rf_mcp_event, ts_rf_event, ts_mcp_event);
+    if (dataset == "27Al")
+      miscHistograms_27Alax(plotter, QQQ_Events, SX3_Events, PC_Events, aClusters);
+  }
   // return kTRUE;
-} // end if(process_alpha_proton_scattering)
 
-if (pcEnergyCalibLoaded)
-  pcCalibratedHistograms(plotter, QQQ_Events, SX3_Events, PC_Events_calibrated);
-
-a1c1CalibDiagnostic(plotter, PC_Events);                            // <-- new, unconditional
-pcVertexByWireGeometry(plotter, QQQ_Events, SX3_Events, PC_Events); // <-- new, unconditional
-
-// phi_win matches every other Si-PC match in this file: SX3 sits at a longer lever
-// arm (rho ~88mm vs the PC anode at 37mm) than QQQ, so its true phi spread is wider
-// -- pi/4 for both detectors under-counted real SX3-PC coincidences. Also gated on
-// siPcCoincident(): this used to be the one Si-PC match in the file with a phi
-// window but no time gate, so "withPC" included phi-aligned but time-accidental
-// pairs.
-auto hasPCCoincidence = [&](const Event &sievent, bool isQQQ)
-{
-  double phi_win = isQQQ ? TMath::Pi() / 4.0 : TMath::Pi() / 3.0;
-  for (const auto &pcevent : PC_Events)
+  if (doRawHistos)
   {
-    if (pcevent.multi1 < 1)
-      continue;
-    if (!siPcCoincident(sievent.Time1, pcevent.Time1))
-      continue;
-    if (TMath::Abs(sievent.pos.DeltaPhi(pcevent.pos)) <= phi_win)
-      return true;
+    if (QQQ_Events.size() && PC_Events.size())
+      plotter->Fill2D("PCEv_vs_QQQEv", 20, 0, 20, 20, 0, 20, QQQ_Events.size(), PC_Events.size());
+
+    plotter->Fill2D("ac_vs_cc", 20, 0, 20, 20, 0, 20, aClusters.size(), cClusters.size(), "wiremult");
+    for (const auto &cluster : aClusters)
+    {
+      plotter->Fill1D("aClusters" + std::to_string(aClusters.size()), 20, -0.5, 19.5, cluster.size(), "wiremult");
+    }
+    for (const auto &cluster : cClusters)
+    {
+      plotter->Fill1D("cClusters" + std::to_string(cClusters.size()), 20, -0.5, 19.5, cluster.size(), "wiremult");
+    }
+
+    if (cClusters.size() && aClusters.size())
+    {
+      plotter->Fill2D("ac_vs_cc_ign0", 20, 0, 20, 20, 0, 20, aClusters.size(), cClusters.size(), "wiremult");
+    }
   }
-  return false;
-};
-for (const auto &qqqevent : QQQ_Events)
-{
-  plotter->Fill1D("siE_qqq_calibrated_all", 800, 0, 15, qqqevent.Energy1, "siE");
-  bool coinc = hasPCCoincidence(qqqevent, true);
-  plotter->Fill1D(coinc ? "siE_qqq_calibrated_withPC" : "siE_qqq_calibrated_noPC", 800, 0, 15, qqqevent.Energy1, "siE");
-}
-for (const auto &sx3event : SX3_Events)
-{
-  plotter->Fill1D("siE_sx3_calibrated_all", 800, 0, 15, sx3event.Energy1, "siE");
-  bool coinc = hasPCCoincidence(sx3event, false);
-  plotter->Fill1D(coinc ? "siE_sx3_calibrated_withPC" : "siE_sx3_calibrated_noPC", 800, 0, 15, sx3event.Energy1, "siE");
-}
-
-if (doMiscHistograms && ta_foil_run)
-{
-  // det, si_ecut, perp_cut, phi_win -- identical per-detector cuts to the
-  // m17Fax/m27Alax reaction_ax_core calls below, by design. a1c0/a2c0 (the
-  // former miscHistograms_oneWire) is folded in here now, gated on
-  // onewire_analysis internally.
-  protonAlphaElastic_core(plotter, QQQ_Events, PC_Events, aClusters, true, "QQQ", 0.4, 6.0, TMath::Pi() / 4.0, 6.88);
-  protonAlphaElastic_core(plotter, SX3_Events, PC_Events, aClusters, false, "SX3", 0.5, 10.0, TMath::Pi() / 3.0, 6.88);
-}
-
-if (reactiondata)
-{
-  if (dataset == "17F")
-    miscHistograms_17Fax(plotter, QQQ_Events, SX3_Events, PC_Events, aClusters, "", dt_rf_mcp_event, ts_rf_event, ts_mcp_event);
-  if (dataset == "27Al")
-    miscHistograms_27Alax(plotter, QQQ_Events, SX3_Events, PC_Events, aClusters);
-}
-// return kTRUE;
-
-if (doRawHistos)
-{
-  if (QQQ_Events.size() && PC_Events.size())
-    plotter->Fill2D("PCEv_vs_QQQEv", 20, 0, 20, 20, 0, 20, QQQ_Events.size(), PC_Events.size());
-
-  plotter->Fill2D("ac_vs_cc", 20, 0, 20, 20, 0, 20, aClusters.size(), cClusters.size(), "wiremult");
-  for (const auto &cluster : aClusters)
+  if (doPCSX3ClusterAnalysis)
   {
-    plotter->Fill1D("aClusters" + std::to_string(aClusters.size()), 20, -0.5, 19.5, cluster.size(), "wiremult");
+    PCSX3ClusterAnalysis(plotter, QQQ_Events, SX3_Events, PC_Events, aClusters, cClusters);
   }
-  for (const auto &cluster : cClusters)
+  if (doPCQQQClusterAnalysis)
   {
-    plotter->Fill1D("cClusters" + std::to_string(cClusters.size()), 20, -0.5, 19.5, cluster.size(), "wiremult");
+    PCQQQClusterAnalysis(plotter, QQQ_Events, SX3_Events, PC_Events, aClusters, cClusters);
   }
 
-  if (cClusters.size() && aClusters.size())
-  {
-    plotter->Fill2D("ac_vs_cc_ign0", 20, 0, 20, 20, 0, 20, aClusters.size(), cClusters.size(), "wiremult");
-  }
-}
-if (doPCSX3ClusterAnalysis)
-{
-  PCSX3ClusterAnalysis(plotter, QQQ_Events, SX3_Events, PC_Events, aClusters, cClusters);
-}
-if (doPCQQQClusterAnalysis)
-{
-  PCQQQClusterAnalysis(plotter, QQQ_Events, SX3_Events, PC_Events, aClusters, cClusters);
-}
-
-if (doOldAnalysis)
-  OldAnalysis();
-return kTRUE;
+  if (doOldAnalysis)
+    OldAnalysis();
+  return kTRUE;
 }
 
 void TrackRecon::Terminate()
