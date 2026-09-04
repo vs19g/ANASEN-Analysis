@@ -45,7 +45,7 @@ bool process_alpha_proton_scattering = false,
      doPCSX3ClusterAnalysis = true,
      doPCQQQClusterAnalysis = true,
      doOldAnalysis = false,
-     BenchMark = false,
+     BenchMark = true,
      onewire_analysis = true,
      diagnostic_eplots = false,
      diagnostic_tplots = true,
@@ -3605,7 +3605,15 @@ void protonAlphaElastic_core(HistPlotter *plotter, const std::vector<Event> &Si_
 
       auto fillHypothesis = [&](bool alphaHyp)
       {
-        const std::string ejtag = (alphaHyp && sievent.Energy1 < 5) ? "_a" : "_p";
+        // const std::string ejtag = (alphaHyp && sievent.Energy1 < 5) ? "_a" : "_p";
+        std::string ejtag;
+        if (alphaHyp && sievent.Energy1 < 5)
+          ejtag = "_a";
+        else if (sievent.Energy1 >= 6.4 && sievent.Energy1 < 7.0)
+          ejtag = "_p";
+        else
+          ejtag = "_maybep";
+
         std::string pmlabel = misclabel + ejtag;
         TSpline3 *ej_fwd = alphaHyp ? MeV_to_cm_spl : MeV_to_cm_p_spl;
         TSpline3 *ej_inv = alphaHyp ? cm_to_MeV_spl : cm_to_MeVp_spl;
@@ -3684,9 +3692,9 @@ void protonAlphaElastic_core(HistPlotter *plotter, const std::vector<Event> &Si_
         }
       };
 
-      if (pid != SiPcPid::kAlpha)
+      if (pid != SiPcPid::kAlpha && sievent.Energy1 >= 6.4 && sievent.Energy1 < 7.0)
         fillHypothesis(false); // proton, or PID unavailable (legacy default)
-      if (pid == SiPcPid::kAlpha)
+      if (pid == SiPcPid::kAlpha && sievent.Energy1 < 6.2)
         fillHypothesis(true);
     };
 
@@ -3964,8 +3972,6 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
 
       plotter->Fill2D(rx + "_BeamEnergy_vs_VertexZ" + sfx, 800, -400, 400, 400, 0, beamE0, vertex_z, beam_energy_at_vertex, folderPrefix + globaltag + "_" + rx + "+misc_" + det);
 
-      bool trueProton = (beam_energy_at_vertex < 10.0);
-
       double ex_as_proton = 0.0, ex_as_alpha = 0.0;
       auto fillHypothesis = [&](double m3, double m4, TSpline3 *ej_fwd, TSpline3 *ej_inv, const std::string &ejtag)
       {
@@ -4016,28 +4022,25 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
           if (ebeam_kin_MeV > 0.0)
             plotter->Fill2D(rx + "_BeamEnergy_ETrack_vs_EKin" + ejtag + t + sfx, 400, 0, beamE0 * 1.5, 400, 0, beamE0 * 1.5,
                             beam_energy_at_vertex, ebeam_kin_MeV, pmlabel);
-          if (ejtag == "_p")
+
+          if (beam_energy_at_vertex > 4.0 && beam_energy_at_vertex <= 12.0)
           {
-            // if (beam_energy_at_vertex < 4.0 && beam_energy_at_vertex > 0.1)
+            plotter->Fill2D(rx + "_EKin-ETrack2235keV_vs_phi" + ejtag + t + sfx, 45, -180, 180, 600, -20, 40, phi * 180 / M_PI, ebeam_kin_2235keV - beam_energy_at_vertex, pmlabel);
+          }
+          if (ejtag == "_p" && rx == "m27Alax")
+          {
             plotter->Fill2D(rx + "_ETrack_vs_EKinGS" + ejtag + t + sfx, 400, 0, beamE0 * 1.5, 400, 0, beamE0 * 1.5,
                             beam_energy_at_vertex, ebeam_kin_GS, folderPrefix + "ETrackvsKin_assumed");
-            // else if (beam_energy_at_vertex <= 12.0)
             plotter->Fill2D(rx + "_ETrack_vs_EKin2235keV" + ejtag + t + sfx, 400, 0, beamE0 * 1.5, 400, 0, beamE0 * 1.5,
                             beam_energy_at_vertex, ebeam_kin_2235keV, folderPrefix + "ETrackvsKin_assumed");
-            // else if (beam_energy_at_vertex < 24.0)
-            {
-              plotter->Fill2D(rx + "_ETrack_vs_EKin3498keV" + ejtag + t + sfx, 400, 0, beamE0 * 1.5, 400, 0, beamE0 * 1.5,
-                              beam_energy_at_vertex, ebeam_kin_3498keV, folderPrefix + "ETrackvsKin_assumed");
-              plotter->Fill2D(rx + "_ETrack_vs_EKin3774keV" + ejtag + t + sfx, 400, 0, beamE0 * 1.5, 400, 0, beamE0 * 1.5,
-                              beam_energy_at_vertex, ebeam_kin_3774keV, folderPrefix + "ETrackvsKin_assumed");
-            }
-            // else if (beam_energy_at_vertex <= 36.00)
+            plotter->Fill2D(rx + "_ETrack_vs_EKin3498keV" + ejtag + t + sfx, 400, 0, beamE0 * 1.5, 400, 0, beamE0 * 1.5,
+                            beam_energy_at_vertex, ebeam_kin_3498keV, folderPrefix + "ETrackvsKin_assumed");
+            plotter->Fill2D(rx + "_ETrack_vs_EKin3774keV" + ejtag + t + sfx, 400, 0, beamE0 * 1.5, 400, 0, beamE0 * 1.5,
+                            beam_energy_at_vertex, ebeam_kin_3774keV, folderPrefix + "ETrackvsKin_assumed");
             plotter->Fill2D(rx + "_ETrack_vs_EKin4809keV" + ejtag + t + sfx, 400, 0, beamE0 * 1.5, 400, 0, beamE0 * 1.5,
                             beam_energy_at_vertex, ebeam_kin_4809keV, folderPrefix + "ETrackvsKin_assumed");
-            // else if (beam_energy_at_vertex < 42.0)
             plotter->Fill2D(rx + "_ETrack_vs_EKin5614keV" + ejtag + t + sfx, 400, 0, beamE0 * 1.5, 400, 0, beamE0 * 1.5,
                             beam_energy_at_vertex, ebeam_kin_5614keV, folderPrefix + "ETrackvsKin_assumed");
-            // else
             plotter->Fill2D(rx + "_ETrack_vs_EKin6550keV" + ejtag + t + sfx, 400, 0, beamE0 * 1.5, 400, 0, beamE0 * 1.5,
                             beam_energy_at_vertex, ebeam_kin_6550keV, folderPrefix + "ETrackvsKin_assumed");
           }
@@ -4045,7 +4048,6 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
 
         plotter->Fill2D(rx + "_dE_E_Anode" + sfx, 400, 0, dEa_max, 800, 0, 40000, sievent.Energy1, anodeE, pmlabel);
 
-        plotter->Fill2D(rx + "_dE_E_Anode" + sfx + "_E<10MeV" + std::to_string(beam_energy_at_vertex < 10), 400, 0, dEa_max, 800, 0, 40000, sievent.Energy1, anodeE, pmlabel);
         if (cathodeE >= 0.0)
         {
           plotter->Fill2D(rx + "_dE_E_Cathode" + sfx, 400, 0, dEa_max, 800, 0, dEc_max, sievent.Energy1, cathodeE, pmlabel);
@@ -4055,7 +4057,7 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
         }
         plotter->Fill1D(rx + "_pczfix" + sfx, 600, -300, 300, pcz_fix, pmlabel);
         plotter->Fill2D(rx + "_Ef_vs_theta" + ejtag + sfx, 100, 0, 180, 800, 0, ef_max, theta * 180 / M_PI, Efix, pmlabel);
-        plotter->Fill2D(rx + "_Ex_vs_phi" + ejtag + sfx, 180, -180, 180, 600, -10, 20, phi * 180 / M_PI, Ex, pmlabel);
+        plotter->Fill2D(rx + "_Ex_vs_phi" + ejtag + sfx, 45, -180, 180, 600, -10, 20, phi * 180 / M_PI, Ex, pmlabel);
 
         for (const auto &pcevent : PC_Events)
         {
@@ -4065,6 +4067,7 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
             continue;
           plotter->Fill2D(rx + "_Ex_vs_dT" + ejtag + sfx, 500, -2000, 2000, 600, -10, 20, (sievent.Time1 - pcevent.Time1), Ex, pmlabel);
           plotter->Fill2D(rx + "_dEgasCalib_vs_dT" + ejtag + sfx, 500, -2000, 2000, 800, 0, 0.6, (sievent.Time1 - pcevent.Time1), anodeE_MeV, pmlabel);
+          plotter->Fill2D(rx + "_dEgasCalibCathode_vs_dT" + ejtag + sfx, 500, -2000, 2000, 800, 0, 0.6, (sievent.Time1 - pcevent.Time1), cathodeE_MeV, pmlabel);
         }
 
         if (dt_rf_mcp > -900000000)
@@ -4072,8 +4075,6 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
         plotter->Fill1D(rx + "_VertexReconZ" + sfx, 800, -400, 400, vertex_z, pmlabel);
 
         forEachTier(topo1, topo2, methodGroup, plot_with_tag);
-        if (trueProton)
-          plot_with_tag("trueProton"); // clean, alpha-free proton sub-sample
 
         // Gas segmentation validation
         PCCollect pcc = pcCollectionPath(r_rhoMin_fix, sievent.pos);
@@ -4095,7 +4096,7 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
             plotter->Fill2D(rx + "_dEgasRaw_vs_VertexZ" + ejtag + sfx, 800, -400, 400, 800, 0, 20000, vertex_z, anodeE, pmlabel);
             plotter->Fill2D(rx + "_dEgasRaw_vs_theta" + ejtag + sfx, 180, 0, 180, 800, 0, 20000, theta * 180 / M_PI, anodeE, pmlabel);
             plotter->Fill2D(rx + "_dEgasCalib_vs_theta" + ejtag + sfx, 360, 0, 180, 800, 0, 0.6, theta * 180 / M_PI, anodeE_MeV, pmlabel);
-            plotter->Fill2D(rx + "_dEgasCalib_vs_phi" + ejtag + sfx, 90, -200, 200, 800, 0, 0.6, phi * 180 / M_PI, anodeE_MeV, pmlabel);
+            plotter->Fill2D(rx + "_dEgasCalib_vs_phi" + ejtag + sfx, 90, -180, 180, 800, 0, 0.6, phi * 180 / M_PI, anodeE_MeV, pmlabel);
             // if (anodeCh >= 0)
             //   plotter->Fill2D(rx + "_dEgasCalib_vs_E" + ejtag + sfx + "_anode" + pad2(anodeCh), 400, 0, ef_max, 800, 0, 0.6, sievent.Energy1, anodeE_MeV, pmlabel);
             plotter->Fill2D(rx + "_dEgasCalib_vs_Ex" + ejtag + sfx, 600, -10, 20, 800, 0, 0.6, Ex, anodeE_MeV, pmlabel);

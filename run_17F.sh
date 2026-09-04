@@ -35,7 +35,7 @@ export -f run_once
 export DATASET="17F"
 export PREFIX="Run_"
 export OUT_DIR="Output_17F"
-export source_vertex=-57.28
+export source_vertex=-200.0
 export CATHODE_GAIN=1
 # A1C1 cfrac low-band fold + z autocal (see TrackRecon.C Begin()). Defaults are the
 # 17F values; override here to re-tune without recompiling.

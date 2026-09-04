@@ -23,8 +23,8 @@ process_run() {
     local infile="../ANASEN_analysis/data/${DATASET}_Data/${prefix}${wrun}_mapped.root"
     
     # Dynamically point to the correct output directory for this X/Y iteration
-    # local current_out_dir="Output_27Al_X${BEAM_AXIS_X}_Y${BEAM_AXIS_Y}"
     local current_out_dir="Output_27Al"
+    # local current_out_dir="Output_27Al_X${BEAM_AXIS_X}_Y${BEAM_AXIS_Y}"
     local out="${current_out_dir}/results_run${wrun}.root"
 
     root -q -l -b -x "$infile" \
@@ -47,9 +47,9 @@ export -f process_run
 #         BEAM_AXIS_Y=$y  
 
         # Define and create a clean directory name BEFORE running parallel tasks
-        # CURRENT_OUT_DIR="Output_27Al_X${BEAM_AXIS_X}_Y${BEAM_AXIS_Y}"
         CURRENT_OUT_DIR="Output_27Al"
-        # CURRENT_OUT_DIR="Output_27Al_run_48"
+        # CURRENT_OUT_DIR="Output_27Al_X${BEAM_AXIS_X}_Y${BEAM_AXIS_Y}"
+        rm -f ${OUT_DIR}/*.root
         mkdir -p "$CURRENT_OUT_DIR"
 
         echo "Running Eloss.py with a scaling parameter of $DEDX_SCALE"
@@ -57,9 +57,11 @@ export -f process_run
         python3 eloss_calculations/Eloss.py
         
         echo "Starting parallel processing..."
-        time parallel --bar -j 10 process_run ::: {24..41} 
-        time parallel --bar -j 10 process_run ::: 44 45 46 {50..59}
-        # time parallel --bar -j 10 process_run ::: 48 # pc without coincidence
+        time parallel --bar -j 12 process_run ::: {24..41} 44 45 46 {50..59}
+        # time parallel --bar -j 10 process_run ::: {24..41} 
+        # time parallel --bar -j 10 process_run ::: 44 45 46 {50..59}
+        time parallel --bar -j 1 process_run ::: 48 # pc without coincidence
+        mv "${CURRENT_OUT_DIR}/results_run048.root" "Output_27Al_run48/."
         # time parallel --bar -j 4 process_run ::: 62 63 66 67 68
         # time parallel --bar -j 1 process_run ::: 73
         # time parallel --bar -j 1 process_run ::: 74
@@ -67,7 +69,7 @@ export -f process_run
 
         echo "Merging files..."
         # Fixed: Safely merge using the clean directory variable (added -f to overwrite if re-running)
-        hadd -k -f -j 4 "${CURRENT_OUT_DIR}/output_27Al.root" "${CURRENT_OUT_DIR}/results_run"*.root
+        hadd -k -f -j 4 "${CURRENT_OUT_DIR}/Output_27Al.root" "${CURRENT_OUT_DIR}/results_run"*.root
 #     done
 # done
 

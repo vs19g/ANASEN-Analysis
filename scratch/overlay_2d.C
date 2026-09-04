@@ -48,6 +48,7 @@
 // Call, now just: rootFile, axis labels, and the drawing knobs --
 //
 //   root -l -b -q 'scratch/overlay_2d.C("Output_27Al/output_27Al.root", "Tracked Beam Energy (MeV)", "Kinematic Energy (MeV)", 2, 2, 2.0)'
+//   root -l -b -q 'scratch/overlay_2d.C("Output_27Al/output_27Al.root", "Tracked Beam Energy (MeV)", "Kinematic Energy (MeV)")'
 
 #include "TFile.h"
 #include "TH2.h"
@@ -59,7 +60,7 @@
 #include <vector>
 
 void overlay_2d(TString rootFile, TString xAxisLabel, TString yAxisLabel,
-                int rebinX = 8, int rebinY = 8, double minz = 5.0)
+                int rebinX = 4, int rebinY = 4, double minz = 8.0)
 {
     gROOT->SetStyle("Plain");
     gStyle->SetOptStat(0);
@@ -67,7 +68,7 @@ void overlay_2d(TString rootFile, TString xAxisLabel, TString yAxisLabel,
     // ---- Hardcoded selection: edit these to choose what to plot ----
     TString reaction = "m27Alax"; // reaction tag, e.g. "m27Alax", "m17Fax"
     TString ejtag = "p";          // ejectile: "p" (proton) or "a" (alpha)
-    TString topology = "a2c0";    // e.g. "a1c0", "a1c1", "a1c2fix", "a2c0", "a1c1c2"
+    TString topology = "a1c1_inband";    // e.g. "a1c0", "a1c1", "a1c2fix", "a2c0", "a1c1c2"
     TString detector = "sx3";     // "sx3" or "qqq"
 
     // Excited states to overlay, in the same order as labels[]/xlo[]/xhi[]
@@ -75,14 +76,16 @@ void overlay_2d(TString rootFile, TString xAxisLabel, TString yAxisLabel,
     // note 3498's tag is lowercase "kev" (TrackRecon.C:4028), unlike every
     // other state's "keV". 3774 keV is deliberately left out (too close
     // to 3498, spin-parity predicts it's weaker anyway).
-    TString states[] = {"GS", "2235keV", "3498kev", "4809keV", "5614keV", "6550keV"};
+    TString states[] = {"GS", "2235keV", "3498keV", "4810keV", "6550keV"};
     TString labels[] = {"Ground State", "2.235 MeV", "3.498 MeV",
-                        "4.809 MeV", "5.614 MeV", "6.550 MeV"};
+                        "4.810 MeV", "6.550 MeV"};
 
     // Per-state display window (MeV), same order as states[] above.
     // See the header comment for why these are currently a no-op.
-    double xlo[] = {0, 4, 12, 24, 36, 42};
-    double xhi[] = {4, 12, 24, 36, 42, 90};
+    // double xlo[] = {0, 4, 12, 24, 36};
+    // double xhi[] = {4, 12, 24, 36, 90};
+    double xlo[] = {0, 4, 16, 28, 36};
+    double xhi[] = {4, 16, 28, 36, 90};
 
     const size_t nStates = sizeof(states) / sizeof(states[0]);
     if (sizeof(labels) / sizeof(labels[0]) != nStates ||
@@ -94,8 +97,18 @@ void overlay_2d(TString rootFile, TString xAxisLabel, TString yAxisLabel,
         return;
     }
 
-    // Standard ANASEN color sequence
-    int colors[] = {kBlack, kRed + 1, kAzure + 2, kGreen + 2, kMagenta + 1};
+    // Custom 12-color set (named ROOT colors + hex via TColor::GetColor), not the
+    // ANASEN colors[40] sequence in TrackRecon.C -- 12 distinct colors is plenty of
+    // headroom for however many states get overlaid here without collisions.
+    int colors[] = {kBlack, kRed + 1, kAzure + 2, kGreen + 2, kMagenta + 1,
+                    TColor::GetColor("#3f90da"),
+                    TColor::GetColor("#bc1e00"),
+                    kGreen + 2,
+                    TColor::GetColor("#832db5"),
+                    kPink - 7,
+                    TColor::GetColor("#e76300"),
+                    TColor::GetColor("#b8ab6f")};
+    const int nColors = sizeof(colors) / sizeof(colors[0]);
     std::vector<TH2 *> hists;
     std::vector<TString> usedLabels;
 
@@ -144,6 +157,12 @@ void overlay_2d(TString rootFile, TString xAxisLabel, TString yAxisLabel,
         hists[i]->SetMinimum(minz);
     }
 
+    double globalMax = 0;
+    for (size_t i = 0; i < hists.size(); i++)
+        globalMax = std::max(globalMax, hists[i]->GetMaximum());
+    for (size_t i = 0; i < hists.size(); i++)
+        hists[i]->SetMaximum(globalMax);
+
     TCanvas *c = new TCanvas("c", "", 1800, 1800);
     c->SetLeftMargin(0.15);
     c->SetBottomMargin(0.15);
@@ -152,7 +171,15 @@ void overlay_2d(TString rootFile, TString xAxisLabel, TString yAxisLabel,
     c->SetGridx(1);
     c->SetGridy(1);
 
-    TLegend *leg = new TLegend(0.65, 0.75, 0.9, 0.9);
+    // Box height scales with the number of series instead of a fixed constant --
+    // at SetTextSize(0.03) a fixed 0.15 NDC-tall box only gives each of 6 rows
+    // 0.025 NDC, less than the text height itself, which is what made the legend
+    // look crowded. 0.045 NDC/row leaves real padding and stays correctly sized
+    // for however many states are overlaid.
+    const double legEntryHeight = 0.045;
+    const double legY2 = 0.9;
+    double legY1 = legY2 - legEntryHeight * hists.size();
+    TLegend *leg = new TLegend(0.65, legY1, 0.9, legY2);
     leg->SetBorderSize(1);
     leg->SetFillStyle(1001); // Solid background so grid doesn't bleed through
     leg->SetFillColor(kWhite);
@@ -160,7 +187,12 @@ void overlay_2d(TString rootFile, TString xAxisLabel, TString yAxisLabel,
 
     for (size_t i = 0; i < hists.size(); i++)
     {
-        hists[i]->SetFillColor(colors[i % 5]);
+        int color = colors[i % nColors];
+        hists[i]->SetMarkerColor(color);
+        hists[i]->SetLineColor(color);
+        hists[i]->SetFillColor(color);
+        hists[i]->SetFillStyle(1001); // solid fill for the "box" boxes below --
+                                      // "Plain" style's default fill is hollow
         if (i == 0)
         {
             hists[i]->SetTitle("");
