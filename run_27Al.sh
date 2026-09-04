@@ -60,8 +60,9 @@ export -f process_run
         time parallel --bar -j 12 process_run ::: {24..41} 44 45 46 {50..59}
         # time parallel --bar -j 10 process_run ::: {24..41} 
         # time parallel --bar -j 10 process_run ::: 44 45 46 {50..59}
-        time parallel --bar -j 1 process_run ::: 48 # pc without coincidence
-        mv "${CURRENT_OUT_DIR}/results_run048.root" "Output_27Al_run48/."
+        # time parallel --bar -j 1 process_run ::: 48 # pc without coincidence
+        # mv "${CURRENT_OUT_DIR}/results_run048.root" "Output_27Al_run48/."
+        # time parallel --bar -j 10 process_run ::: 62 63 66 67 68 73 74 {78..89}
         # time parallel --bar -j 4 process_run ::: 62 63 66 67 68
         # time parallel --bar -j 1 process_run ::: 73
         # time parallel --bar -j 1 process_run ::: 74

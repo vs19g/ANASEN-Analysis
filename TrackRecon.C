@@ -42,10 +42,10 @@ Int_t colors[40] = {
 bool process_alpha_proton_scattering = false,
      doMiscHistograms = true,
      doRawHistos = false,
-     doPCSX3ClusterAnalysis = true,
-     doPCQQQClusterAnalysis = true,
+     doPCSX3ClusterAnalysis = false,
+     doPCQQQClusterAnalysis = false,
      doOldAnalysis = false,
-     BenchMark = true,
+     BenchMark = false,
      onewire_analysis = true,
      diagnostic_eplots = false,
      diagnostic_tplots = true,
@@ -90,9 +90,11 @@ int pressure = 250; // gas pressure (torr) for the Eloss-table filenames;
 TRandom3 anasenRandom(4357);
 
 constexpr double kSiPcDtMax = 150.0;
+constexpr double kSiPcDtMin = -500.0;
 inline bool siPcCoincident(double t_si, double t_pc)
 {
-  return (t_si - t_pc) < kSiPcDtMax;
+  double dt = t_si - t_pc;
+  return dt > kSiPcDtMin && dt < kSiPcDtMax;
 }
 
 // PC anode dE gate, gas-region proton/alpha separation for the p(a,a)p elastic
@@ -3591,7 +3593,7 @@ void protonAlphaElastic_core(HistPlotter *plotter, const std::vector<Event> &Si_
       TVector3 x2f(pcXY.X(), pcXY.Y(), pcz_fix);
       TVector3 r_rhoMin_fix = beamVertex(sievent.pos, x2f - sievent.pos);
       double vertex_z = r_rhoMin_fix.Z();
-      if (vertex_z < z_entrance || vertex_z > 100)
+      if (vertex_z < z_entrance)
         return;
       double theta = (sievent.pos - r_rhoMin_fix).Theta();
       double path_length = pathLengthCm(sievent.pos, r_rhoMin_fix);
@@ -3627,7 +3629,7 @@ void protonAlphaElastic_core(HistPlotter *plotter, const std::vector<Event> &Si_
         plotter->Fill1D(rx + "_VertexReconZ" + ejtag + sfx, 800, -400, 400, vertex_z, pmlabel);
         plotter->Fill2D(rx + "_VertexReconXY" + ejtag + sfx, 200, -100, 100, 200, -100, 100, r_rhoMin_fix.X(), r_rhoMin_fix.Y(), pmlabel);
         plotter->Fill2D(rx + "_Ef_vs_theta" + ejtag + sfx, 100, 0, 180, 800, 0, 10, theta * 180 / M_PI, Efix, pmlabel);
-        plotter->Fill2D(rx + "_Ex_vs_theta" + ejtag + sfx, 180, 0, 180, 800, -10, 10, theta * 180 / M_PI, Ex, pmlabel);
+        plotter->Fill2D(rx + "_Ex_vs_theta" + ejtag + sfx, 360, 0, 180, 800, -10, 10, theta * 180 / M_PI, Ex, pmlabel);
         plotter->Fill2D(rx + "_Ex_vs_phi" + ejtag + sfx, 180, -180, 180, 800, -10, 10, sievent.pos.Phi() * 180 / M_PI, Ex, pmlabel);
 
         // Ground-state beam-energy consistency check -- elastic scattering has
@@ -3692,7 +3694,7 @@ void protonAlphaElastic_core(HistPlotter *plotter, const std::vector<Event> &Si_
         }
       };
 
-      if (pid != SiPcPid::kAlpha && sievent.Energy1 >= 6.4 && sievent.Energy1 < 7.0)
+      if (pid != SiPcPid::kAlpha)
         fillHypothesis(false); // proton, or PID unavailable (legacy default)
       if (pid == SiPcPid::kAlpha && sievent.Energy1 < 6.2)
         fillHypothesis(true);
@@ -3779,7 +3781,7 @@ void protonAlphaElastic_core(HistPlotter *plotter, const std::vector<Event> &Si_
             plotter->Fill2D(rx + "_a1c1cmp_phi_vs_Ef_" + m + w + sfx, 90, -180, 180, 800, 0, 10, sievent.pos.Phi() * 180 / M_PI, Ef, cmplbl);
             plotter->Fill2D(rx + "_a1c1cmp_phi_vs_Ex_" + m + w + sfx, 90, -180, 180, 800, -10, 10, sievent.pos.Phi() * 180 / M_PI, Ex, cmplbl);
             plotter->Fill2D(rx + "_a1c1cmp_Ef_vs_theta_" + m + w + sfx, 100, 0, 180, 800, 0, 10, th * 180 / M_PI, Ef, cmplbl);
-            plotter->Fill2D(rx + "_a1c1cmp_Ex_vs_theta_" + m + w + sfx, 100, 0, 180, 800, -10, 10, th * 180 / M_PI, Ex, cmplbl);
+            plotter->Fill2D(rx + "_a1c1cmp_Ex_vs_theta_" + m + w + sfx, 180, 0, 180, 800, -10, 10, th * 180 / M_PI, Ex, cmplbl);
           }
         };
 
