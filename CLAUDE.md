@@ -1,8 +1,18 @@
 # ANASEN Analysis — working notes for Claude
 
 ## Agent behavior
+- **Architecture & Remotes:** 
+  - `upstream` points to the canonical public repo (read-only reference).
+  - `origin` points to your private sandbox repo (read/write scratchpad).
+  - **NEVER attempt to push to `upstream`.** All upstream synchronization is strictly one-way (`git fetch upstream` -> merge).
+- **Upstream Sync Routine:**
+  - Before applying requested features or edits, sync with `upstream` if requested.
+  - Never pull into a dirty working tree. Use: `git stash` -> `git fetch upstream` -> `git merge upstream/devel_vignesh` -> `git stash pop`.
+  - If a merge conflict occurs in analysis macros (`TrackRecon.C`, `MakeVertex.C`, kinematics scripts, or calibration tables), **STOP immediately**. Do not attempt to guess physics logic; flag the exact conflict lines and await instruction.
+- **Commits & Pushes to `origin`:**
+  - Commit only when a coherent, discrete change is finished or when explicitly asked. Write concise, conventional commit messages.
+  - Push **only** to `origin` (`git push origin <branch>`). Push after completing a requested unit of work so the sandbox stays backed up.
 - ALWAYS output a brief, step-by-step plan before modifying files or running commands.
-- NEVER push to remote. Commit only when explicitly asked.
 - **Targeted edits only.** Never regenerate a whole file to make a local change.
 - **Never read `MakeVertex.C`**
 - **Never read `TrackRecon.C` end to end** (~4,250 lines; ~63k tokens each, and it stays in the prefix for the rest of the session). Grep for the symbol, then Read with offset/limit around the hit. If a question genuinely needs the whole file, say so first. Do not explore the codebase open-endedly.

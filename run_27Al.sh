@@ -13,6 +13,12 @@ export DEDX_SCALE=0.89
 export CUTLIST=cuts_list.txt
 export BEAM_AXIS_X=0
 export BEAM_AXIS_Y=0
+# Tilted-beam parameters: (x, y) at BEAM_AXIS_Z0 (default 0), plus dx/dz and dy/dz slopes.
+# Default (zeros) reproduces the original vertical beam bit-for-bit. Fit them
+# with scratch/iterate_beam.sh + scratch/FitBeamAxis.C.
+export BEAM_AXIS_Z0=${BEAM_AXIS_Z0:-0}
+export BEAM_TILT_X=${BEAM_TILT_X:-0}
+export BEAM_TILT_Y=${BEAM_TILT_Y:-0}
 
 echo "Pre-compiling TrackRecon.C safely on a single core..."
 root -q -l -b -e '.L TrackRecon.C++O'
@@ -57,8 +63,8 @@ export -f process_run
         python3 eloss_calculations/Eloss.py
         
         echo "Starting parallel processing..."
-        time parallel --bar -j 12 process_run ::: {24..41} 44 45 46 {50..59}
-        # time parallel --bar -j 10 process_run ::: {24..41} 
+        # time parallel --bar -j 12 process_run ::: {24..41} 44 45 46 {50..59}
+        time parallel --bar -j 12 process_run ::: {24..41} 
         # time parallel --bar -j 10 process_run ::: 44 45 46 {50..59}
         # time parallel --bar -j 1 process_run ::: 48 # pc without coincidence
         # mv "${CURRENT_OUT_DIR}/results_run048.root" "Output_27Al_run48/."
@@ -89,6 +95,9 @@ unset A1C1_Z_OFF_QQQ
 unset A1C1_Z_OFF_SX3
 unset BEAM_AXIS_X
 unset BEAM_AXIS_Y
+unset BEAM_AXIS_Z0
+unset BEAM_TILT_X
+unset BEAM_TILT_Y
 unset CUTLIST
 unset DEDX_SCALE
 unset CURRENT_OUT_DIR
