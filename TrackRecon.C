@@ -3611,7 +3611,7 @@ void protonAlphaElastic_core(HistPlotter *plotter, const std::vector<Event> &Si_
         std::string ejtag;
         if (alphaHyp && sievent.Energy1 < 5)
           ejtag = "_a";
-        else if (sievent.Energy1 >= 6.4 && sievent.Energy1 < 7.0)
+        else if (sievent.Energy1 >= 5.0 && sievent.Energy1 < 7.0)
           ejtag = "_p";
         else
           ejtag = "_maybep";
@@ -3631,6 +3631,16 @@ void protonAlphaElastic_core(HistPlotter *plotter, const std::vector<Event> &Si_
         plotter->Fill2D(rx + "_Ef_vs_theta" + ejtag + sfx, 100, 0, 180, 800, 0, 10, theta * 180 / M_PI, Efix, pmlabel);
         plotter->Fill2D(rx + "_Ex_vs_theta" + ejtag + sfx, 360, 0, 180, 800, -10, 10, theta * 180 / M_PI, Ex, pmlabel);
         plotter->Fill2D(rx + "_Ex_vs_phi" + ejtag + sfx, 180, -180, 180, 800, -10, 10, sievent.pos.Phi() * 180 / M_PI, Ex, pmlabel);
+
+        for (const auto &pcevent : PC_Events)
+        {
+          if (!(pcevent.multi1 == 1 && (pcevent.multi2 == 1 || pcevent.multi2 == 2)))
+            continue;
+          if (TMath::Abs(sievent.pos.DeltaPhi(pcevent.pos)) > phi_win)
+            continue;
+          plotter->Fill2D(rx + "_Ex_vs_dT" + ejtag + sfx, 500, -2000, 2000, 600, -10, 20, (sievent.Time1 - pcevent.Time1), Ex, pmlabel);
+          plotter->Fill2D(rx + "_dEgasCalib_vs_dT" + ejtag + sfx, 500, -2000, 2000, 800, 0, 0.6, (sievent.Time1 - pcevent.Time1), anodeE_MeV, pmlabel);
+        }
 
         // Ground-state beam-energy consistency check -- elastic scattering has
         // no excited levels, so there's only ever a "ground state" hypothesis
