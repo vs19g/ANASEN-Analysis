@@ -42,8 +42,8 @@ Int_t colors[40] = {
 bool process_alpha_proton_scattering = false,
      doMiscHistograms = true,
      doRawHistos = false,
-     doPCSX3ClusterAnalysis = false,
-     doPCQQQClusterAnalysis = false,
+     doPCSX3ClusterAnalysis = true,
+     doPCQQQClusterAnalysis = true,
      doOldAnalysis = false,
      BenchMark = false,
      onewire_analysis = true,
@@ -75,6 +75,9 @@ double source_vertex = 53.0,
        a1c1_z_off_sx3 = 2.52614,
        beam_axis_x = 0.0,
        beam_axis_y = 0.0,
+       beam_axis_z0 = 0.0,   // reference z at which (beam_axis_x, beam_axis_y) is specified
+       beam_tilt_x = 0.0,    // dx/dz slope of the beam axis
+       beam_tilt_y = 0.0,    // dy/dz slope of the beam axis
        ta_foil_z_mm = 0.0,
        alpha_source_mev = 5.486;
 
@@ -122,23 +125,111 @@ inline SiPcPid classifyByAnodeDe(double anodeE_MeV)
   return (anodeE_MeV < kProtonAlphaAnodeDeGate_MeV) ? SiPcPid::kProton : SiPcPid::kAlpha;
 }
 
-inline TVector3 beamVertex(const TVector3 &si, const TVector3 &dir)
+inline TVector3 beamAxisOrigin()
 {
-  double d = dir.X() * dir.X() + dir.Y() * dir.Y();
-  double t = (d > 0.0) ? -((si.X() - beam_axis_x) * dir.X() + (si.Y() - beam_axis_y) * dir.Y()) / d : 0.0;
-  return si + t * dir;
+  return TVector3(beam_axis_x, beam_axis_y, beam_axis_z0);
 }
-inline double beamPerp(const TVector3 &p)
+inline TVector3 beamAxisDirUnit()
 {
-  return TMath::Sqrt((p.X() - beam_axis_x) * (p.X() - beam_axis_x) + (p.Y() - beam_axis_y) * (p.Y() - beam_axis_y));
+  return TVector3(beam_tilt_x, beam_tilt_y, 1.0).Unit();
 }
-// A point on the beam axis at height z. Every theta/phi reference point used to be
-// spelled beamAxisPoint(z), which silently ignored BEAM_AXIS_X/Y even though
-// Begin() prints them as configured parameters and pcEnergyCalibrationAccumulate
-// already built its source_pos the correct way.
+
 inline TVector3 beamAxisPoint(double z)
 {
-  return TVector3(beam_axis_x, beam_axis_y, z);
+  double dz = z - beam_axis_z0;
+  return TVector3(beam_axis_x + beam_tilt_x * dz,
+                  beam_axis_y + beam_tilt_y * dz,
+                  z);
+}
+
+inline TVector3 pocaOnTrack(const TVector3 &si, const TVector3 &dir,
+                            const TVector3 &p, const TVector3 &d)
+{
+  TVector3 e = dir;
+  double ee = e.Dot(e);
+  double de = d.Dot(e);
+  double denom = ee - de * de; // = |e|^2 * sin^2(angle between beam and track)
+  double t = 0.0;
+  if (denom > 1e-18 * (ee > 0.0 ? ee : 1.0))
+  {
+    TVector3 w = si - p;
+    double dw = d.Dot(w);
+    double ew = e.Dot(w);
+    t = (de * dw - ew) / denom;
+  }
+  return si + t * e;
+}
+
+inline TVector3 beamVertex(const TVector3 &si, const TVector3 &dir)
+{
+  return pocaOnTrack(si, dir, beamAxisOrigin(), beamAxisDirUnit());
+}
+inline TVector3 beamVertexNominal(const TVector3 &si, const TVector3 &dir)
+{
+  return pocaOnTrack(si, dir, TVector3(0.0, 0.0, 0.0), TVector3(0.0, 0.0, 1.0));
+}
+
+inline double beamPerp(const TVector3 &p)
+{
+  TVector3 p0 = beamAxisOrigin();
+  TVector3 d = beamAxisDirUnit();
+  TVector3 w = p - p0;
+  TVector3 perp = w - d * w.Dot(d);
+  return perp.Mag();
+}
+
+inline void fillBeamProfile(HistPlotter *plotter, const TVector3 &vertex,
+                            const TVector3 &si, const TVector3 &dir, const std::string &tag,
+                            bool axisSafe)
+{
+  const std::string folder = "BeamAxis";
+  const std::string all = "beamAxis_all_";
+  const std::string one = "beamAxis_" + tag + "_";
+  double vx = vertex.X(), vy = vertex.Y(), vz = vertex.Z();
+  double pocaDist = beamPerp(vertex);
+  plotter->Fill2D(all + "vertexX_vs_Z", 250, -450, 50, 200, -50, 50, vz, vx, folder);
+  plotter->Fill2D(all + "vertexY_vs_Z", 250, -450, 50, 200, -50, 50, vz, vy, folder);
+  plotter->Fill1D(all + "pocaDist", 400, 0, 100, pocaDist, folder);
+  // Per-branch copy so anomalies can be traced to a specific reconstruction path.
+  plotter->Fill2D(one + "vertexX_vs_Z", 250, -450, 50, 200, -50, 50, vz, vx, folder);
+  plotter->Fill2D(one + "vertexY_vs_Z", 250, -450, 50, 200, -50, 50, vz, vy, folder);
+  plotter->Fill1D(one + "pocaDist", 400, 0, 100, pocaDist, folder);
+  const double zLo = -440.0, zHi = 40.0;
+  const int nSlice = 16;
+  const double sliceW = (zHi - zLo) / nSlice; // 40 mm
+  if (vz >= zLo && vz < zHi)
+  {
+    int is = static_cast<int>((vz - zLo) / sliceW);
+    if (is >= 0 && is < nSlice)
+    {
+      char buf[8];
+      snprintf(buf, sizeof(buf), "%02d", is);
+      plotter->Fill2D(all + "vertexXY_z" + buf, 200, -50, 50, 200, -50, 50, vx, vy, folder);
+    }
+  }
+
+  double dz = dir.Z();
+  double vzBin = beamVertexNominal(si, dir).Z();
+  if (axisSafe && TMath::Abs(dz) > 1e-6 && vzBin >= zLo && vzBin < zHi)
+  {
+    int k = static_cast<int>((vzBin - zLo) / sliceW);
+    if (k >= 0 && k < nSlice)
+    {
+      double zPlane = zLo + (k + 0.5) * sliceW;
+      double s = (zPlane - si.Z()) / dz;
+      double cx = si.X() + s * dir.X();
+      double cy = si.Y() + s * dir.Y();
+      if (TMath::Abs(cx) < 100.0 && TMath::Abs(cy) < 100.0)
+      {
+        char kbuf[8];
+        snprintf(kbuf, sizeof(kbuf), "%02d", k);
+        plotter->Fill1D(all + "crossX_z" + kbuf, 800, -100, 100, cx, folder);
+        plotter->Fill1D(all + "crossY_z" + kbuf, 800, -100, 100, cy, folder);
+        plotter->Fill1D(one + "crossX_z" + kbuf, 800, -100, 100, cx, folder);
+        plotter->Fill1D(one + "crossY_z" + kbuf, 800, -100, 100, cy, folder);
+      }
+    }
+  }
 }
 
 struct PCPath
@@ -587,7 +678,16 @@ void TrackRecon::Begin(TTree * /*tree*/)
     beam_axis_x = std::atof(getenv("BEAM_AXIS_X"));
   if (getenv("BEAM_AXIS_Y"))
     beam_axis_y = std::atof(getenv("BEAM_AXIS_Y"));
-  std::cout << "Beam-axis origin (x,y) = (" << beam_axis_x << ", " << beam_axis_y << ") mm" << std::endl;
+  if (getenv("BEAM_AXIS_Z0"))
+    beam_axis_z0 = std::atof(getenv("BEAM_AXIS_Z0"));
+  if (getenv("BEAM_TILT_X"))
+    beam_tilt_x = std::atof(getenv("BEAM_TILT_X"));
+  if (getenv("BEAM_TILT_Y"))
+    beam_tilt_y = std::atof(getenv("BEAM_TILT_Y"));
+  std::cout << "Beam axis line: (x,y) = (" << beam_axis_x << ", " << beam_axis_y
+            << ") mm at z0 = " << beam_axis_z0
+            << " mm, tilts (dx/dz, dy/dz) = (" << beam_tilt_x << ", " << beam_tilt_y << ")"
+            << std::endl;
   if (doPCEnergyCalibration)
     std::cout << "PC energy calibration ON: alpha source = " << alpha_source_mev
               << " MeV, source position = (" << beam_axis_x << ", " << beam_axis_y << ", " << source_vertex
@@ -2045,6 +2145,8 @@ void protonAlphaHistograms(HistPlotter *plotter, const std::vector<Event> &QQQ_E
         // purely longitudinal direction.
         TVector3 r_rhoMin_fix = beamVertex(x1, v);
         double vertex_z = r_rhoMin_fix.Z();
+        fillBeamProfile(plotter, r_rhoMin_fix, x1, v, "apCoinc",
+                        pcevent.multi1 == 1 && pcevent.multi2 == 2);
         double theta_q = (qqqevent.pos - beamAxisPoint(vertex_z)).Theta();
         // double theta_q = (qqqevent.pos - r_rhoMin_fix).Theta();
         double sinTheta_customV = TMath::Sin(theta_q);
@@ -2485,6 +2587,7 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
         // beam axis at (0,0), silently ignoring BEAM_AXIS_X/Y, and had no guard for a
         // purely longitudinal direction.
         TVector3 r_rhoMin_fix = beamVertex(x1, v);
+        fillBeamProfile(plotter, r_rhoMin_fix, x1, v, "sx3a1c2", true); // a1c2 only, gated above
         plotter->Fill1D("VertexRecon_pczfix_sx3", 800, -300, 300, r_rhoMin_fix.Z(), "Vertex_Reconstruction");
         plotter->Fill1D("VertexRecon_pczfix", 800, -300, 300, r_rhoMin_fix.Z(), "Vertex_Reconstruction");
         plotter->Fill1D("pczfix_A1C2_1d_sx3", 600, -200, 200, pcz_fix, "PCZ_Recon");
@@ -3036,6 +3139,7 @@ void PCQQQClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
           // beam axis at (0,0), silently ignoring BEAM_AXIS_X/Y, and had no guard for a
           // purely longitudinal direction.
           TVector3 r_rhoMin_fix = beamVertex(x1, v);
+          fillBeamProfile(plotter, r_rhoMin_fix, x1, v, "qqqa1c2", true); // a1c2 only, gated above
 
           double sinTheta_customV = TMath::Sin((qqqevent.pos - beamAxisPoint(r_rhoMin_fix.Z())).Theta());
           plotter->Fill2D("dE3_E_CathodeQQQR_A1C2_TC1_PC" + std::to_string(phicut), 400, 0, 30, 800, 0, 10000, qqqevent.Energy1, pcevent.Energy2 * sinTheta_customV, "PID_dE_E");
@@ -3593,6 +3697,8 @@ void protonAlphaElastic_core(HistPlotter *plotter, const std::vector<Event> &Si_
       TVector3 x2f(pcXY.X(), pcXY.Y(), pcz_fix);
       TVector3 r_rhoMin_fix = beamVertex(sievent.pos, x2f - sievent.pos);
       double vertex_z = r_rhoMin_fix.Z();
+      const bool axisSafe = (multi2 == 2) || (multi1 == 2 && multi2 == 0);
+      fillBeamProfile(plotter, r_rhoMin_fix, sievent.pos, x2f - sievent.pos, "elastic_" + det, axisSafe);
       if (vertex_z < z_entrance)
         return;
       double theta = (sievent.pos - r_rhoMin_fix).Theta();
@@ -3629,7 +3735,7 @@ void protonAlphaElastic_core(HistPlotter *plotter, const std::vector<Event> &Si_
         plotter->Fill1D(rx + "_VertexReconZ" + ejtag + sfx, 800, -400, 400, vertex_z, pmlabel);
         plotter->Fill2D(rx + "_VertexReconXY" + ejtag + sfx, 200, -100, 100, 200, -100, 100, r_rhoMin_fix.X(), r_rhoMin_fix.Y(), pmlabel);
         plotter->Fill2D(rx + "_Ef_vs_theta" + ejtag + sfx, 100, 0, 180, 800, 0, 10, theta * 180 / M_PI, Efix, pmlabel);
-        plotter->Fill2D(rx + "_Ex_vs_theta" + ejtag + sfx, 360, 0, 180, 800, -10, 10, theta * 180 / M_PI, Ex, pmlabel);
+        plotter->Fill2D(rx + "_Ex_vs_theta" + ejtag + sfx, 720, 0, 180, 800, -10, 10, theta * 180 / M_PI, Ex, pmlabel);
         plotter->Fill2D(rx + "_Ex_vs_phi" + ejtag + sfx, 180, -180, 180, 800, -10, 10, sievent.pos.Phi() * 180 / M_PI, Ex, pmlabel);
 
         for (const auto &pcevent : PC_Events)
@@ -3970,6 +4076,9 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
       TVector3 x2f(pcXY.X(), pcXY.Y(), pcz_fix);
       TVector3 r_rhoMin_fix = beamVertex(sievent.pos, x2f - sievent.pos);
       double vertex_z = r_rhoMin_fix.Z();
+      const bool axisSafe = (topo1 == "a1c2fix") || (topo1 == "a2c0") || (topo2 == "a1c1_inband");
+      fillBeamProfile(plotter, r_rhoMin_fix, sievent.pos, x2f - sievent.pos,
+                      "reaction_" + globaltag + "_" + det, axisSafe);
       if (beamPerp(r_rhoMin_fix) > perp_cut || vertex_z < z_entrance)
         return;
 
@@ -4029,7 +4138,7 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
           plotter->Fill1D(rx + "_Ex_from" + ejtag + t + sfx, 600, -10, 20, Ex, pmlabel);
           plotter->Fill2D(rx + "_VertexReconZ_vs_Ef" + ejtag + t + sfx, 800, -400, 400, 800, 0, ef_max, vertex_z, Efix, pmlabel);
           plotter->Fill2D(rx + "_VertexReconZ_vs_Ex" + ejtag + t + sfx, 800, -400, 400, 600, -10, 20, vertex_z, Ex, pmlabel);
-          plotter->Fill2D(rx + "_Ex_vs_theta" + ejtag + t + sfx, 360, 0, 180, 600, -10, 20, theta * 180 / M_PI, Ex, pmlabel);
+          plotter->Fill2D(rx + "_Ex_vs_theta" + ejtag + t + sfx, 720, 0, 180, 600, -10, 20, theta * 180 / M_PI, Ex, pmlabel);
 
           if (ebeam_kin_MeV > 0.0)
             plotter->Fill2D(rx + "_BeamEnergy_ETrack_vs_EKin" + ejtag + t + sfx, 400, 0, beamE0 * 1.5, 400, 0, beamE0 * 1.5,
@@ -4069,6 +4178,7 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
         }
         plotter->Fill1D(rx + "_pczfix" + sfx, 600, -300, 300, pcz_fix, pmlabel);
         plotter->Fill2D(rx + "_Ef_vs_theta" + ejtag + sfx, 100, 0, 180, 800, 0, ef_max, theta * 180 / M_PI, Efix, pmlabel);
+        plotter->Fill2D(rx + "_Ex_vs_theta" + ejtag + sfx, 720, 0, 180, 800, -20, 20, theta * 180 / M_PI, Ex, pmlabel);
         plotter->Fill2D(rx + "_Ex_vs_phi" + ejtag + sfx, 45, -180, 180, 600, -10, 20, phi * 180 / M_PI, Ex, pmlabel);
 
         for (const auto &pcevent : PC_Events)
@@ -4107,7 +4217,7 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
             plotter->Fill2D(rx + "_dEgasCalib_vs_VertexZ" + ejtag + sfx, 800, -400, 400, 800, 0, 0.6, vertex_z, anodeE_MeV, pmlabel);
             plotter->Fill2D(rx + "_dEgasRaw_vs_VertexZ" + ejtag + sfx, 800, -400, 400, 800, 0, 20000, vertex_z, anodeE, pmlabel);
             plotter->Fill2D(rx + "_dEgasRaw_vs_theta" + ejtag + sfx, 180, 0, 180, 800, 0, 20000, theta * 180 / M_PI, anodeE, pmlabel);
-            plotter->Fill2D(rx + "_dEgasCalib_vs_theta" + ejtag + sfx, 360, 0, 180, 800, 0, 0.6, theta * 180 / M_PI, anodeE_MeV, pmlabel);
+            plotter->Fill2D(rx + "_dEgasCalib_vs_theta" + ejtag + sfx, 720, 0, 180, 800, 0, 0.6, theta * 180 / M_PI, anodeE_MeV, pmlabel);
             plotter->Fill2D(rx + "_dEgasCalib_vs_phi" + ejtag + sfx, 90, -180, 180, 800, 0, 0.6, phi * 180 / M_PI, anodeE_MeV, pmlabel);
             // if (anodeCh >= 0)
             //   plotter->Fill2D(rx + "_dEgasCalib_vs_E" + ejtag + sfx + "_anode" + pad2(anodeCh), 400, 0, ef_max, 800, 0, 0.6, sievent.Energy1, anodeE_MeV, pmlabel);

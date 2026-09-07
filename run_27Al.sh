@@ -11,14 +11,12 @@ export CATHODE_GAIN=3.0
 export source_vertex=-200.0
 export DEDX_SCALE=0.89
 export CUTLIST=cuts_list.txt
-export BEAM_AXIS_X=0
-export BEAM_AXIS_Y=0
-# Tilted-beam parameters: (x, y) at BEAM_AXIS_Z0 (default 0), plus dx/dz and dy/dz slopes.
-# Default (zeros) reproduces the original vertical beam bit-for-bit. Fit them
-# with scratch/iterate_beam.sh + scratch/FitBeamAxis.C.
-export BEAM_AXIS_Z0=${BEAM_AXIS_Z0:-0}
-export BEAM_TILT_X=${BEAM_TILT_X:-0}
-export BEAM_TILT_Y=${BEAM_TILT_Y:-0}
+
+export BEAM_AXIS_Z0=-200
+export BEAM_AXIS_X=-0.136398
+export BEAM_AXIS_Y=0.034824
+export BEAM_TILT_X=-0.00083798
+export BEAM_TILT_Y=0.00191377
 
 echo "Pre-compiling TrackRecon.C safely on a single core..."
 root -q -l -b -e '.L TrackRecon.C++O'
@@ -64,11 +62,11 @@ export -f process_run
         
         echo "Starting parallel processing..."
         # time parallel --bar -j 12 process_run ::: {24..41} 44 45 46 {50..59}
-        time parallel --bar -j 12 process_run ::: {24..41} 
+        # time parallel --bar -j 12 process_run ::: {24..41} 
         # time parallel --bar -j 10 process_run ::: 44 45 46 {50..59}
         # time parallel --bar -j 1 process_run ::: 48 # pc without coincidence
         # mv "${CURRENT_OUT_DIR}/results_run048.root" "Output_27Al_run48/."
-        # time parallel --bar -j 10 process_run ::: 62 63 66 67 68 73 74 {78..89}
+        time parallel --bar -j 10 process_run ::: {24..41} 44 45 46 {50..59} 62 63 66 67 68 73 74 {78..89}
         # time parallel --bar -j 4 process_run ::: 62 63 66 67 68
         # time parallel --bar -j 1 process_run ::: 73
         # time parallel --bar -j 1 process_run ::: 74
