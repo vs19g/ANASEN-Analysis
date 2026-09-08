@@ -34,7 +34,7 @@ export pressure_in_torr=250
 export CO2percent=3
 
 # --- Block 1: 27Al Source Runs No Gas (1-8) ---
-if [[ 1 -eq 0 ]]; then
+if [[ 1 -eq 1 ]]; then
     export DATASET="27Al"
     export PREFIX="Run_"
     export OUT_DIR="Output_av"
@@ -42,6 +42,7 @@ if [[ 1 -eq 0 ]]; then
     rm -f ${OUT_DIR}/all.root
     
     parallel --bar -j 6 process_run ::: {1..8}
+    exit
 fi
 
 # --- Block 2: 17F Source Runs (5-14) ---

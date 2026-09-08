@@ -5,9 +5,11 @@
 //
 // Usage (Single File):
 //   root -l -b -q 'make_pretty.C("myfile.root", "histName")'
+//   root -l -b -q 'make_pretty.C("myfile.root", "histName", "XLabel", "YLabel", minZ, minY, minX, maxX, maxY, rebinX, rebinY)'
 //
 // Usage (Multi-File Overlay):
 //   root -l -b -q 'make_pretty.C("file1.root,file2.root", "Run 1,Run 2", "histName", "X-Axis", "Y-Axis")'
+//   root -l -b -q 'make_pretty.C("file1.root,file2.root", "Run 1,Run 2", "histName", "X", "Y", yMin, yMax, xMin, xMax, canvasW, canvasH, rebinX)'
 //
 // =============================================================================
 
@@ -78,7 +80,9 @@ void make_prettyplots(const char *rootFile,
                       double minY = -9999.0,
                       double minX = -9999.0,
                       double maxX = -9999.0,
-                      double maxY = -9999.0)
+                      double maxY = -9999.0,
+                      int rebinX = 1,
+                      int rebinY = 1) // rebinY only used for 2D histograms
 {
 
     SetStyle();
@@ -129,6 +133,15 @@ void make_prettyplots(const char *rootFile,
         TH2 *h = (TH2 *)clone;
         h->SetStats(0);
 
+        // Rebin() and Rebin2D() modify in place and return `this` when called
+        // with no newname, but reassign anyway in case that ever changes.
+        if (rebinX > 1 || rebinY > 1)
+        {
+            TH2 *rebinned = (TH2 *)h->Rebin2D(rebinX, rebinY);
+            if (rebinned)
+                h = rebinned;
+        }
+
         // --- Apply Minimum Z if provided ---
         if (minZ != -9999.0)
         {
@@ -154,13 +167,19 @@ void make_prettyplots(const char *rootFile,
         h->GetXaxis()->CenterTitle(true);
         h->GetYaxis()->CenterTitle(true);
 
-        // gPad->SetLogz();
+        gPad->SetLogz();
 
         h->Draw("colz");
     }
     else
     {
         TH1 *h = (TH1 *)clone;
+        if (rebinX > 1)
+        {
+            TH1 *rebinned = (TH1 *)h->Rebin(rebinX);
+            if (rebinned)
+                h = rebinned;
+        }
         if (minX != -9999.0)
             h->GetXaxis()->SetRangeUser(minX, h->GetXaxis()->GetXmax());
         if (maxX != -9999.0)
@@ -200,7 +219,7 @@ void make_prettyplots(const char *rootFile,
 // NOTE: canvasW/canvasH added as trailing optional args (default = old
 // hardcoded values, so every existing call site keeps working unchanged).
 // Pass larger values for a bigger/higher-resolution output image.
-void make_prettyplots(TString filesCSV, TString labelsCSV, TString histName, TString xAxisLabel="", TString yAxisLabel="", double yMin=-9999, double yMax=-9999, double xMin=-9999, double xMax=-9999, int canvasW=2100, int canvasH=1575)
+void make_prettyplots(TString filesCSV, TString labelsCSV, TString histName, TString xAxisLabel="", TString yAxisLabel="", double yMin=-9999, double yMax=-9999, double xMin=-9999, double xMax=-9999, int canvasW=2100, int canvasH=1575, int rebinX=1)
 {
     SetStyle();
 
@@ -242,6 +261,13 @@ void make_prettyplots(TString filesCSV, TString labelsCSV, TString histName, TSt
         TH1 *clone = (TH1 *)h->Clone(Form("h_%d", i));
         clone->SetDirectory(0); // Detach from file
         f->Close();
+
+        if (rebinX > 1)
+        {
+            TH1 *rebinned = (TH1 *)clone->Rebin(rebinX);
+            if (rebinned)
+                clone = rebinned;
+        }
 
         // Apply X-range BEFORE checking the max Y-height, otherwise peaks
         // outside the viewing range might scale the Y-axis unnecessarily!

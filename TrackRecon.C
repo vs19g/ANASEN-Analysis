@@ -42,8 +42,8 @@ Int_t colors[40] = {
 bool process_alpha_proton_scattering = false,
      doMiscHistograms = true,
      doRawHistos = false,
-     doPCSX3ClusterAnalysis = true,
-     doPCQQQClusterAnalysis = true,
+     doPCSX3ClusterAnalysis = false,
+     doPCQQQClusterAnalysis = false,
      doOldAnalysis = false,
      BenchMark = false,
      onewire_analysis = true,
@@ -196,7 +196,8 @@ inline void fillBeamProfile(HistPlotter *plotter, const TVector3 &vertex,
   plotter->Fill1D(one + "pocaDist", 400, 0, 100, pocaDist, folder);
   const double zLo = -440.0, zHi = 40.0;
   const int nSlice = 16;
-  const double sliceW = (zHi - zLo) / nSlice; // 40 mm
+  const double sliceW = (zHi - zLo) / nSlice; // 30 mm
+  
   if (vz >= zLo && vz < zHi)
   {
     int is = static_cast<int>((vz - zLo) / sliceW);
@@ -1296,20 +1297,20 @@ Bool_t TrackRecon::Process(Long64_t entry)
         continue;
       }
       auto det = Fsx3.at(id);
-      // if (det.valid)
-      // {
-      //   // std::cout << det.frontEL << " " << det.frontEL*sx3RightGain[id][det.stripF] << std::endl;
-      //   // plotter->Fill2D("be_vs_x_sx3_id_"+std::to_string(id)+"_f"+std::to_string(det.stripF)+"_b"+std::to_string(det.stripB),200,-1,1,800,0,8192,det.frontX,det.backE,"evsx");
-      //   // plotter->Fill2D("unmatched_be_vs_x_sx3_id_" + std::to_string(id), 200, -1, 1, 800, 0, 4096, det.frontX, det.backE, "evsx");
-      //   // plotter->Fill2D("unmatched_be_vs_x_sx3", 200, -1, 1, 800, 0, 4096, det.frontX, det.backE, "evsx");
-      //   // plotter->Fill2D("matched_be_vs_x_sx3", 200, -60, 60, 800, 0, 8192, det.frontX * sx3FrontGain[id][det.stripF] + sx3FrontOffset[id][det.stripF], det.backE * sx3BackGain[id][det.stripF][det.stripB], "evsx");
-      //   // plotter->Fill2D("matched_be_vs_x_sx3_id_" + std::to_string(id), 200, -60, 60, 800, 0, 8192, det.frontX * sx3FrontGain[id][det.stripF] + sx3FrontOffset[id][det.stripF], det.backE * sx3BackGain[id][det.stripF][det.stripB], "evsx");
+      if (det.valid && diagnostic_eplots)
+      {
+        // std::cout << det.frontEL << " " << det.frontEL*sx3RightGain[id][det.stripF] << std::endl;
+        plotter->Fill2D("be_vs_x_sx3_id_"+std::to_string(id)+"_f"+std::to_string(det.stripF)+"_b"+std::to_string(det.stripB),200,-1,1,800,0,8192,det.frontX,det.backE,"evsx");
+        plotter->Fill2D("unmatched_be_vs_x_sx3_id_" + std::to_string(id), 200, -1, 1, 800, 0, 4096, det.frontX, det.backE, "evsx");
+        plotter->Fill2D("unmatched_be_vs_x_sx3", 200, -1, 1, 800, 0, 4096, det.frontX, det.backE, "evsx");
+        plotter->Fill2D("matched_be_vs_x_sx3", 200, -60, 60, 800, 0, 8192, det.frontX * sx3FrontGain[id][det.stripF] + sx3FrontOffset[id][det.stripF], det.backE * sx3BackGain[id][det.stripF][det.stripB], "evsx");
+        plotter->Fill2D("matched_be_vs_x_sx3_id_" + std::to_string(id), 200, -60, 60, 800, 0, 8192, det.frontX * sx3FrontGain[id][det.stripF] + sx3FrontOffset[id][det.stripF], det.backE * sx3BackGain[id][det.stripF][det.stripB], "evsx");
 
-      //   // plotter->Fill2D("matched_be_vs_x_sx3_id_" + std::to_string(id) + "_f" + std::to_string(det.stripF), 200, -60, 60, 800, 0, 8192,
-      //   //                 det.frontX * sx3FrontGain[id][det.stripF] + sx3FrontOffset[id][det.stripF], det.backE * sx3BackGain[id][det.stripF][det.stripB], "evsx_matched");
-      //   // plotter->Fill2D("fe_vs_x_sx3_id_"+std::to_string(id)+"_f"+std::to_string(det.stripF)+"_"+std::to_string(det.stripB),200,-1,1,800,0,4096,det.frontX,det.backE,"evsx");
-      //   // plotter->Fill2D("l_vs_r_sx3_id_" + std::to_string(id) + "_f" + std::to_string(det.stripF), 800, 0, 4096, 800, 0, 4096, det.frontEL, det.frontER, "l_vs_r");
-      // }
+        plotter->Fill2D("matched_be_vs_x_sx3_id_" + std::to_string(id) + "_f" + std::to_string(det.stripF), 200, -60, 60, 800, 0, 8192,
+                        det.frontX * sx3FrontGain[id][det.stripF] + sx3FrontOffset[id][det.stripF], det.backE * sx3BackGain[id][det.stripF][det.stripB], "evsx_matched");
+        plotter->Fill2D("fe_vs_x_sx3_id_"+std::to_string(id)+"_f"+std::to_string(det.stripF)+"_"+std::to_string(det.stripB),200,-1,1,800,0,4096,det.frontX,det.backE,"evsx");
+        plotter->Fill2D("l_vs_r_sx3_id_" + std::to_string(id) + "_f" + std::to_string(det.stripF), 800, 0, 4096, 800, 0, 4096, det.frontEL, det.frontER, "l_vs_r");
+      }
       if (det.valid && (id == 9 || id == 7 || id == 1 || id == 3) && det.stripF != DEFAULT_NULL && det.stripB != DEFAULT_NULL)
       {
         double z = det.frontX * sx3FrontGain[id][det.stripF] + sx3FrontOffset[id][det.stripF];
@@ -1334,7 +1335,7 @@ Bool_t TrackRecon::Process(Long64_t entry)
           plotter->Fill2D("sx3backs_gm", 100, 0, 100, 800, 0, 8192, det.stripB + 4 * id, backE, "hCalSX3");
           plotter->Fill1D("sx3backs_calib", 800, 0, 8192, backE, "hCalSX3");
 
-          // plotter->Fill2D("SX3CartesianPlot", 200, -100, 100, 200, -100, 100, 88.0*TMath::Cos(phi_n),88.0*TMath::Sin(phi_n), "hCalSX3");
+          plotter->Fill2D("SX3CartesianPlot", 200, -100, 100, 200, -100, 100, 88.0*TMath::Cos(phi_n),88.0*TMath::Sin(phi_n), "hCalSX3");
           plotter->Fill2D("SX3CartesianPlot" + std::to_string(id), 200, -100, 100, 200, -100, 100, rho_at_strip * TMath::Cos(phi_n), rho_at_strip * TMath::Sin(phi_n), "hCalSX3");
         }
         if (diagnostic_tplots)
@@ -4078,8 +4079,8 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
       double vertex_z = r_rhoMin_fix.Z();
       const bool axisSafe = (topo1 == "a1c2fix") || (topo1 == "a2c0") || (topo2 == "a1c1_inband");
       fillBeamProfile(plotter, r_rhoMin_fix, sievent.pos, x2f - sievent.pos,
-                      "reaction_" + globaltag + "_" + det, axisSafe);
-      if (beamPerp(r_rhoMin_fix) > perp_cut || vertex_z < z_entrance)
+                      "reaction_" + rx + "_" + det, axisSafe);
+      if (beamPerp(r_rhoMin_fix) > perp_cut || vertex_z < z_entrance || vertex_z > 30.0)
         return;
 
       double theta = (sievent.pos - r_rhoMin_fix).Theta();
@@ -4217,7 +4218,7 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
             plotter->Fill2D(rx + "_dEgasCalib_vs_VertexZ" + ejtag + sfx, 800, -400, 400, 800, 0, 0.6, vertex_z, anodeE_MeV, pmlabel);
             plotter->Fill2D(rx + "_dEgasRaw_vs_VertexZ" + ejtag + sfx, 800, -400, 400, 800, 0, 20000, vertex_z, anodeE, pmlabel);
             plotter->Fill2D(rx + "_dEgasRaw_vs_theta" + ejtag + sfx, 180, 0, 180, 800, 0, 20000, theta * 180 / M_PI, anodeE, pmlabel);
-            plotter->Fill2D(rx + "_dEgasCalib_vs_theta" + ejtag + sfx, 720, 0, 180, 800, 0, 0.6, theta * 180 / M_PI, anodeE_MeV, pmlabel);
+            plotter->Fill2D(rx + "_dEgasCalib_vs_theta" + ejtag + sfx, 360, 0, 180, 800, 0, 0.6, theta * 180 / M_PI, anodeE_MeV, pmlabel);
             plotter->Fill2D(rx + "_dEgasCalib_vs_phi" + ejtag + sfx, 90, -180, 180, 800, 0, 0.6, phi * 180 / M_PI, anodeE_MeV, pmlabel);
             // if (anodeCh >= 0)
             //   plotter->Fill2D(rx + "_dEgasCalib_vs_E" + ejtag + sfx + "_anode" + pad2(anodeCh), 400, 0, ef_max, 800, 0, 0.6, sievent.Energy1, anodeE_MeV, pmlabel);
@@ -4245,7 +4246,11 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
     {
       if (!(pcevent.multi1 == 1 && (pcevent.multi2 == 1 || pcevent.multi2 == 2)))
         continue;
-      if (TMath::Abs(sievent.pos.DeltaPhi(pcevent.pos)) > phi_win)
+      // phi + time gate, matching protonAlphaElastic_core's equivalent a1c1/a1c2
+      // dispatch loop -- this branch previously gated on phi only.
+      bool phicut = TMath::Abs(sievent.pos.DeltaPhi(pcevent.pos)) <= phi_win;
+      bool timecut = siPcCoincident(sievent.Time1, pcevent.Time1);
+      if (!(phicut && timecut))
         continue;
       double anodeE_MeV = (pcevent.Anodech >= 0 && pcevent.Anodech < 24)
                               ? pcEnergySlope[pcevent.Anodech] * pcevent.Energy1
@@ -4290,13 +4295,18 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
       auto aPw = pwinstance.GetPseudoWire(aCl, "ANODE");
       auto apwire = std::get<0>(aPw);
       double apSumE = std::get<1>(aPw);
+      double apTSMaxE = std::get<3>(aPw);
 
       bool isA2C0 = (aCl.size() == 2);
       const std::string a0tag = isA2C0 ? "a2c0" : "a1c0";
       TVector3 pc = isA2C0 ? a2c0_wirePos(apwire, sievent.pos.Phi(), isQQQ)
                            : a1c0_wirePos(apwire, sievent.pos.Phi(), isQQQ);
 
-      if (TMath::Abs(sievent.pos.DeltaPhi(pc)) > phi_win)
+      // phi + time gate, matching protonAlphaElastic_core's equivalent a1c0/a2c0
+      // loop -- this branch previously gated on phi only.
+      bool phicut = TMath::Abs(sievent.pos.DeltaPhi(pc)) <= phi_win;
+      bool timecut = siPcCoincident(sievent.Time1, apTSMaxE);
+      if (!(phicut && timecut))
         continue;
 
       std::string pmlabel = folderPrefix + globaltag + "_" + rx + "+misc_" + det + "_" + a0tag;
