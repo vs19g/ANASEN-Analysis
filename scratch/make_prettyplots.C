@@ -167,7 +167,7 @@ void make_prettyplots(const char *rootFile,
         h->GetXaxis()->CenterTitle(true);
         h->GetYaxis()->CenterTitle(true);
 
-        gPad->SetLogz();
+        // gPad->SetLogz();
 
         h->Draw("colz");
     }

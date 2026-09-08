@@ -25,6 +25,7 @@ Int_t colors[40] = {
 #include <TSpline.h>
 #include <TSystem.h> // gSystem->mkdir for the pc_calib_raw/ output directory
 
+#include <cmath> // std::floor/fabs/lround for vertexZSliceTag()
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -42,8 +43,8 @@ Int_t colors[40] = {
 bool process_alpha_proton_scattering = false,
      doMiscHistograms = true,
      doRawHistos = false,
-     doPCSX3ClusterAnalysis = false,
-     doPCQQQClusterAnalysis = false,
+     doPCSX3ClusterAnalysis = true,
+     doPCQQQClusterAnalysis = true,
      doOldAnalysis = false,
      BenchMark = false,
      onewire_analysis = true,
@@ -75,9 +76,9 @@ double source_vertex = 53.0,
        a1c1_z_off_sx3 = 2.52614,
        beam_axis_x = 0.0,
        beam_axis_y = 0.0,
-       beam_axis_z0 = 0.0,   // reference z at which (beam_axis_x, beam_axis_y) is specified
-       beam_tilt_x = 0.0,    // dx/dz slope of the beam axis
-       beam_tilt_y = 0.0,    // dy/dz slope of the beam axis
+       beam_axis_z0 = 0.0,
+       beam_tilt_x = 0.0,
+       beam_tilt_y = 0.0,
        ta_foil_z_mm = 0.0,
        alpha_source_mev = 5.486;
 
@@ -197,7 +198,7 @@ inline void fillBeamProfile(HistPlotter *plotter, const TVector3 &vertex,
   const double zLo = -440.0, zHi = 40.0;
   const int nSlice = 16;
   const double sliceW = (zHi - zLo) / nSlice; // 30 mm
-  
+
   if (vz >= zLo && vz < zHi)
   {
     int is = static_cast<int>((vz - zLo) / sliceW);
@@ -502,6 +503,27 @@ inline bool clusterHasExcludedAnode(const std::vector<std::tuple<int, double, do
 inline std::string pad2(int n)
 {
   return (n < 10 ? "0" : "") + std::to_string(n);
+}
+
+// Vertex-z slicing for detector-angle maps: 10 cm wide, covering the physical
+// vertex acceptance. Labels carry the slice edges in mm ('m' = minus), so
+// histogram names stay unique per slice -- HistPlotter keys oMap by name only.
+static const double kVertexZSliceWidth = 20.0; // mm (10 cm)
+static const double kVertexZSliceMax = 400.0;  // mm, symmetric about z = 0
+
+// Returns e.g. "z_m200_m100" for z = -137 mm, or "" when z falls outside
+// +-kVertexZSliceMax (callers skip the fill).
+inline std::string vertexZSliceTag(double z)
+{
+  if (!(std::fabs(z) < kVertexZSliceMax))
+    return "";
+  const double lo = std::floor(z / kVertexZSliceWidth) * kVertexZSliceWidth;
+  auto fmt = [](double v)
+  {
+    const int i = static_cast<int>(std::lround(v));
+    return i < 0 ? "m" + std::to_string(-i) : std::to_string(i);
+  };
+  return "z_" + fmt(lo) + "_" + fmt(lo + kVertexZSliceWidth);
 }
 
 HistPlotter *plotter;
@@ -1300,7 +1322,7 @@ Bool_t TrackRecon::Process(Long64_t entry)
       if (det.valid && diagnostic_eplots)
       {
         // std::cout << det.frontEL << " " << det.frontEL*sx3RightGain[id][det.stripF] << std::endl;
-        plotter->Fill2D("be_vs_x_sx3_id_"+std::to_string(id)+"_f"+std::to_string(det.stripF)+"_b"+std::to_string(det.stripB),200,-1,1,800,0,8192,det.frontX,det.backE,"evsx");
+        plotter->Fill2D("be_vs_x_sx3_id_" + std::to_string(id) + "_f" + std::to_string(det.stripF) + "_b" + std::to_string(det.stripB), 200, -1, 1, 800, 0, 8192, det.frontX, det.backE, "evsx");
         plotter->Fill2D("unmatched_be_vs_x_sx3_id_" + std::to_string(id), 200, -1, 1, 800, 0, 4096, det.frontX, det.backE, "evsx");
         plotter->Fill2D("unmatched_be_vs_x_sx3", 200, -1, 1, 800, 0, 4096, det.frontX, det.backE, "evsx");
         plotter->Fill2D("matched_be_vs_x_sx3", 200, -60, 60, 800, 0, 8192, det.frontX * sx3FrontGain[id][det.stripF] + sx3FrontOffset[id][det.stripF], det.backE * sx3BackGain[id][det.stripF][det.stripB], "evsx");
@@ -1308,7 +1330,7 @@ Bool_t TrackRecon::Process(Long64_t entry)
 
         plotter->Fill2D("matched_be_vs_x_sx3_id_" + std::to_string(id) + "_f" + std::to_string(det.stripF), 200, -60, 60, 800, 0, 8192,
                         det.frontX * sx3FrontGain[id][det.stripF] + sx3FrontOffset[id][det.stripF], det.backE * sx3BackGain[id][det.stripF][det.stripB], "evsx_matched");
-        plotter->Fill2D("fe_vs_x_sx3_id_"+std::to_string(id)+"_f"+std::to_string(det.stripF)+"_"+std::to_string(det.stripB),200,-1,1,800,0,4096,det.frontX,det.backE,"evsx");
+        plotter->Fill2D("fe_vs_x_sx3_id_" + std::to_string(id) + "_f" + std::to_string(det.stripF) + "_" + std::to_string(det.stripB), 200, -1, 1, 800, 0, 4096, det.frontX, det.backE, "evsx");
         plotter->Fill2D("l_vs_r_sx3_id_" + std::to_string(id) + "_f" + std::to_string(det.stripF), 800, 0, 4096, 800, 0, 4096, det.frontEL, det.frontER, "l_vs_r");
       }
       if (det.valid && (id == 9 || id == 7 || id == 1 || id == 3) && det.stripF != DEFAULT_NULL && det.stripB != DEFAULT_NULL)
@@ -1335,7 +1357,7 @@ Bool_t TrackRecon::Process(Long64_t entry)
           plotter->Fill2D("sx3backs_gm", 100, 0, 100, 800, 0, 8192, det.stripB + 4 * id, backE, "hCalSX3");
           plotter->Fill1D("sx3backs_calib", 800, 0, 8192, backE, "hCalSX3");
 
-          plotter->Fill2D("SX3CartesianPlot", 200, -100, 100, 200, -100, 100, 88.0*TMath::Cos(phi_n),88.0*TMath::Sin(phi_n), "hCalSX3");
+          plotter->Fill2D("SX3CartesianPlot", 200, -100, 100, 200, -100, 100, 88.0 * TMath::Cos(phi_n), 88.0 * TMath::Sin(phi_n), "hCalSX3");
           plotter->Fill2D("SX3CartesianPlot" + std::to_string(id), 200, -100, 100, 200, -100, 100, rho_at_strip * TMath::Cos(phi_n), rho_at_strip * TMath::Sin(phi_n), "hCalSX3");
         }
         if (diagnostic_tplots)
@@ -1862,12 +1884,19 @@ Bool_t TrackRecon::Process(Long64_t entry)
   double dt_rf_mcp_event = -987654321;
   double ts_rf_event = -987654321, ts_mcp_event = -987654321;
   {
+    // +/-2 ns clock dither, same dequantization as tRing/tWedge (QQQ, +/-8 ns)
+    // and Fsx3.ts (SX3, +/-8 ns) -- misc.t/misc.tf are raw digitizer ticks, not
+    // a continuous CFD fraction, so left undithered this stair-steps just like
+    // the Si times did before their own dither was added. Applied once here,
+    // at construction, same as tRing/tWedge -- everything downstream (the
+    // miscHistograms_17Fax parameters, dt_si_mcp/dt_si_rf in reaction_ax_core's
+    // siMcpRfGate cut) inherits this value and must not redither it.
     for (int j = 0; j < misc.multi; j++)
     {
       if (misc.ch[j] == 3)
-        ts_rf_event = static_cast<double>(misc.t[j]) + static_cast<double>(misc.tf[j]);
+        ts_rf_event = static_cast<double>(misc.t[j]) + static_cast<double>(misc.tf[j]) + (rnd.Uniform(4.0) - 2.0);
       if (misc.ch[j] == 4)
-        ts_mcp_event = static_cast<double>(misc.t[j]) + static_cast<double>(misc.tf[j]);
+        ts_mcp_event = static_cast<double>(misc.t[j]) + static_cast<double>(misc.tf[j]) + (rnd.Uniform(4.0) - 2.0);
     }
     if (ts_rf_event > -987654321 && ts_mcp_event > -987654321)
       dt_rf_mcp_event = ts_rf_event - ts_mcp_event;
@@ -1903,33 +1932,35 @@ Bool_t TrackRecon::Process(Long64_t entry)
         if (misc.ch[j] == 2)
         { // Needle
           plotter->Fill2D("needle_vs_qqqE", 800, 0, 16384, 800, 0, 10, misc.e[j], qqqevent.Energy1, "misc");
-          ts_needle = static_cast<double>(misc.t[j]) + static_cast<double>(misc.tf[j]);
+          ts_needle = static_cast<double>(misc.t[j]) + static_cast<double>(misc.tf[j]) + (rnd.Uniform(4.0) - 2.0);
           found_needle = 1;
-          plotter->Fill1D("dt_qqq_needle", 800, -2000, 2000, ts_qqq - ts_needle, "misc");
+          plotter->Fill1D("dt_qqq_needle", 1600, -2000, 2000, ts_qqq - ts_needle, "misc");
         }
         if (misc.ch[j] == 3)
         { // RF
-          ts_rf = static_cast<double>(misc.t[j]) + static_cast<double>(misc.tf[j]);
+          ts_rf = static_cast<double>(misc.t[j]) + static_cast<double>(misc.tf[j]) + (rnd.Uniform(4.0) - 2.0);
           found_rf = 1;
-          plotter->Fill1D("dt_qqq_rf_innerring" + std::to_string(qqq_inner_ring), 800, -2000, 2000, ts_qqq - ts_rf, "misc");
+          plotter->Fill1D("dt_qqq_rf_innerring" + std::to_string(qqq_inner_ring), 1600, -2000, 2000, ts_qqq - ts_rf, "misc");
         }
         if (misc.ch[j] == 4)
         { // mcp
-          ts_mcp = static_cast<double>(misc.t[j]) + static_cast<double>(misc.tf[j]);
+          ts_mcp = static_cast<double>(misc.t[j]) + static_cast<double>(misc.tf[j]) + (rnd.Uniform(4.0) - 2.0);
           found_mcp = 1;
-          plotter->Fill1D("dt_qqq_mcp_innerring" + std::to_string(qqq_inner_ring), 800, -2000, 2000, ts_qqq - ts_mcp, "misc");
+          plotter->Fill1D("dt_qqq_mcp_innerring" + std::to_string(qqq_inner_ring), 1600, -2000, 2000, ts_qqq - ts_mcp, "misc");
         }
       }
       if (found_rf && found_mcp)
       {
         if (ctr == 0)
-          plotter->Fill1D("dt_rf_mcp_qqq_innerring" + std::to_string(qqq_inner_ring), 500, -1000, 1000, ts_rf - ts_mcp, "misc");
+          plotter->Fill1D("dt_rf_mcp_qqq_innerring" + std::to_string(qqq_inner_ring), 1000, -1000, 1000, ts_rf - ts_mcp, "misc");
         double dt_rf_mcp = ts_rf - ts_mcp;
         double dt_qqq_rf = ts_qqq - ts_rf;
         double dt_qqq_mcp = ts_qqq - ts_mcp;
-        plotter->Fill2D("dt(qqq,rf)_vs_(rf,mcp)_innerring" + std::to_string(qqq_inner_ring), 800, -2000, 2000, 640, -2000, 2000, dt_qqq_rf, dt_rf_mcp, "misc");
-        plotter->Fill2D("dt_(qqq,mcp)_vs_(qqq,rf)_innerring" + std::to_string(qqq_inner_ring), 800, -1400, 2000, 640, -2000, 2000, dt_qqq_mcp, dt_qqq_rf, "misc");
-        plotter->Fill2D("dt_(qqq,mcp)_vs_(rf,mcp)_innerring" + std::to_string(qqq_inner_ring), 1000, -1400, 1000, 640, -2000, 2000, dt_qqq_mcp, dt_rf_mcp, "misc");
+        plotter->Fill2D("dt(qqq,rf)_vs_(rf,mcp)_innerring" + std::to_string(qqq_inner_ring), 1600, -2000, 2000, 1280, -2000, 2000, dt_qqq_rf, dt_rf_mcp, "misc");
+        plotter->Fill2D("dt_(qqq,mcp)_vs_(qqq,rf)_innerring" + std::to_string(qqq_inner_ring), 1600, -1400, 2000, 1280, -2000, 2000, dt_qqq_mcp, dt_qqq_rf, "misc");
+        plotter->Fill2D("dt_(qqq,mcp)_vs_(rf,mcp)_innerring" + std::to_string(qqq_inner_ring), 2000, -1400, 1000, 1280, -2000, 2000, dt_qqq_mcp, dt_rf_mcp, "misc");
+        plotter->Fill2D("dt_(qqq,mcp)_vs_(rf,mcp)", 2000, -1400, 1000, 1280, -2000, 2000, dt_qqq_mcp, dt_rf_mcp, "misc");
+        plotter->Fill2D("dt_(si,mcp)_vs_(rf,mcp)", 2000, -1400, 1000, 1280, -2000, 2000, dt_qqq_mcp, dt_rf_mcp, "misc");
       }
       ctr += 1;
     }
@@ -1949,33 +1980,34 @@ Bool_t TrackRecon::Process(Long64_t entry)
         if (misc.ch[j] == 2)
         { // Needle
           plotter->Fill2D("needle_vs_sx3E", 800, 0, 16384, 800, 0, 10, misc.e[j], sx3event.Energy1, "misc");
-          ts_needle = static_cast<double>(misc.t[j]) + static_cast<double>(misc.tf[j]);
+          ts_needle = static_cast<double>(misc.t[j]) + static_cast<double>(misc.tf[j]) + (rnd.Uniform(4.0) - 2.0);
           found_needle = 1;
-          plotter->Fill1D("dt_sx3_needle", 800, -2000, 2000, ts_sx3 - ts_needle, "misc");
+          plotter->Fill1D("dt_sx3_needle", 1600, -2000, 2000, ts_sx3 - ts_needle, "misc");
         }
         if (misc.ch[j] == 3)
         { // RF
-          ts_rf = static_cast<double>(misc.t[j]) + static_cast<double>(misc.tf[j]);
+          ts_rf = static_cast<double>(misc.t[j]) + static_cast<double>(misc.tf[j]) + (rnd.Uniform(4.0) - 2.0);
           found_rf = 1;
-          plotter->Fill1D("dt_sx3_rf", 800, -2000, 2000, ts_sx3 - ts_rf, "misc");
+          plotter->Fill1D("dt_sx3_rf", 1600, -2000, 2000, ts_sx3 - ts_rf, "misc");
         }
         if (misc.ch[j] == 4)
         { // mcp
-          ts_mcp = static_cast<double>(misc.t[j]) + static_cast<double>(misc.tf[j]);
+          ts_mcp = static_cast<double>(misc.t[j]) + static_cast<double>(misc.tf[j]) + (rnd.Uniform(4.0) - 2.0);
           found_mcp = 1;
-          plotter->Fill1D("dt_sx3_mcp", 800, -2000, 2000, ts_sx3 - ts_mcp, "misc");
+          plotter->Fill1D("dt_sx3_mcp", 1600, -2000, 2000, ts_sx3 - ts_mcp, "misc");
         }
       }
       if (found_rf && found_mcp)
       {
         if (ctr == 0)
-          plotter->Fill1D("dt_rf_mcp_sx3", 500, -1000, 1000, ts_rf - ts_mcp, "misc");
+          plotter->Fill1D("dt_rf_mcp_sx3", 1000, -1000, 1000, ts_rf - ts_mcp, "misc");
         double dt_rf_mcp = ts_rf - ts_mcp;
         double dt_sx3_rf = ts_sx3 - ts_rf;
         double dt_sx3_mcp = ts_sx3 - ts_mcp;
-        plotter->Fill2D("dt(sx3,rf)_vs_(rf,mcp)", 800, -2000, 2000, 640, -2000, 2000, dt_sx3_rf, dt_rf_mcp, "misc");
-        plotter->Fill2D("dt_(sx3,mcp)_vs_(sx3,rf)", 800, -1400, 2000, 640, -2000, 2000, dt_sx3_mcp, dt_sx3_rf, "misc");
-        plotter->Fill2D("dt_(sx3,mcp)_vs_(rf,mcp)", 1000, -1400, 1000, 640, -2000, 2000, dt_sx3_mcp, dt_rf_mcp, "misc");
+        plotter->Fill2D("dt(sx3,rf)_vs_(rf,mcp)", 1600, -2000, 2000, 1280, -2000, 2000, dt_sx3_rf, dt_rf_mcp, "misc");
+        plotter->Fill2D("dt_(sx3,mcp)_vs_(sx3,rf)", 1600, -1400, 2000, 1280, -2000, 2000, dt_sx3_mcp, dt_sx3_rf, "misc");
+        plotter->Fill2D("dt_(sx3,mcp)_vs_(rf,mcp)", 2000, -1400, 1000, 1280, -2000, 2000, dt_sx3_mcp, dt_rf_mcp, "misc");
+        plotter->Fill2D("dt_(si,mcp)_vs_(rf,mcp)", 2000, -1400, 1000, 1280, -2000, 2000, dt_qqq_mcp, dt_rf_mcp, "misc");
       }
       ctr += 1;
     }
@@ -2602,6 +2634,20 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
         plotter->Fill1D("pczfix-sx3pczguess_A1C2", 200, -100, 100, pcz_fix - pczguess, "Residuals");
         plotter->Fill2D("pczfix_vs_sx3pczguess_A1C2_strip" + std::to_string(sx3event.ch2), 300, -200, 200, 600, -200, 200, pczguess, pcevent.pos.Z(), "PCZ_Recon");
 
+        // Si theta vs phi, sliced in 10 cm of reconstructed vertex z. theta is
+        // measured from the beam axis at the vertex z (same convention as the
+        // kinematics plots); phi is the detector-frame azimuth.
+        {
+          const double si_theta_deg = (sx3event.pos - beamAxisPoint(r_rhoMin_fix.Z())).Theta() * 180.0 / M_PI;
+          const double si_phi_deg = sx3event.pos.Phi() * 180.0 / M_PI;
+          plotter->Fill2D("siTheta_vs_siPhi_SX3_A1C2_all", 180, 0, 180, 180, -180, 180,
+                          si_theta_deg, si_phi_deg, "theta_v_phi_sx3");
+          const std::string zslice = vertexZSliceTag(r_rhoMin_fix.Z());
+          if (!zslice.empty())
+            plotter->Fill2D("siTheta_vs_siPhi_SX3_A1C2_" + zslice, 180, 0, 180, 180, -180, 180,
+                            si_theta_deg, si_phi_deg, "theta_v_phi_sx3");
+        }
+
         double sinTheta_customV = TMath::Sin((sx3event.pos - beamAxisPoint(r_rhoMin_fix.Z())).Theta());
         plotter->Fill2D("dE3_E_CathodeSX3_A1C2_TC" + std::to_string(PCSX3TimeCut) + "_PC" + std::to_string(phicut), 400, 0, 30, 800, 0, 10000, sx3event.Energy1, pcevent.Energy2 * sinTheta_customV, "PID_dE_E");
         plotter->Fill2D("dE3_E_AnodeSX3_A1C2_TC" + std::to_string(PCSX3TimeCut) + "_PC" + std::to_string(phicut), 400, 0, 30, 800, 0, 40000, sx3event.Energy1, pcevent.Energy1 * sinTheta_customV, "PID_dE_E");
@@ -3141,6 +3187,20 @@ void PCQQQClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
           // purely longitudinal direction.
           TVector3 r_rhoMin_fix = beamVertex(x1, v);
           fillBeamProfile(plotter, r_rhoMin_fix, x1, v, "qqqa1c2", true); // a1c2 only, gated above
+
+          // Si theta vs phi, sliced in 10 cm of reconstructed vertex z. theta is
+          // measured from the beam axis at the vertex z (same convention as the
+          // kinematics plots); phi is the detector-frame azimuth.
+          {
+            const double si_theta_deg = (qqqevent.pos - beamAxisPoint(r_rhoMin_fix.Z())).Theta() * 180.0 / M_PI;
+            const double si_phi_deg = qqqevent.pos.Phi() * 180.0 / M_PI;
+            plotter->Fill2D("siTheta_vs_siPhi_QQQ_A1C2_all", 180, 0, 180, 180, -180, 180,
+                            si_theta_deg, si_phi_deg, "theta_v_phi_qqq");
+            const std::string zslice = vertexZSliceTag(r_rhoMin_fix.Z());
+            if (!zslice.empty())
+              plotter->Fill2D("siTheta_vs_siPhi_QQQ_A1C2_" + zslice, 180, 0, 180, 180, -180, 180,
+                              si_theta_deg, si_phi_deg, "theta_v_phi_qqq");
+          }
 
           double sinTheta_customV = TMath::Sin((qqqevent.pos - beamAxisPoint(r_rhoMin_fix.Z())).Theta());
           plotter->Fill2D("dE3_E_CathodeQQQR_A1C2_TC1_PC" + std::to_string(phicut), 400, 0, 30, 800, 0, 10000, qqqevent.Energy1, pcevent.Energy2 * sinTheta_customV, "PID_dE_E");
