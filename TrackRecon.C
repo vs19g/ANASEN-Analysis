@@ -43,8 +43,8 @@ Int_t colors[40] = {
 bool process_alpha_proton_scattering = false,
      doMiscHistograms = true,
      doRawHistos = false,
-     doPCSX3ClusterAnalysis = true,
-     doPCQQQClusterAnalysis = true,
+     doPCSX3ClusterAnalysis = false,
+     doPCQQQClusterAnalysis = false,
      doOldAnalysis = false,
      BenchMark = false,
      onewire_analysis = true,
@@ -61,12 +61,8 @@ bool process_alpha_proton_scattering = false,
 // 1175mm instead of 1105, plus some part of the window actually lies outside the chamber
 double source_vertex = 53.0,
        z_entrance = -174.3 - 9.7 - 270.0,
-       dither_sigma = 8.0, // single pcz dither width; A1C0/A1C1/A1C2 all use this.
-                           // dither_sigma_c0 (=16.0, always consumed as /2.0) was
-                           // removed -- numerically identical at the default but it
-                           // desynced from dither_sigma the moment DITHER_SIGMA was
-                           // set, giving the QQQ and SX3 twins a silent 2x difference.
-    cathode_gain = 1.0,
+       dither_sigma = 8.0,
+       cathode_gain = 1.0,
        a1c1_cfrac_split = 0.0,
        a1c1_missing_fmax = 2.0,
        a1c1_lowband_rfactor = 0.0,
@@ -179,60 +175,60 @@ inline double beamPerp(const TVector3 &p)
   return perp.Mag();
 }
 
-inline void fillBeamProfile(HistPlotter *plotter, const TVector3 &vertex,
-                            const TVector3 &si, const TVector3 &dir, const std::string &tag,
-                            bool axisSafe)
-{
-  const std::string folder = "BeamAxis";
-  const std::string all = "beamAxis_all_";
-  const std::string one = "beamAxis_" + tag + "_";
-  double vx = vertex.X(), vy = vertex.Y(), vz = vertex.Z();
-  double pocaDist = beamPerp(vertex);
-  plotter->Fill2D(all + "vertexX_vs_Z", 250, -450, 50, 200, -50, 50, vz, vx, folder);
-  plotter->Fill2D(all + "vertexY_vs_Z", 250, -450, 50, 200, -50, 50, vz, vy, folder);
-  plotter->Fill1D(all + "pocaDist", 400, 0, 100, pocaDist, folder);
-  // Per-branch copy so anomalies can be traced to a specific reconstruction path.
-  plotter->Fill2D(one + "vertexX_vs_Z", 250, -450, 50, 200, -50, 50, vz, vx, folder);
-  plotter->Fill2D(one + "vertexY_vs_Z", 250, -450, 50, 200, -50, 50, vz, vy, folder);
-  plotter->Fill1D(one + "pocaDist", 400, 0, 100, pocaDist, folder);
-  const double zLo = -440.0, zHi = 40.0;
-  const int nSlice = 16;
-  const double sliceW = (zHi - zLo) / nSlice; // 30 mm
+// inline void fillBeamProfile(HistPlotter *plotter, const TVector3 &vertex,
+//                             const TVector3 &si, const TVector3 &dir, const std::string &tag,
+//                             bool axisSafe)
+// {
+//   const std::string folder = "BeamAxis";
+//   const std::string all = "beamAxis_all_";
+//   const std::string one = "beamAxis_" + tag + "_";
+//   double vx = vertex.X(), vy = vertex.Y(), vz = vertex.Z();
+//   double pocaDist = beamPerp(vertex);
+//   plotter->Fill2D(all + "vertexX_vs_Z", 250, -450, 50, 200, -50, 50, vz, vx, folder);
+//   plotter->Fill2D(all + "vertexY_vs_Z", 250, -450, 50, 200, -50, 50, vz, vy, folder);
+//   plotter->Fill1D(all + "pocaDist", 400, 0, 100, pocaDist, folder);
+//   // Per-branch copy so anomalies can be traced to a specific reconstruction path.
+//   plotter->Fill2D(one + "vertexX_vs_Z", 250, -450, 50, 200, -50, 50, vz, vx, folder);
+//   plotter->Fill2D(one + "vertexY_vs_Z", 250, -450, 50, 200, -50, 50, vz, vy, folder);
+//   plotter->Fill1D(one + "pocaDist", 400, 0, 100, pocaDist, folder);
+//   const double zLo = -440.0, zHi = 40.0;
+//   const int nSlice = 16;
+//   const double sliceW = (zHi - zLo) / nSlice; // 30 mm
 
-  if (vz >= zLo && vz < zHi)
-  {
-    int is = static_cast<int>((vz - zLo) / sliceW);
-    if (is >= 0 && is < nSlice)
-    {
-      char buf[8];
-      snprintf(buf, sizeof(buf), "%02d", is);
-      plotter->Fill2D(all + "vertexXY_z" + buf, 200, -50, 50, 200, -50, 50, vx, vy, folder);
-    }
-  }
+//   if (vz >= zLo && vz < zHi)
+//   {
+//     int is = static_cast<int>((vz - zLo) / sliceW);
+//     if (is >= 0 && is < nSlice)
+//     {
+//       char buf[8];
+//       snprintf(buf, sizeof(buf), "%03d", is);
+//       plotter->Fill2D(all + "vertexXY_z" + buf, 200, -50, 50, 200, -50, 50, vx, vy, folder);
+//     }
+//   }
 
-  double dz = dir.Z();
-  double vzBin = beamVertexNominal(si, dir).Z();
-  if (axisSafe && TMath::Abs(dz) > 1e-6 && vzBin >= zLo && vzBin < zHi)
-  {
-    int k = static_cast<int>((vzBin - zLo) / sliceW);
-    if (k >= 0 && k < nSlice)
-    {
-      double zPlane = zLo + (k + 0.5) * sliceW;
-      double s = (zPlane - si.Z()) / dz;
-      double cx = si.X() + s * dir.X();
-      double cy = si.Y() + s * dir.Y();
-      if (TMath::Abs(cx) < 100.0 && TMath::Abs(cy) < 100.0)
-      {
-        char kbuf[8];
-        snprintf(kbuf, sizeof(kbuf), "%02d", k);
-        plotter->Fill1D(all + "crossX_z" + kbuf, 800, -100, 100, cx, folder);
-        plotter->Fill1D(all + "crossY_z" + kbuf, 800, -100, 100, cy, folder);
-        plotter->Fill1D(one + "crossX_z" + kbuf, 800, -100, 100, cx, folder);
-        plotter->Fill1D(one + "crossY_z" + kbuf, 800, -100, 100, cy, folder);
-      }
-    }
-  }
-}
+//   double dz = dir.Z();
+//   double vzBin = beamVertexNominal(si, dir).Z();
+//   if (axisSafe && TMath::Abs(dz) > 1e-6 && vzBin >= zLo && vzBin < zHi)
+//   {
+//     int k = static_cast<int>((vzBin - zLo) / sliceW);
+//     if (k >= 0 && k < nSlice)
+//     {
+//       double zPlane = zLo + (k + 0.5) * sliceW;
+//       double s = (zPlane - si.Z()) / dz;
+//       double cx = si.X() + s * dir.X();
+//       double cy = si.Y() + s * dir.Y();
+//       if (TMath::Abs(cx) < 100.0 && TMath::Abs(cy) < 100.0)
+//       {
+//         char kbuf[8];
+//         snprintf(kbuf, sizeof(kbuf), "%03d", k);
+//         plotter->Fill1D(all + "crossX_z" + kbuf, 800, -100, 100, cx, folder);
+//         plotter->Fill1D(all + "crossY_z" + kbuf, 800, -100, 100, cy, folder);
+//         plotter->Fill1D(one + "crossX_z" + kbuf, 800, -100, 100, cx, folder);
+//         plotter->Fill1D(one + "crossY_z" + kbuf, 800, -100, 100, cy, folder);
+//       }
+//     }
+//   }
+// }
 
 struct PCPath
 {
@@ -503,27 +499,6 @@ inline bool clusterHasExcludedAnode(const std::vector<std::tuple<int, double, do
 inline std::string pad2(int n)
 {
   return (n < 10 ? "0" : "") + std::to_string(n);
-}
-
-// Vertex-z slicing for detector-angle maps: 10 cm wide, covering the physical
-// vertex acceptance. Labels carry the slice edges in mm ('m' = minus), so
-// histogram names stay unique per slice -- HistPlotter keys oMap by name only.
-static const double kVertexZSliceWidth = 20.0; // mm (10 cm)
-static const double kVertexZSliceMax = 400.0;  // mm, symmetric about z = 0
-
-// Returns e.g. "z_m200_m100" for z = -137 mm, or "" when z falls outside
-// +-kVertexZSliceMax (callers skip the fill).
-inline std::string vertexZSliceTag(double z)
-{
-  if (!(std::fabs(z) < kVertexZSliceMax))
-    return "";
-  const double lo = std::floor(z / kVertexZSliceWidth) * kVertexZSliceWidth;
-  auto fmt = [](double v)
-  {
-    const int i = static_cast<int>(std::lround(v));
-    return i < 0 ? "m" + std::to_string(-i) : std::to_string(i);
-  };
-  return "z_" + fmt(lo) + "_" + fmt(lo + kVertexZSliceWidth);
 }
 
 HistPlotter *plotter;
@@ -2007,7 +1982,7 @@ Bool_t TrackRecon::Process(Long64_t entry)
         plotter->Fill2D("dt(sx3,rf)_vs_(rf,mcp)", 1600, -2000, 2000, 1280, -2000, 2000, dt_sx3_rf, dt_rf_mcp, "misc");
         plotter->Fill2D("dt_(sx3,mcp)_vs_(sx3,rf)", 1600, -1400, 2000, 1280, -2000, 2000, dt_sx3_mcp, dt_sx3_rf, "misc");
         plotter->Fill2D("dt_(sx3,mcp)_vs_(rf,mcp)", 2000, -1400, 1000, 1280, -2000, 2000, dt_sx3_mcp, dt_rf_mcp, "misc");
-        plotter->Fill2D("dt_(si,mcp)_vs_(rf,mcp)", 2000, -1400, 1000, 1280, -2000, 2000, dt_qqq_mcp, dt_rf_mcp, "misc");
+        plotter->Fill2D("dt_(si,mcp)_vs_(rf,mcp)", 2000, -1400, 1000, 1280, -2000, 2000, dt_sx3_mcp, dt_rf_mcp, "misc");
       }
       ctr += 1;
     }
@@ -2178,8 +2153,7 @@ void protonAlphaHistograms(HistPlotter *plotter, const std::vector<Event> &QQQ_E
         // purely longitudinal direction.
         TVector3 r_rhoMin_fix = beamVertex(x1, v);
         double vertex_z = r_rhoMin_fix.Z();
-        fillBeamProfile(plotter, r_rhoMin_fix, x1, v, "apCoinc",
-                        pcevent.multi1 == 1 && pcevent.multi2 == 2);
+        // fillBeamProfile(plotter, r_rhoMin_fix, x1, v, "apCoinc", pcevent.multi1 == 1 && pcevent.multi2 == 2);
         double theta_q = (qqqevent.pos - beamAxisPoint(vertex_z)).Theta();
         // double theta_q = (qqqevent.pos - r_rhoMin_fix).Theta();
         double sinTheta_customV = TMath::Sin(theta_q);
@@ -2620,7 +2594,7 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
         // beam axis at (0,0), silently ignoring BEAM_AXIS_X/Y, and had no guard for a
         // purely longitudinal direction.
         TVector3 r_rhoMin_fix = beamVertex(x1, v);
-        fillBeamProfile(plotter, r_rhoMin_fix, x1, v, "sx3a1c2", true); // a1c2 only, gated above
+        // fillBeamProfile(plotter, r_rhoMin_fix, x1, v, "sx3a1c2", true); // a1c2 only, gated above
         plotter->Fill1D("VertexRecon_pczfix_sx3", 800, -300, 300, r_rhoMin_fix.Z(), "Vertex_Reconstruction");
         plotter->Fill1D("VertexRecon_pczfix", 800, -300, 300, r_rhoMin_fix.Z(), "Vertex_Reconstruction");
         plotter->Fill1D("pczfix_A1C2_1d_sx3", 600, -200, 200, pcz_fix, "PCZ_Recon");
@@ -2633,20 +2607,6 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
         plotter->Fill2D("pczguess_vs_int_residual_vs_phi_A1C2", 200, 0, 6.28, 200, -100, 100, r_rhoMin_fix.Phi(), pcz_guess_int - pczguess, "Residuals");
         plotter->Fill1D("pczfix-sx3pczguess_A1C2", 200, -100, 100, pcz_fix - pczguess, "Residuals");
         plotter->Fill2D("pczfix_vs_sx3pczguess_A1C2_strip" + std::to_string(sx3event.ch2), 300, -200, 200, 600, -200, 200, pczguess, pcevent.pos.Z(), "PCZ_Recon");
-
-        // Si theta vs phi, sliced in 10 cm of reconstructed vertex z. theta is
-        // measured from the beam axis at the vertex z (same convention as the
-        // kinematics plots); phi is the detector-frame azimuth.
-        {
-          const double si_theta_deg = (sx3event.pos - beamAxisPoint(r_rhoMin_fix.Z())).Theta() * 180.0 / M_PI;
-          const double si_phi_deg = sx3event.pos.Phi() * 180.0 / M_PI;
-          plotter->Fill2D("siTheta_vs_siPhi_SX3_A1C2_all", 180, 0, 180, 180, -180, 180,
-                          si_theta_deg, si_phi_deg, "theta_v_phi_sx3");
-          const std::string zslice = vertexZSliceTag(r_rhoMin_fix.Z());
-          if (!zslice.empty())
-            plotter->Fill2D("siTheta_vs_siPhi_SX3_A1C2_" + zslice, 180, 0, 180, 180, -180, 180,
-                            si_theta_deg, si_phi_deg, "theta_v_phi_sx3");
-        }
 
         double sinTheta_customV = TMath::Sin((sx3event.pos - beamAxisPoint(r_rhoMin_fix.Z())).Theta());
         plotter->Fill2D("dE3_E_CathodeSX3_A1C2_TC" + std::to_string(PCSX3TimeCut) + "_PC" + std::to_string(phicut), 400, 0, 30, 800, 0, 10000, sx3event.Energy1, pcevent.Energy2 * sinTheta_customV, "PID_dE_E");
@@ -3186,21 +3146,7 @@ void PCQQQClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
           // beam axis at (0,0), silently ignoring BEAM_AXIS_X/Y, and had no guard for a
           // purely longitudinal direction.
           TVector3 r_rhoMin_fix = beamVertex(x1, v);
-          fillBeamProfile(plotter, r_rhoMin_fix, x1, v, "qqqa1c2", true); // a1c2 only, gated above
-
-          // Si theta vs phi, sliced in 10 cm of reconstructed vertex z. theta is
-          // measured from the beam axis at the vertex z (same convention as the
-          // kinematics plots); phi is the detector-frame azimuth.
-          {
-            const double si_theta_deg = (qqqevent.pos - beamAxisPoint(r_rhoMin_fix.Z())).Theta() * 180.0 / M_PI;
-            const double si_phi_deg = qqqevent.pos.Phi() * 180.0 / M_PI;
-            plotter->Fill2D("siTheta_vs_siPhi_QQQ_A1C2_all", 180, 0, 180, 180, -180, 180,
-                            si_theta_deg, si_phi_deg, "theta_v_phi_qqq");
-            const std::string zslice = vertexZSliceTag(r_rhoMin_fix.Z());
-            if (!zslice.empty())
-              plotter->Fill2D("siTheta_vs_siPhi_QQQ_A1C2_" + zslice, 180, 0, 180, 180, -180, 180,
-                              si_theta_deg, si_phi_deg, "theta_v_phi_qqq");
-          }
+          // fillBeamProfile(plotter, r_rhoMin_fix, x1, v, "qqqa1c2", true); // a1c2 only, gated above
 
           double sinTheta_customV = TMath::Sin((qqqevent.pos - beamAxisPoint(r_rhoMin_fix.Z())).Theta());
           plotter->Fill2D("dE3_E_CathodeQQQR_A1C2_TC1_PC" + std::to_string(phicut), 400, 0, 30, 800, 0, 10000, qqqevent.Energy1, pcevent.Energy2 * sinTheta_customV, "PID_dE_E");
@@ -3759,7 +3705,7 @@ void protonAlphaElastic_core(HistPlotter *plotter, const std::vector<Event> &Si_
       TVector3 r_rhoMin_fix = beamVertex(sievent.pos, x2f - sievent.pos);
       double vertex_z = r_rhoMin_fix.Z();
       const bool axisSafe = (multi2 == 2) || (multi1 == 2 && multi2 == 0);
-      fillBeamProfile(plotter, r_rhoMin_fix, sievent.pos, x2f - sievent.pos, "elastic_" + det, axisSafe);
+      // fillBeamProfile(plotter, r_rhoMin_fix, sievent.pos, x2f - sievent.pos, "elastic_" + det, axisSafe);
       if (vertex_z < z_entrance)
         return;
       double theta = (sievent.pos - r_rhoMin_fix).Theta();
@@ -3798,6 +3744,8 @@ void protonAlphaElastic_core(HistPlotter *plotter, const std::vector<Event> &Si_
         plotter->Fill2D(rx + "_Ef_vs_theta" + ejtag + sfx, 100, 0, 180, 800, 0, 10, theta * 180 / M_PI, Efix, pmlabel);
         plotter->Fill2D(rx + "_Ex_vs_theta" + ejtag + sfx, 720, 0, 180, 800, -10, 10, theta * 180 / M_PI, Ex, pmlabel);
         plotter->Fill2D(rx + "_Ex_vs_phi" + ejtag + sfx, 180, -180, 180, 800, -10, 10, sievent.pos.Phi() * 180 / M_PI, Ex, pmlabel);
+        plotter->Fill2D(rx + "_Ex_vs_X" + ejtag + sfx, 800, -200, 200, 800, -10, 10, sievent.pos.X(), Ex, pmlabel);
+        plotter->Fill2D(rx + "_Ex_vs_Y" + ejtag + sfx, 800, -200, 200, 800, -10, 10, sievent.pos.Y(), Ex, pmlabel);
 
         for (const auto &pcevent : PC_Events)
         {
@@ -4138,8 +4086,7 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
       TVector3 r_rhoMin_fix = beamVertex(sievent.pos, x2f - sievent.pos);
       double vertex_z = r_rhoMin_fix.Z();
       const bool axisSafe = (topo1 == "a1c2fix") || (topo1 == "a2c0") || (topo2 == "a1c1_inband");
-      fillBeamProfile(plotter, r_rhoMin_fix, sievent.pos, x2f - sievent.pos,
-                      "reaction_" + rx + "_" + det, axisSafe);
+      // fillBeamProfile(plotter, r_rhoMin_fix, sievent.pos, x2f - sievent.pos, "reaction_" + rx + "_" + det, axisSafe);
       if (beamPerp(r_rhoMin_fix) > perp_cut || vertex_z < z_entrance || vertex_z > 30.0)
         return;
 
@@ -4198,6 +4145,7 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
           std::string t = topo.empty() ? "" : ("_" + topo);
           plotter->Fill1D(rx + "_Ex_from" + ejtag + t + sfx, 600, -10, 20, Ex, pmlabel);
           plotter->Fill2D(rx + "_VertexReconZ_vs_Ef" + ejtag + t + sfx, 800, -400, 400, 800, 0, ef_max, vertex_z, Efix, pmlabel);
+          plotter->Fill2D(rx + "_VertexReconZ_vs_E" + ejtag + sfx, 800, -400, 400, 800, 0, ef_max, vertex_z, sievent.Energy1, pmlabel);
           plotter->Fill2D(rx + "_VertexReconZ_vs_Ex" + ejtag + t + sfx, 800, -400, 400, 600, -10, 20, vertex_z, Ex, pmlabel);
           plotter->Fill2D(rx + "_Ex_vs_theta" + ejtag + t + sfx, 720, 0, 180, 600, -10, 20, theta * 180 / M_PI, Ex, pmlabel);
 
@@ -4241,6 +4189,8 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
         plotter->Fill2D(rx + "_Ef_vs_theta" + ejtag + sfx, 100, 0, 180, 800, 0, ef_max, theta * 180 / M_PI, Efix, pmlabel);
         plotter->Fill2D(rx + "_Ex_vs_theta" + ejtag + sfx, 720, 0, 180, 800, -20, 20, theta * 180 / M_PI, Ex, pmlabel);
         plotter->Fill2D(rx + "_Ex_vs_phi" + ejtag + sfx, 45, -180, 180, 600, -10, 20, phi * 180 / M_PI, Ex, pmlabel);
+        plotter->Fill2D(rx + "_Ex_vs_X" + ejtag + sfx, 100, -100, 120, 800, -6, 15, sievent.pos.X(), Ex, pmlabel);
+        plotter->Fill2D(rx + "_Ex_vs_Y" + ejtag + sfx, 100, -100, 120, 800, -6, 15, sievent.pos.Y(), Ex, pmlabel);
 
         for (const auto &pcevent : PC_Events)
         {
