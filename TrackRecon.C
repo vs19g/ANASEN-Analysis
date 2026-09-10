@@ -3745,8 +3745,15 @@ void protonAlphaElastic_core(HistPlotter *plotter, const std::vector<Event> &Si_
         plotter->Fill2D(rx + "_Ef_vs_theta" + ejtag + sfx, 100, 0, 180, 800, 0, 10, theta * 180 / M_PI, Efix, pmlabel);
         plotter->Fill2D(rx + "_Ex_vs_theta" + ejtag + sfx, 720, 0, 180, 800, -10, 10, theta * 180 / M_PI, Ex, pmlabel);
         plotter->Fill2D(rx + "_Ex_vs_phi" + ejtag + sfx, 180, -180, 180, 800, -10, 10, sievent.pos.Phi() * 180 / M_PI, Ex, pmlabel);
-        plotter->Fill2D(rx + "_Ex_vs_X" + ejtag + sfx, 800, -200, 200, 800, -10, 10, sievent.pos.X(), Ex, pmlabel);
-        plotter->Fill2D(rx + "_Ex_vs_Y" + ejtag + sfx, 800, -200, 200, 800, -10, 10, sievent.pos.Y(), Ex, pmlabel);
+        plotter->Fill2D(rx + "_Ex_vs_X" + ejtag + sfx,  100, -100, 120, 800, -6, 15, sievent.pos.X(), Ex, pmlabel);
+        plotter->Fill2D(rx + "_Ex_vs_Y" + ejtag + sfx, 100, -100, 120, 800, -6, 15, sievent.pos.Y(), Ex, pmlabel);
+
+        if (isQQQ)
+        {
+          const std::string qtag = "_q" + std::to_string(sievent.ch1 / 16);
+          plotter->Fill2D(rx + "_Ex_vs_X" + qtag + ejtag + sfx, 100, -100, 120, 800, -6, 15, sievent.pos.X(), Ex, pmlabel);
+          plotter->Fill2D(rx + "_Ex_vs_Y" + qtag + ejtag + sfx, 100, -100, 120, 800, -6, 15, sievent.pos.Y(), Ex, pmlabel);
+        }
 
         for (const auto &pcevent : PC_Events)
         {
@@ -4194,6 +4201,13 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
         plotter->Fill2D(rx + "_Ex_vs_X" + ejtag + sfx, 100, -100, 120, 800, -6, 15, sievent.pos.X(), Ex, pmlabel);
         plotter->Fill2D(rx + "_Ex_vs_Y" + ejtag + sfx, 100, -100, 120, 800, -6, 15, sievent.pos.Y(), Ex, pmlabel);
 
+        if (isQQQ)
+        {
+          const std::string qtag = "_q" + std::to_string(sievent.ch1 / 16);
+          plotter->Fill2D(rx + "_Ex_vs_X" + qtag + ejtag + sfx, 100, -100, 120, 800, -6, 15, sievent.pos.X(), Ex, pmlabel);
+          plotter->Fill2D(rx + "_Ex_vs_Y" + qtag + ejtag + sfx, 100, -100, 120, 800, -6, 15, sievent.pos.Y(), Ex, pmlabel);
+        }
+
         for (const auto &pcevent : PC_Events)
         {
           if (!(pcevent.multi1 == 1 && (pcevent.multi2 == 1 || pcevent.multi2 == 2)))
@@ -4359,7 +4373,7 @@ void miscHistograms_17Fax(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
 
   // 17F beam energy at the gas target, after the entrance-window foils:
   // 67.8 MeV -> Mylar (MCP, 4.2426 um-equiv) -> 64.0305 MeV -> Kapton (7.8 um) -> 56.7173 MeV.
-  double ebeam_17F_MeV = 56.7173;
+  double ebeam_17F_MeV = 56.72;
   // 17F(a,a)/(a,d)/(a,p): ejectile + recoil masses per channel.
   AAEjectileMasses ej17F{mass_4He, mass_17F, mass_2H, mass_19Ne_rec, mass_1H, mass_20Ne};
   reaction_ax_core(plotter, QQQ_Events, PC_Events, aClusters, true, "m17Fax", "qqq", 2.0, 6.0, TMath::Pi() / 4.0,

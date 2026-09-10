@@ -2,7 +2,7 @@ import pycatima as catima
 import numpy as np
 import os
 
-DEDX_SCALE = float(os.environ.get("DEDX_SCALE", "1.0"))
+DEDX_SCALE = float(os.environ.get("DEDX_SCALE", "0.89"))
 print(f"Using dEdX scale factor: {DEDX_SCALE}")
 
 # --- 1. Constants ---

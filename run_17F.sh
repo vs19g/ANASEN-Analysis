@@ -1,8 +1,15 @@
 #!/bin/bash
 export DATASET="17F"
+export PREFIX="Run_"
+export OUT_DIR="Output_17F"
 export reactiondata=1
 export CO2percent=4
 export pressure_in_torr=250
+export CATHODE_GAIN=1
+export source_vertex=-200.0
+export DEDX_SCALE=0.89
+export A1C1_LOWBAND_RFACTOR=7.0
+export CUTLIST=cuts_list.txt
 
 run_once() {
     local wrun=$(printf "%03d" "$1")
@@ -32,16 +39,11 @@ run_once() {
 
 export -f run_once
 
-export DATASET="17F"
-export PREFIX="Run_"
-export OUT_DIR="Output_17F"
-export source_vertex=-200.0
-export CATHODE_GAIN=1
-# A1C1 cfrac low-band fold + z autocal (see TrackRecon.C Begin()). Defaults are the
-# 17F values; override here to re-tune without recompiling.
-export A1C1_LOWBAND_RFACTOR=7.0
-export CUTLIST=cuts_list.txt
 rm -f ${OUT_DIR}/*.root
+
+echo "Running Eloss.py with a scaling parameter of $DEDX_SCALE"
+echo "running with a beam offset of $BEAM_AXIS_X $BEAM_AXIS_Y"
+python3 eloss_calculations/Eloss.py        
 
 # Pre-compile TrackRecon.C ONCE on a single core so parallel jobs don't race on ACLiC
 echo "Pre-compiling TrackRecon.C..."
