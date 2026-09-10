@@ -48,7 +48,7 @@ bool process_alpha_proton_scattering = false,
      doOldAnalysis = false,
      BenchMark = false,
      onewire_analysis = true,
-     diagnostic_eplots = false,
+     diagnostic_eplots = true,
      diagnostic_tplots = true,
      reactiondata = false,
      doPCEnergyCalibration = false,
@@ -532,7 +532,6 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
 void PCQQQClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Events, const std::vector<Event> &SX3_Events, const std::vector<Event> &PC_Events,
                           const std::vector<std::vector<std::tuple<int, double, double>>> &aClusters, const std::vector<std::vector<std::tuple<int, double, double>>> &cClusters);
 void a1c1CalibDiagnostic(HistPlotter *plotter, const std::vector<Event> &PC_Events);
-void pcVertexByWireGeometry(HistPlotter *plotter, const std::vector<Event> &QQQ_Events, const std::vector<Event> &SX3_Events, const std::vector<Event> &PC_Events_calibrated);
 
 void TrackRecon::Begin(TTree * /*tree*/)
 {
@@ -1995,11 +1994,10 @@ Bool_t TrackRecon::Process(Long64_t entry)
     // return kTRUE;
   } // end if(process_alpha_proton_scattering)
 
-  if (pcEnergyCalibLoaded)
+  if (pcEnergyCalibLoaded && diagnostic_eplots)
     pcCalibratedHistograms(plotter, QQQ_Events, SX3_Events, PC_Events_calibrated);
 
-  a1c1CalibDiagnostic(plotter, PC_Events);                            // <-- new, unconditional
-  pcVertexByWireGeometry(plotter, QQQ_Events, SX3_Events, PC_Events); // <-- new, unconditional
+  // a1c1CalibDiagnostic(plotter, PC_Events);                            // <-- new, unconditional
 
   // phi_win matches every other Si-PC match in this file: SX3 sits at a longer lever
   // arm (rho ~88mm vs the PC anode at 37mm) than QQQ, so its true phi spread is wider
@@ -2268,71 +2266,6 @@ void a1c1CalibDiagnostic(HistPlotter *plotter, const std::vector<Event> &PC_Even
       break;
     }
   }
-}
-
-void pcVertexByWireGeometry(HistPlotter *plotter, const std::vector<Event> &QQQ_Events, const std::vector<Event> &SX3_Events, const std::vector<Event> &PC_Events_calibrated)
-{
-  TRandom3 &rand = anasenRandom; // dithers A1C0's Z below
-
-  auto fillFor = [&](const std::vector<Event> &sis, bool isQQQ)
-  {
-    double phi_win = isQQQ ? TMath::Pi() / 4.0 : TMath::Pi() / 3.0; // same per-detector
-    double perp_max = isQQQ ? 6.0 : 10.0;                           // tolerances used
-    const std::string det = isQQQ ? "_QQQ" : "_SX3";                // elsewhere in this file
-
-    for (const auto &pcevent : PC_Events_calibrated)
-    {
-      // Only topologies with an established pcz method below -- A2C1/A2C2 etc.
-      // don't have one yet, so they're skipped here rather than silently
-      // falling back to a raw, un-dispatched pos.Z().
-      bool knownTopo = (pcevent.multi1 == 1 && pcevent.multi2 == 2) ||
-                       (pcevent.multi1 == 1 && pcevent.multi2 == 1) ||
-                       (pcevent.multi1 == 1 && pcevent.multi2 == 0) ||
-                       (pcevent.multi1 == 2 && pcevent.multi2 == 0);
-      if (!knownTopo)
-        continue;
-
-      for (const auto &si : sis)
-      {
-        if (TMath::Abs(si.pos.DeltaPhi(pcevent.pos)) > phi_win)
-          continue;
-        if (si.Time1 - pcevent.Time1 > 150) // loose time coincidence, same convention as elsewhere
-          continue;
-
-        double pcz;
-        bool a1c1_inband = false;
-        if (pcevent.multi1 == 1 && pcevent.multi2 == 2) // A1C2
-          pcz = a1c2_zfix(pcevent.pos.Z());
-        else if (pcevent.multi1 == 1 && pcevent.multi2 == 1) // A1C1
-          pcz = a1c1_cfrac_pcz(pcevent, si.pos, a1c1_inband);
-        else if (pcevent.multi1 == 1 && pcevent.multi2 == 0) // A1C0
-          pcz = rand.Gaus(pcevent.pos.Z(), dither_sigma);
-        else // A2C0 (multi1==2, multi2==0) -- undithered by design
-          pcz = pcevent.pos.Z();
-
-        TVector3 x2(pcevent.pos.X(), pcevent.pos.Y(), pcz);
-        TVector3 vtx = beamVertex(si.pos, x2 - si.pos);
-        if (beamPerp(vtx) > perp_max)
-          continue;
-        if (vtx.Z() < z_entrance || vtx.Z() > 100)
-          continue;
-
-        std::string topo = "_a" + std::to_string(pcevent.multi1) + "c" + std::to_string(pcevent.multi2);
-
-        plotter->Fill2D("WireGeometry_dE_vs_VertexZ" + topo, 800, -400, 400, 800, 0, 1.5, vtx.Z(), pcevent.Energy1, "WireGeometry");
-        plotter->Fill2D("WireGeometry_dE_vs_VertexZ" + topo + det, 800, -400, 400, 800, 0, 1.5, vtx.Z(), pcevent.Energy1, "WireGeometry");
-
-        if (pcevent.multi1 == 1 && pcevent.multi2 == 1 && a1c1_inband)
-        {
-          plotter->Fill2D("WireGeometry_dE_vs_VertexZ_a1c1_inband", 800, -400, 400, 800, 0, 1.5, vtx.Z(), pcevent.Energy1, "WireGeometry");
-          plotter->Fill2D("WireGeometry_dE_vs_VertexZ_a1c1_inband" + det, 800, -400, 400, 800, 0, 1.5, vtx.Z(), pcevent.Energy1, "WireGeometry");
-        }
-      }
-    }
-  };
-
-  fillFor(QQQ_Events, true);
-  fillFor(SX3_Events, false);
 }
 
 void pcCalibratedHistograms(HistPlotter *plotter, const std::vector<Event> &QQQ_Events, const std::vector<Event> &SX3_Events, const std::vector<Event> &PC_Events_calibrated)
@@ -3745,14 +3678,17 @@ void protonAlphaElastic_core(HistPlotter *plotter, const std::vector<Event> &Si_
         plotter->Fill2D(rx + "_Ef_vs_theta" + ejtag + sfx, 100, 0, 180, 800, 0, 10, theta * 180 / M_PI, Efix, pmlabel);
         plotter->Fill2D(rx + "_Ex_vs_theta" + ejtag + sfx, 720, 0, 180, 800, -10, 10, theta * 180 / M_PI, Ex, pmlabel);
         plotter->Fill2D(rx + "_Ex_vs_phi" + ejtag + sfx, 180, -180, 180, 800, -10, 10, sievent.pos.Phi() * 180 / M_PI, Ex, pmlabel);
-        plotter->Fill2D(rx + "_Ex_vs_X" + ejtag + sfx,  100, -100, 120, 800, -6, 15, sievent.pos.X(), Ex, pmlabel);
+        plotter->Fill2D(rx + "_Ex_vs_X" + ejtag + sfx, 100, -100, 120, 800, -6, 15, sievent.pos.X(), Ex, pmlabel);
         plotter->Fill2D(rx + "_Ex_vs_Y" + ejtag + sfx, 100, -100, 120, 800, -6, 15, sievent.pos.Y(), Ex, pmlabel);
 
         if (isQQQ)
         {
           const std::string qtag = "_q" + std::to_string(sievent.ch1 / 16);
-          plotter->Fill2D(rx + "_Ex_vs_X" + qtag + ejtag + sfx, 100, -100, 120, 800, -6, 15, sievent.pos.X(), Ex, pmlabel);
-          plotter->Fill2D(rx + "_Ex_vs_Y" + qtag + ejtag + sfx, 100, -100, 120, 800, -6, 15, sievent.pos.Y(), Ex, pmlabel);
+          plotter->Fill2D(rx + "_Ex_vs_X" + qtag + ejtag + sfx, 100, -100, 120, 800, -6, 15, sievent.pos.X(), Ex, "qqq" + pmlabel);
+          plotter->Fill2D(rx + "_Ex_vs_Y" + qtag + ejtag + sfx, 100, -100, 120, 800, -6, 15, sievent.pos.Y(), Ex, "qqq" + pmlabel);
+          plotter->Fill2D(rx + "_Ex_vs_phi" + qtag + ejtag + sfx, 45, -180, 180, 600, -6, 15, sievent.pos.Phi() * 180 / M_PI, Ex, "qqq" + pmlabel);
+          plotter->Fill2D(rx + "_Ex_vs_rho" + qtag + ejtag + sfx, 60, 0, 120, 600, -6, 15, sievent.pos.Perp(), Ex, "qqq" + pmlabel);
+          plotter->Fill1D(rx + "_Ex_from" + qtag + ejtag + sfx, 800, -10, 10, Ex, "qqq" + pmlabel);
         }
 
         for (const auto &pcevent : PC_Events)
@@ -4096,7 +4032,7 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
       const bool axisSafe = (topo1 == "a1c2fix") || (topo1 == "a2c0") || (topo2 == "a1c1_inband");
       // fillBeamProfile(plotter, r_rhoMin_fix, sievent.pos, x2f - sievent.pos, "reaction_" + rx + "_" + det, axisSafe);
       // if (beamPerp(r_rhoMin_fix) > perp_cut || vertex_z < z_entrance || vertex_z > 30.0)
-      if ( vertex_z < z_entrance || vertex_z > 30.0)
+      if (vertex_z < z_entrance || vertex_z > 30.0)
         return;
 
       double theta = (sievent.pos - r_rhoMin_fix).Theta();
@@ -4204,8 +4140,11 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
         if (isQQQ)
         {
           const std::string qtag = "_q" + std::to_string(sievent.ch1 / 16);
-          plotter->Fill2D(rx + "_Ex_vs_X" + qtag + ejtag + sfx, 100, -100, 120, 800, -6, 15, sievent.pos.X(), Ex, pmlabel);
-          plotter->Fill2D(rx + "_Ex_vs_Y" + qtag + ejtag + sfx, 100, -100, 120, 800, -6, 15, sievent.pos.Y(), Ex, pmlabel);
+          plotter->Fill2D(rx + "_Ex_vs_X" + qtag + ejtag + sfx, 100, -100, 120, 800, -6, 15, sievent.pos.X(), Ex, "qqq" + pmlabel);
+          plotter->Fill2D(rx + "_Ex_vs_Y" + qtag + ejtag + sfx, 100, -100, 120, 800, -6, 15, sievent.pos.Y(), Ex, "qqq" + pmlabel);
+          plotter->Fill2D(rx + "_Ex_vs_phi" + qtag + ejtag + sfx, 45, -180, 180, 600, -6, 15, phi * 180 / M_PI, Ex, "qqq" + pmlabel);
+          plotter->Fill2D(rx + "_Ex_vs_rho" + qtag + ejtag + sfx, 60, 0, 120, 600, -6, 15, sievent.pos.Perp(), Ex, "qqq" + pmlabel);
+          plotter->Fill1D(rx + "_Ex_from" + qtag + ejtag + sfx, 800, -10, 10, Ex, "qqq" + pmlabel);
         }
 
         for (const auto &pcevent : PC_Events)
