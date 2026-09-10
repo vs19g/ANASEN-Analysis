@@ -1330,6 +1330,7 @@ Bool_t TrackRecon::Process(Long64_t entry)
         if (diagnostic_eplots)
         {
           plotter->Fill2D("sx3backs_gm", 100, 0, 100, 800, 0, 8192, det.stripB + 4 * id, backE, "hCalSX3");
+          plotter->Fill2D("sx3backs_raw", 100, 0, 100, 800, 0, 8192, det.stripB + 4 * id, det.backE, "hCalSX3");
           plotter->Fill1D("sx3backs_calib", 800, 0, 8192, backE, "hCalSX3");
 
           plotter->Fill2D("SX3CartesianPlot", 200, -100, 100, 200, -100, 100, 88.0 * TMath::Cos(phi_n), 88.0 * TMath::Sin(phi_n), "hCalSX3");
@@ -4087,7 +4088,8 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
       double vertex_z = r_rhoMin_fix.Z();
       const bool axisSafe = (topo1 == "a1c2fix") || (topo1 == "a2c0") || (topo2 == "a1c1_inband");
       // fillBeamProfile(plotter, r_rhoMin_fix, sievent.pos, x2f - sievent.pos, "reaction_" + rx + "_" + det, axisSafe);
-      if (beamPerp(r_rhoMin_fix) > perp_cut || vertex_z < z_entrance || vertex_z > 30.0)
+      // if (beamPerp(r_rhoMin_fix) > perp_cut || vertex_z < z_entrance || vertex_z > 30.0)
+      if ( vertex_z < z_entrance || vertex_z > 30.0)
         return;
 
       double theta = (sievent.pos - r_rhoMin_fix).Theta();
