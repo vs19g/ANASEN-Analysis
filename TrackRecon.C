@@ -42,11 +42,11 @@ Int_t colors[40] = {
 // --- Analysis Control Flags ---
 bool process_alpha_proton_scattering = false,
      doMiscHistograms = true,
-     doRawHistos = false,
+     doRawHistos = false, 
      doPCSX3ClusterAnalysis = false,
      doPCQQQClusterAnalysis = false,
      doOldAnalysis = false,
-     BenchMark = false,
+     BenchMark = true,
      onewire_analysis = true,
      diagnostic_eplots = true,
      diagnostic_tplots = true,
@@ -79,7 +79,7 @@ double source_vertex = 53.0,
        alpha_source_mev = 5.486;
 
 // --- Immutable Constants ---
-const double qqq_z = 105.0,
+const double qqq_z = 100.0,
              sx3_phi_pitch = 6.5 * (M_PI / 180.0),
              qqq_wedge_pitch = (87.0 / 16.0) * (M_PI / 180.0),
              qqq_ring_pitch = 48.0 / 16.0;
@@ -4100,7 +4100,13 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
 
           if (beam_energy_at_vertex > 4.0 && beam_energy_at_vertex <= 12.0)
           {
+            const std::string qtag = "_q" + std::to_string(sievent.ch1 / 16);
             plotter->Fill2D(rx + "_EKin-ETrack2235keV_vs_phi" + ejtag + t + sfx, 45, -180, 180, 600, -20, 40, phi * 180 / M_PI, ebeam_kin_2235keV - beam_energy_at_vertex, pmlabel);
+            plotter->Fill2D(rx + "_2235keV_Ex_vs_X" + qtag + ejtag + sfx, 100, -100, 120, 800, -6, 15, sievent.pos.X(), Ex, "qqq" + pmlabel);
+            plotter->Fill2D(rx + "_2235keV_Ex_vs_Y" + qtag + ejtag + sfx, 100, -100, 120, 800, -6, 15, sievent.pos.Y(), Ex, "qqq" + pmlabel);
+            plotter->Fill2D(rx + "_2235keV_Ex_vs_phi" + qtag + ejtag + sfx, 45, -180, 180, 600, -6, 15, phi * 180 / M_PI, Ex, "qqq" + pmlabel);
+            plotter->Fill2D(rx + "_2235keV_Ex_vs_rho" + qtag + ejtag + sfx, 60, 0, 120, 600, -6, 15, sievent.pos.Perp(), Ex, "qqq" + pmlabel);
+            plotter->Fill1D(rx + "_2235keV_Ex_from" + qtag + ejtag + sfx, 800, -10, 10, Ex, "qqq" + pmlabel);
           }
           if (ejtag == "_p" && rx == "m27Alax")
           {
@@ -4156,6 +4162,13 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
           plotter->Fill2D(rx + "_Ex_vs_dT" + ejtag + sfx, 500, -2000, 2000, 600, -10, 20, (sievent.Time1 - pcevent.Time1), Ex, pmlabel);
           plotter->Fill2D(rx + "_dEgasCalib_vs_dT" + ejtag + sfx, 500, -2000, 2000, 800, 0, 0.6, (sievent.Time1 - pcevent.Time1), anodeE_MeV, pmlabel);
           plotter->Fill2D(rx + "_dEgasCalibCathode_vs_dT" + ejtag + sfx, 500, -2000, 2000, 800, 0, 0.6, (sievent.Time1 - pcevent.Time1), cathodeE_MeV, pmlabel);
+          plotter->Fill2D(rx + "_Ex_vs_AnodeID" + ejtag + sfx, 24, 0.5, 25.5, 600, -6, 15, pcevent.Anodech, Ex, "qqq" + pmlabel);
+          plotter->Fill2D(rx + "_Ex_vs_CathodeID" + ejtag + sfx, 24, 0.5, 25.5, 600, -6, 15, pcevent.Cathodech, Ex, "qqq" + pmlabel);
+          if (beam_energy_at_vertex > 4.0 && beam_energy_at_vertex <= 12.0)
+          {
+            plotter->Fill2D(rx + "_2235keV_Ex_vs_AnodeID" + ejtag + sfx, 24, 0.5, 25.5, 600, -6, 15, pcevent.Anodech, Ex, "qqq" + pmlabel);
+            plotter->Fill2D(rx + "_2235keV_Ex_vs_CathodeID" + ejtag + sfx, 24, 0.5, 25.5, 600, -6, 15, pcevent.Cathodech, Ex, "qqq" + pmlabel);
+          }
         }
 
         if (dt_rf_mcp > -900000000)
