@@ -9,7 +9,7 @@ export CO2percent=3
 export pressure_in_torr=250
 export CATHODE_GAIN=3.0
 export source_vertex=-200.0
-export DEDX_SCALE=0.89
+export DEDX_SCALE=0.87
 
 # export BEAM_AXIS_Z0=-200
 export BEAM_AXIS_X=0.0
@@ -42,12 +42,12 @@ process_run() {
 
 export -f process_run
 
-for x in -5 -3 0 
-do 
-    BEAM_AXIS_X=$x  
-    for y in  0 3 5 7
-    do 
-        BEAM_AXIS_Y=$y  
+# for x in -5 -3 
+# do 
+#     BEAM_AXIS_X=$x  
+#     for y in  3 5 7
+#     do 
+#         BEAM_AXIS_Y=$y  
 
         # Define and create a clean directory name BEFORE running parallel tasks
         CURRENT_OUT_DIR="Output_27Al"
@@ -74,8 +74,8 @@ do
         echo "Merging files..."
         # Fixed: Safely merge using the clean directory variable (added -f to overwrite if re-running)
         hadd -k -f -j 4 "${CURRENT_OUT_DIR}/Output_27Al.root" "${CURRENT_OUT_DIR}/results_run"*.root
-    done
-done
+#     done
+# done
 
 # Cleanup
 unset DATASET
