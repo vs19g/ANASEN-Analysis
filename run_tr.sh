@@ -56,7 +56,7 @@ if [[ 1 -eq 0 ]]; then
 fi
 
 # --- Block 3: 27Al Alpha+Gas Runs (9, 12) ---
-if [[ 1 -eq 1 ]]; then
+if [[ 1 -eq 0 ]]; then
     export DATASET="27Al"
     export PREFIX="Run_"
     export OUT_DIR="Output_a"
@@ -64,8 +64,8 @@ if [[ 1 -eq 1 ]]; then
     export pressure_in_torr=350
     rm -f ${OUT_DIR}/all.root
     echo "Processing 27Al alpha+gas runs..."
-    export source_vertex=-5.36; export timecut_low=12.0; export timecut_high=119.0; process_run 9 "$slope"
-    unset timecut_high
+    # export source_vertex=-5.36; export timecut_low=12.0; export timecut_high=119.0; process_run 9 "$slope"
+    # unset timecut_high
     export source_vertex=53.44; export timecut_low=400.0; process_run 12 "$slope"
     unset Gain
     unset CATHODE_GAIN
@@ -86,7 +86,8 @@ if [[ 1 -eq 1 ]]; then
     export source_vertex=14.24;  process_run 19
     export source_vertex=-24.96; process_run 20
     export source_vertex=-73.96; process_run 21
-    hadd -j 4 -k ${OUT_DIR}/all.root ${OUT_DIR}/results_run*.root
+    hadd -j 4 -f -k ${OUT_DIR}/F_alpha.root ${OUT_DIR}/results_run0{18,19,20,21}.root
+    hadd -j 4 -f -k ${OUT_DIR}/all.root ${OUT_DIR}/results_run*.root
     exit
 fi
 
@@ -111,7 +112,7 @@ if [[ 1 -eq 1 ]]; then
 fi
 
 # --- Block 6: 17F Proton Data  ---
-if [[ 1 -eq 1 ]]; then
+if [[ 1 -eq 0 ]]; then
     export DATASET="17F"
     export PREFIX="ProtonRun_"
     export OUT_DIR="Output_p"

@@ -12,8 +12,8 @@ export source_vertex=-200.0
 export DEDX_SCALE=0.87
 
 # export BEAM_AXIS_Z0=-200
-export BEAM_AXIS_X=0.0
-export BEAM_AXIS_Y=0.0
+export BEAM_AXIS_X=0
+export BEAM_AXIS_Y=0
 # export BEAM_TILT_X=-0.00083798
 # export BEAM_TILT_Y=0.00191377
 
