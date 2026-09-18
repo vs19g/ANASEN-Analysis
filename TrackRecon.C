@@ -63,9 +63,6 @@ double source_vertex = 53.0,
        z_entrance = -174.3 - 9.7 - 270.0,
        dither_sigma = 8.0,
        cathode_gain = 1.0,
-       a1c1_cfrac_split = 0.0,
-       a1c1_missing_fmax = 2.0,
-       a1c1_lowband_rfactor = 0.0,
        a1c1_z_scale_qqq = 0.0111081,
        a1c1_z_off_qqq = 34.501,
        a1c1_z_scale_sx3 = 0.0,
@@ -79,7 +76,7 @@ double source_vertex = 53.0,
        alpha_source_mev = 5.486;
 
 // --- Immutable Constants ---
-const double qqq_z = 100.0,
+const double qqq_z = 105.0,
              sx3_phi_pitch = 6.5 * (M_PI / 180.0),
              qqq_wedge_pitch = (87.0 / 16.0) * (M_PI / 180.0),
              qqq_ring_pitch = 48.0 / 16.0;
@@ -271,24 +268,14 @@ struct AAEjectileMasses
 
 const double a1c1_zg[8] = {147.998, 101.946, 59.7634, 19.6965, -19.6965, -59.7634, -101.946, -147.998};
 
-static const double a1c1_cfmin_17F[7] = {0.20, 0.20, 0.20, 0.20, 0.20, 0.20, 0.20};
-static const double a1c1_k_17F[7] = {0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25};
-static const double a1c1_cfmin_27Al[7] = {0.42, 0.42, 0.42, 0.40, 0.42, 0.43, 0.43};
-static const double a1c1_k_27Al[7] = {0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06};
-
-// low band for 17F data
-
-static const double a1c1_cfmin2_17F[7] = {0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10};
-static const double a1c1_k2_17F[7] = {0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05};
-static const double a1c1_cfmin2_27Al[7] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}; // no low band
-static const double a1c1_k2_27Al[7] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
-
-double a1c1_cfmin2_cell[7] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
-double a1c1_k2_cell[7] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+static const double a1c1_cfmin_17F[7] = {0.410, 0.420, 0.400, 0.410, 0.410, 0.420, 0.410};
+static const double a1c1_k_17F[7] = {0.060, 0.060, 0.052, 0.059, 0.065, 0.060, 0.060};
+static const double a1c1_cfmin_27Al[7] = {0.410, 0.420, 0.400, 0.420, 0.400, 0.420, 0.410};
+static const double a1c1_k_27Al[7] = {0.075, 0.099, 0.066, 0.062, 0.067, 0.099, 0.075};
 
 // active per-cell set, populated by dataset in Begin()
-double a1c1_cfmin_cell[7] = {0.20, 0.20, 0.20, 0.20, 0.20, 0.20, 0.20};
-double a1c1_k_cell[7] = {0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25};
+double a1c1_cfmin_cell[7] = {0.410, 0.420, 0.400, 0.410, 0.410, 0.420, 0.410};
+double a1c1_k_cell[7] = {0.060, 0.060, 0.052, 0.059, 0.065, 0.060, 0.060};
 
 static std::vector<int> a1c1_dead_anode_17F = {9, 12}; // 1 can be recovered
 static std::vector<int> a1c1_dead_cathode_17F = {};    // 0,13,15 can be recovered
@@ -643,26 +630,16 @@ void TrackRecon::Begin(TTree * /*tree*/)
 
   const double *cfmin_src = a1c1_cfmin_17F;
   const double *k_src = a1c1_k_17F;
-  const double *cfmin2_src = a1c1_cfmin2_17F;
-  const double *k2_src = a1c1_k2_17F;
-  a1c1_cfrac_split = 0.15;
-  a1c1_lowband_rfactor = 7.0;
   a1c1_dead_anode = &a1c1_dead_anode_17F;
   a1c1_dead_cathode = &a1c1_dead_cathode_17F;
   if (dataset == "27Al")
   {
     cfmin_src = a1c1_cfmin_27Al;
     k_src = a1c1_k_27Al;
-    cfmin2_src = a1c1_cfmin2_27Al;
-    k2_src = a1c1_k2_27Al;
-    a1c1_cfrac_split = 0.0;
-    a1c1_lowband_rfactor = 0.0;
     a1c1_dead_anode = &a1c1_dead_anode_27Al;
     a1c1_dead_cathode = &a1c1_dead_cathode_27Al;
   }
   a1c1_rebuild_dead_masks();
-  if (getenv("A1C1_LOWBAND_RFACTOR"))
-    a1c1_lowband_rfactor = std::atof(getenv("A1C1_LOWBAND_RFACTOR"));
   if (getenv("A1C1_Z_SCALE_QQQ"))
     a1c1_z_scale_qqq = std::atof(getenv("A1C1_Z_SCALE_QQQ"));
   if (getenv("A1C1_Z_SCALE_SX3"))
@@ -694,13 +671,8 @@ void TrackRecon::Begin(TTree * /*tree*/)
   {
     a1c1_cfmin_cell[i] = cfmin_src[i];
     a1c1_k_cell[i] = k_src[i];
-    a1c1_cfmin2_cell[i] = cfmin2_src[i];
-    a1c1_k2_cell[i] = k2_src[i];
   }
-  std::cout << "A1C1 per-cell constants: using static " << (dataset.empty() ? "(default 17F)" : dataset)
-            << " set; low-band split cfrac<" << a1c1_cfrac_split
-            << "; low-band r-fold " << (a1c1_lowband_rfactor > 0.0 ? "ON x" : "OFF (")
-            << a1c1_lowband_rfactor << (a1c1_lowband_rfactor > 0.0 ? "" : ")") << std::endl;
+  std::cout << "A1C1 per-cell constants: using static " << (dataset.empty() ? "(default 17F)" : dataset) << std::endl;
 
   pwinstance.ConstructGeo();
 
@@ -2005,7 +1977,17 @@ Bool_t TrackRecon::Process(Long64_t entry)
   // siPcCoincident(): this used to be the one Si-PC match in the file with a phi
   // window but no time gate, so "withPC" included phi-aligned but time-accidental
   // pairs.
-  auto hasPCCoincidence = [&](const Event &sievent, bool isQQQ)
+  // Per-track PC topology class of the first phi/time-coincident PC hit. The
+  // anode multiplicity (multi1) is split out because a 2-wire anode cluster
+  // interpolates between wires (charge-weighted pseudowire) and so resolves z
+  // better than the wire-pitch-quantized single wire:
+  //   0 = no PC coincidence
+  //   1 = A1C0  2 = A2C0   (multi2==0, anode-only)
+  //   3 = A1C1  4 = A2C1   (multi2==1)
+  //   5 = A1C2  6 = A2C2   (multi2==2)
+  //   7 = other (multi2>=3)
+  // (class>0 reproduces the old hasPCCoincidence bool exactly.)
+  auto pcTopoClass = [&](const Event &sievent, bool isQQQ) -> int
   {
     double phi_win = isQQQ ? TMath::Pi() / 4.0 : TMath::Pi() / 3.0;
     for (const auto &pcevent : PC_Events)
@@ -2015,21 +1997,35 @@ Bool_t TrackRecon::Process(Long64_t entry)
       if (!siPcCoincident(sievent.Time1, pcevent.Time1))
         continue;
       if (TMath::Abs(sievent.pos.DeltaPhi(pcevent.pos)) <= phi_win)
-        return true;
+      {
+        int c = pcevent.multi2;
+        if (c > 3)
+          return 7;
+        return 1 + 2 * c + (pcevent.multi1 >= 2 ? 1 : 0); // A1C0..A2C2
+      }
     }
-    return false;
+    return 0;
   };
   for (const auto &qqqevent : QQQ_Events)
   {
     plotter->Fill1D("siE_qqq_calibrated_all", 800, 0, 15, qqqevent.Energy1, "siE");
-    bool coinc = hasPCCoincidence(qqqevent, true);
-    plotter->Fill1D(coinc ? "siE_qqq_calibrated_withPC" : "siE_qqq_calibrated_noPC", 800, 0, 15, qqqevent.Energy1, "siE");
+    int topo = pcTopoClass(qqqevent, true);
+    plotter->Fill1D(topo > 0 ? "siE_qqq_calibrated_withPC" : "siE_qqq_calibrated_noPC", 800, 0, 15, qqqevent.Energy1, "siE");
+    // PC acceptance / z-quality mix vs track angle (species compared across files):
+    // class 0=noPC 1=A1C0 2=A1C1 3=A1C2 4=multi2>=3. theta rel. to source_vertex
+    // (exact for the point source; a lab-angle proxy for reaction protons).
+    double th = (qqqevent.pos - beamAxisPoint(source_vertex)).Theta() * 180.0 / M_PI;
+    plotter->Fill1D("PCtopo_class_qqq", 8, 0, 8, topo + 0.5, "PCtopo");
+    plotter->Fill2D("PCtopo_class_vs_theta_qqq", 180, 0, 180, 8, 0, 8, th, topo + 0.5, "PCtopo");
   }
   for (const auto &sx3event : SX3_Events)
   {
     plotter->Fill1D("siE_sx3_calibrated_all", 800, 0, 15, sx3event.Energy1, "siE");
-    bool coinc = hasPCCoincidence(sx3event, false);
-    plotter->Fill1D(coinc ? "siE_sx3_calibrated_withPC" : "siE_sx3_calibrated_noPC", 800, 0, 15, sx3event.Energy1, "siE");
+    int topo = pcTopoClass(sx3event, false);
+    plotter->Fill1D(topo > 0 ? "siE_sx3_calibrated_withPC" : "siE_sx3_calibrated_noPC", 800, 0, 15, sx3event.Energy1, "siE");
+    double th = (sx3event.pos - beamAxisPoint(source_vertex)).Theta() * 180.0 / M_PI;
+    plotter->Fill1D("PCtopo_class_sx3", 8, 0, 8, topo + 0.5, "PCtopo");
+    plotter->Fill2D("PCtopo_class_vs_theta_sx3", 180, 0, 180, 8, 0, 8, th, topo + 0.5, "PCtopo");
   }
 
   if (doMiscHistograms && ta_foil_run)
