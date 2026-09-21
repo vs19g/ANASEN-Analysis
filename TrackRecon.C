@@ -63,9 +63,6 @@ double source_vertex = 53.0,
        z_entrance = -174.3 - 9.7 - 270.0,
        dither_sigma = 8.0,
        cathode_gain = 1.0,
-       // Low-band split controls, read by a1c1_solve() in Armory/PCZRecon.h.
-       // cfrac_split and lowband_rfactor are set per-dataset in Begin();
-       // missing_fmax is the dead-neighbour cell f-limit in solve_cell().
        a1c1_cfrac_split = 0.0,
        a1c1_missing_fmax = 2.0,
        a1c1_lowband_rfactor = 0.0,
@@ -274,14 +271,15 @@ struct AAEjectileMasses
 
 const double a1c1_zg[8] = {147.998, 101.946, 59.7634, 19.6965, -19.6965, -59.7634, -101.946, -147.998};
 
-static const double a1c1_cfmin_17F[7] = {0.410, 0.420, 0.400, 0.410, 0.410, 0.420, 0.410};
-static const double a1c1_k_17F[7] = {0.060, 0.060, 0.052, 0.059, 0.065, 0.060, 0.060};
-static const double a1c1_cfmin_27Al[7] = {0.410, 0.420, 0.400, 0.420, 0.400, 0.420, 0.410};
-static const double a1c1_k_27Al[7] = {0.075, 0.099, 0.066, 0.062, 0.067, 0.099, 0.075};
+// cell:                                   0      1      2      3      4      5       6
+static const double a1c1_cfmin_17F[7] = {0.410, 0.420, 0.398, 0.415, 0.402, 0.420, 0.410};
+static const double a1c1_k_17F[7] = {0.075, 0.099, 0.086, 0.069, 0.163, 0.099, 0.075};
+static const double a1c1_cfmin_27Al[7] = {0.410, 0.420, 0.398, 0.415, 0.402, 0.420, 0.410};
+static const double a1c1_k_27Al[7] = {0.075, 0.099, 0.086, 0.062, 0.067, 0.099, 0.075};
 
-// low band for 17F data
-static const double a1c1_cfmin2_17F[7] = {0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10};
-static const double a1c1_k2_17F[7] = {0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05};
+// Low band for 17F data (the cfrac < a1c1_cfrac_split population)
+static const double a1c1_cfmin2_17F[7] = {0.095, 0.095, 0.095, 0.095, 0.095, 0.095, 0.095};
+static const double a1c1_k2_17F[7] = {0.0223, 0.0223, 0.0223, 0.0223, 0.0223, 0.0223, 0.0223};
 static const double a1c1_cfmin2_27Al[7] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}; // no low band
 static const double a1c1_k2_27Al[7] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 
@@ -650,7 +648,7 @@ void TrackRecon::Begin(TTree * /*tree*/)
   const double *cfmin2_src = a1c1_cfmin2_17F;
   const double *k2_src = a1c1_k2_17F;
   a1c1_cfrac_split = 0.15;
-  a1c1_lowband_rfactor = 7.0;
+  a1c1_lowband_rfactor = 0.0;
   a1c1_dead_anode = &a1c1_dead_anode_17F;
   a1c1_dead_cathode = &a1c1_dead_cathode_17F;
   if (dataset == "27Al")
@@ -2771,6 +2769,7 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
               double vz_resid = vtx_ref.Z() - source_vertex;
               plotter->Fill2D("Diag_SX3_" + A + "C2_vtxZ_resid_vs_phi", 90, -180, 180, 400, -100, 100, phi_deg, vz_resid, "Diag_XYoffset");
               plotter->Fill2D("Diag_Combined_" + A + "C2_vtxZ_resid_vs_phi", 90, -180, 180, 400, -100, 100, phi_deg, vz_resid, "Diag_XYoffset");
+              plotter->Fill2D("Diag_SX3_" + A + "C2_vtxZresid_vs_cathodeQ", 200, 0, 40000, 400, -100, 100, pcevent.Energy2, vz_resid, "Diag_XYoffset");
               plotter->Fill2D("Diag_SX3_" + A + "C2_vtxXY", 200, -15, 15, 200, -15, 15, vtx_ref.X(), vtx_ref.Y(), "Diag_XYoffset");
               plotter->Fill2D("Diag_Combined_" + A + "C2_time_vs_phi", 2000, 0, 2000, 90, -180, 180, pcevent.Time1 * 1e-9, phi_deg, "Diag_XYoffset");
               plotter->Fill2D("Diag_SX3_" + A + "C2_T_vs_vtxX", 2000, 0, 2000, 200, -15, 15, pcevent.Time1 * 1e-9, vtx_ref.X(), "Diag_XYoffset");
@@ -2855,6 +2854,30 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
                   plotter->Fill2D("Benchmark_SX3_" + A + "C1_cellsel_confusion", 7, 0, 7, 7, 0, 7, cell_truth + 0.5, sm_cell + 0.5, "Benchmark_SX3_ref");
                   plotter->Fill1D("Benchmark_SX3_" + A + "C1_cellsel_misclass", 2, 0, 2, wrong ? 1.0 : 0.0, "Benchmark_SX3_ref");
                   plotter->Fill2D("Benchmark_SX3_" + A + "C1_cellsel_misclass_vs_cell", 7, 0, 7, 2, 0, 2, cell_truth + 0.5, wrong ? 1.0 : 0.0, "Benchmark_SX3_ref");
+                  {
+                    auto a1c1_cellOf = [&](double z) -> int
+                    {
+                      for (int i = 0; i < 7; ++i)
+                        if (z <= a1c1_zg[i] && z > a1c1_zg[i + 1])
+                          return i;
+                      return -1;
+                    };
+
+                    // (1) Oracle side-pick (closer-to-truth candidate) vs the real side-pick.
+                    double lo_pcz = sm.sol.lo.pcz, hi_pcz = sm.sol.hi.pcz;
+                    double oracle_pcz = (TMath::Abs(lo_pcz - pcz_ref) <= TMath::Abs(hi_pcz - pcz_ref)) ? lo_pcz : hi_pcz;
+                    plotter->Fill2D("Benchmark_SX3_" + A + "C1_Cfrac_vs_ref_realpick", 400, -200, 200, 400, -200, 200, pcz_ref, sm.best().pcz, "Benchmark_SX3_ref");
+                    plotter->Fill2D("Benchmark_SX3_" + A + "C1_Cfrac_vs_ref_oracle", 400, -200, 200, 400, -200, 200, pcz_ref, oracle_pcz, "Benchmark_SX3_ref");
+                    {
+                      double sep = TMath::Abs(lo_pcz - hi_pcz);
+                      double anodez_pcz = (TMath::Abs(lo_pcz - za0) <= TMath::Abs(hi_pcz - za0)) ? lo_pcz : hi_pcz;
+                      plotter->Fill2D("Benchmark_SX3_" + A + "C1_Cfrac_vs_ref_anodezpick", 400, -200, 200, 400, -200, 200, pcz_ref, anodez_pcz, "Benchmark_SX3_ref");
+                      // 1D residuals for all three picks so their RMS is directly comparable.
+                      plotter->Fill1D("Benchmark_SX3_" + A + "C1_Cfrac_minus_ref_realpick", 400, -100, 100, sm.best().pcz - pcz_ref, "Benchmark_SX3_ref");
+                      plotter->Fill1D("Benchmark_SX3_" + A + "C1_Cfrac_minus_ref_oracle", 400, -100, 100, oracle_pcz - pcz_ref, "Benchmark_SX3_ref");
+                      plotter->Fill1D("Benchmark_SX3_" + A + "C1_Cfrac_minus_ref_anodezpick", 400, -100, 100, anodez_pcz - pcz_ref, "Benchmark_SX3_ref");
+                    }
+                  }
 
                   double zc = 0.5 * (a1c1_zg[cell_truth] + a1c1_zg[cell_truth + 1]);
                   double half = 0.5 * (a1c1_zg[cell_truth] - a1c1_zg[cell_truth + 1]);
@@ -2880,7 +2903,7 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
 
           else if (pcevent.multi2 == 1 && a1c1Good)
           {
-            const std::string bTrue = A + "C1True_SX3";       // per-topology folder (A1C1True_SX3 / A2C1True_SX3)
+            const std::string bTrue = A + "C1True_SX3";                // per-topology folder (A1C1True_SX3 / A2C1True_SX3)
             const std::string fTrue = "Benchmark_SX3_true" + A + "C1"; // failreason/band diagnostics folder
             double pcz_raw = xo_a1c1.Z();
             TVector3 vtx_raw = vertexFrom(sx3event.pos, TVector3(xo_a1c1.X(), xo_a1c1.Y(), pcz_raw));
@@ -3287,6 +3310,7 @@ void PCQQQClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
                 double vz_resid = vtx_ref.Z() - source_vertex;
                 plotter->Fill2D("Diag_QQQ_" + A + "C2_vtxZ_resid_vs_phi", 180, -180, 180, 400, -100, 100, phi_deg, vz_resid, "Diag_XYoffset");
                 plotter->Fill2D("Diag_Combined_" + A + "C2_vtxZ_resid_vs_phi", 90, -180, 180, 400, -100, 100, phi_deg, vz_resid, "Diag_XYoffset");
+                plotter->Fill2D("Diag_QQQ_" + A + "C2_vtxZresid_vs_cathodeQ", 200, 0, 40000, 400, -100, 100, pcevent.Energy2, vz_resid, "Diag_XYoffset");
                 plotter->Fill2D("Diag_QQQ_" + A + "C2_vtxXY", 200, -15, 15, 200, -15, 15, vtx_ref.X(), vtx_ref.Y(), "Diag_XYoffset");
                 plotter->Fill2D("Diag_Combined_" + A + "C2_time_vs_phi", 2000, 0, 2000, 90, -180, 180, pcevent.Time1 * 1e-9, phi_deg, "Diag_XYoffset");
                 plotter->Fill2D("Diag_QQQ_" + A + "C2_time_vs_phi", 2000, 0, 2000, 90, -180, 180, pcevent.Time1 * 1e-9, phi_deg, "Diag_XYoffset");
@@ -3370,6 +3394,30 @@ void PCQQQClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
                     plotter->Fill2D("Benchmark_QQQ_" + A + "C1_cellsel_confusion", 7, 0, 7, 7, 0, 7, cell_truth + 0.5, sm_cell + 0.5, "Benchmark_QQQ_ref");
                     plotter->Fill1D("Benchmark_QQQ_" + A + "C1_cellsel_misclass", 2, 0, 2, wrong ? 1.0 : 0.0, "Benchmark_QQQ_ref");
                     plotter->Fill2D("Benchmark_QQQ_" + A + "C1_cellsel_misclass_vs_cell", 7, 0, 7, 2, 0, 2, cell_truth + 0.5, wrong ? 1.0 : 0.0, "Benchmark_QQQ_ref");
+                    {
+                      auto a1c1_cellOf = [&](double z) -> int
+                      {
+                        for (int i = 0; i < 7; ++i)
+                          if (z <= a1c1_zg[i] && z > a1c1_zg[i + 1])
+                            return i;
+                        return -1;
+                      };
+
+                      // (1) Oracle side-pick vs the real side-pick, both as reconstructed-z-vs-truth.
+                      double lo_pcz = sm.sol.lo.pcz, hi_pcz = sm.sol.hi.pcz;
+                      double oracle_pcz = (TMath::Abs(lo_pcz - pcz_ref) <= TMath::Abs(hi_pcz - pcz_ref)) ? lo_pcz : hi_pcz;
+                      plotter->Fill2D("Benchmark_QQQ_" + A + "C1_Cfrac_vs_ref_realpick", 400, -200, 200, 400, -200, 200, pcz_ref, sm.best().pcz, "Benchmark_QQQ_ref");
+                      plotter->Fill2D("Benchmark_QQQ_" + A + "C1_Cfrac_vs_ref_oracle", 400, -200, 200, 400, -200, 200, pcz_ref, oracle_pcz, "Benchmark_QQQ_ref");
+                      {
+                        double sep = TMath::Abs(lo_pcz - hi_pcz);
+                        double anodez_pcz = (TMath::Abs(lo_pcz - za0) <= TMath::Abs(hi_pcz - za0)) ? lo_pcz : hi_pcz;
+                        plotter->Fill2D("Benchmark_QQQ_" + A + "C1_Cfrac_vs_ref_anodezpick", 400, -200, 200, 400, -200, 200, pcz_ref, anodez_pcz, "Benchmark_QQQ_ref");
+                        // 1D residuals for all three picks so their RMS is directly comparable.
+                        plotter->Fill1D("Benchmark_QQQ_" + A + "C1_Cfrac_minus_ref_realpick", 400, -100, 100, sm.best().pcz - pcz_ref, "Benchmark_QQQ_ref");
+                        plotter->Fill1D("Benchmark_QQQ_" + A + "C1_Cfrac_minus_ref_oracle", 400, -100, 100, oracle_pcz - pcz_ref, "Benchmark_QQQ_ref");
+                        plotter->Fill1D("Benchmark_QQQ_" + A + "C1_Cfrac_minus_ref_anodezpick", 400, -100, 100, anodez_pcz - pcz_ref, "Benchmark_QQQ_ref");
+                      }
+                    }
 
                     double zc = 0.5 * (a1c1_zg[cell_truth] + a1c1_zg[cell_truth + 1]);
                     double half = 0.5 * (a1c1_zg[cell_truth] - a1c1_zg[cell_truth + 1]);
@@ -3396,7 +3444,7 @@ void PCQQQClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
 
           else if (pcevent.multi2 == 1 && a1c1Good)
           {
-            const std::string bTrue = A + "C1True_QQQ";              // fillSuite folder (A1C1True_QQQ / A2C1True_QQQ)
+            const std::string bTrue = A + "C1True_QQQ";                // fillSuite folder (A1C1True_QQQ / A2C1True_QQQ)
             const std::string fTrue = "Benchmark_QQQ_true" + A + "C1"; // diagnostics folder
             double pcz_raw = xo_a1c1.Z();
             TVector3 vtx_raw = vertexFrom(qqqevent.pos, TVector3(xo_a1c1.X(), xo_a1c1.Y(), pcz_raw));
