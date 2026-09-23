@@ -1,0 +1,8 @@
+Metadata for SaveScalars file: ./scalars_weight.dat
+Elmer version: 26.2
+Elmer compilation date: 2026-06-10
+Solver input file: wires2d_weight.sif
+File started at: 2026/09/22 21:21:43
+ 
+Variables in columns of matrix: 
+   1: res: potential difference

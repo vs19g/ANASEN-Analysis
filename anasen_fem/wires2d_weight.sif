@@ -1,5 +1,10 @@
 Check Keywords Warn
 
+! Ramo weighting potential for the single cathode at tag 40: that electrode
+! sits at 1 V and every other one at 0 V. Identical to wires2d.sif apart from
+! the potentials and the output names, so both solves discretise the same way
+! and E . E_w is meaningful node by node.
+
 Header
   Mesh DB "." "wires2d"
 End
@@ -8,8 +13,8 @@ Simulation
   Coordinate System = Cartesian 2D
   Simulation Type = Steady State
   Steady State Max Iterations = 1
-  Output File = "elstatics.result"
-  Post File = "elstatics.ep"
+  Output File = "elstatics_weight.result"
+  Post File = "elstatics_weight.ep"
   Coordinate Scaling = 0.001  ! Converts mm from Gmsh to meters for Elmer
 End
 
@@ -71,7 +76,7 @@ End
 Solver 3
   Equation = Result Output
   Procedure = "ResultOutputSolve" "ResultOutputSolver"
-  Output File Name = elfield_anasen  ! Sets prefix for output files
+  Output File Name = elfield_weight  ! Sets prefix for output files
   Output Format = Vtu
   ! Optional: Select specific variables to save
   Scalar Field 1 = Potential
@@ -82,24 +87,24 @@ Solver 4
  Exec Solver = After All
  Equation = SaveScalars
  Procedure = "SaveData" "SaveScalars"
- Filename = "scalars.dat"
+ Filename = "scalars_weight.dat"
 End
 
 Boundary Condition 1
   Target Boundaries = 1 
-  Potential = -200
+  Potential = 0
   Calculate Electric Force = True
 End
 
 Boundary Condition 2
   Target Boundaries = 2
-  Potential = 150
+  Potential = 0
   Calculate Electric Force = True
 End
 
 Boundary Condition 3
   Target Boundaries = 3
-  Potential = 250
+  Potential = 0
   Calculate Electric Force = True
 End
 
@@ -110,7 +115,7 @@ End
 
 Boundary Condition 5
   Target Boundaries = 20
-  Potential = 650
+  Potential = 0
   Calculate Electric Force = True
 End
 
@@ -123,5 +128,5 @@ End
 ! like the other 23; it is only separate so wires2d_weight.sif can drive it.
 Boundary Condition 7
   Target Boundaries = 40
-  Potential = 0
+  Potential = 1
 End

@@ -16,15 +16,23 @@ gmsh.option.setNumber("General.NumThreads", 10)
 # gmsh.option.setNumber("Mesh.MeshSizeMax", 10.0)
 gmsh.option.setNumber("Geometry.Tolerance", 4e-2)
 # gmsh.option.setNumber("Mesh.MeshSizeExtendFromBoundary", 0)
+# Only needed alongside mesh.recombine(), which is off. See the note there.
+# gmsh.option.setNumber("Mesh.RecombinationAlgorithm", 2)
+# gmsh.option.setNumber("Mesh.SubdivisionAlgorithm", 1)
+gmsh.option.setNumber("Mesh.SecondOrderIncomplete", 1)
 
 lc = 0.04
 # z_loc = -174.3
 
 if len(sys.argv) < 2:
-    print("Usage: python3 wires_gmsh2d_bc.py <z_locus in mm>")
+    print("Usage: python3 wires_gmsh2d_bc.py <z_locus in mm> [selected_cathode_index]")
     quit()
 
 z_loc = float(sys.argv[1])
+
+# Cathode wire (0..23) given its own physical group, tag 40, so that
+# wires2d_weight.sif can hold it at 1 V while everything else stays grounded.
+selected_cathode = int(sys.argv[2]) if len(sys.argv) > 2 else 1
 
 wireShift = 4.0
 k = 2 * np.pi / 24.0
@@ -193,18 +201,44 @@ def get_surfs(disks):
     return surfs
 
 
+if not 0 <= selected_cathode < len(cathode_wires):
+    print("selected_cathode must be 0..%d" % (len(cathode_wires) - 1))
+    quit()
+
+cathode_wires_other = [
+    disk for i, disk in enumerate(cathode_wires) if i != selected_cathode
+]
+
+# Cut the wire disks into the gas disk, replacing the old mesh.embed() call.
+# embed only makes the mesher honour the curves; fragment splits the barrel
+# into conforming surfaces, which is what lets one wire carry its own BC.
+gmsh.model.occ.synchronize()
+
+all_wire_disks = needle + guard_wires + cathode_wires + anode_wires
+if include_ic_wires:
+    all_wire_disks += ic1_wires + ic2_wires
+
+gmsh.model.occ.fragment([(2, anasen_barrel)], [(2, d) for d in all_wire_disks])
+gmsh.model.occ.synchronize()
+
+# fragment re-derives the bounding curves, so re-extract them.
 needle_surfs = get_surfs(needle) if include_needle else []
 gwire_surfs = get_surfs(guard_wires)
 awire_surfs = get_surfs(anode_wires)
-cwire_surfs = get_surfs(cathode_wires)
+cwire_surfs = get_surfs(cathode_wires_other)
+cwire_sel_surfs = get_surfs([cathode_wires[selected_cathode]])
 i1wire_surfs = get_surfs(ic1_wires) if include_ic_wires else []
 i2wire_surfs = get_surfs(ic2_wires) if include_ic_wires else []
 
-
 all_active_wire_surfs = (
-    needle_surfs + gwire_surfs + awire_surfs + cwire_surfs + i1wire_surfs + i2wire_surfs
+    needle_surfs
+    + gwire_surfs
+    + awire_surfs
+    + cwire_surfs
+    + cwire_sel_surfs
+    + i1wire_surfs
+    + i2wire_surfs
 )
-gmsh.model.mesh.embed(1, all_active_wire_surfs, 2, anasen_barrel)
 
 f1 = gmsh.model.mesh.field.add("Distance")
 gmsh.model.mesh.field.setNumbers(f1, "CurvesList", all_active_wire_surfs)
@@ -220,6 +254,10 @@ gmsh.model.mesh.field.setAsBackgroundMesh(f2)
 
 
 # --- Physical Groups ---
+# These tags are the Target Bodies / Target Boundaries numbers in the .sif
+# files. Do not renumber them without changing both sifs -- and note that
+# ElmerGrid's -autoclean renumbers them for you, which silently breaks every
+# boundary condition.
 # Needle
 if include_needle:
     gmsh.model.addPhysicalGroup(1, needle_surfs, tag=1, name="hot_needle")
@@ -234,15 +272,24 @@ gmsh.model.addPhysicalGroup(1, gwire_surfs, tag=10, name="guard_wires")
 gmsh.model.addPhysicalGroup(1, awire_surfs, tag=20, name="anode_wires")
 gmsh.model.addPhysicalGroup(1, cwire_surfs, tag=30, name="cathode_wires")
 
-# Gas Volume (2D)
-gmsh.model.addPhysicalGroup(2, [anasen_barrel], tag=13, name="gas")
+# The one cathode the weighting potential is solved for, kept out of tag 30 so
+# wires2d_weight.sif can drive it independently.
+gmsh.model.addPhysicalGroup(1, cwire_sel_surfs, tag=40, name="cathode_wire_selected")
 
-gmsh.option.setNumber("Mesh.Algorithm", 6)
+# Gas Volume (2D). fragment split the barrel into many surfaces, so collect
+# them all; naming the original disk alone would solve one sliver of the domain.
+all_surfaces_2d = [s[1] for s in gmsh.model.getEntities(dim=2)]
+gmsh.model.addPhysicalGroup(2, all_surfaces_2d, tag=13, name="gas")
 
-gmsh.model.mesh.generate(dim=2)
-# gmsh.model.mesh.refine()
-# gmsh.model.mesh.refine()
+gmsh.option.setNumber("Mesh.Algorithm", 5)
+
+gmsh.model.mesh.generate(2)
 gmsh.model.mesh.setOrder(2)
+# recombine() ran for over half an hour on the barrel surface without
+# finishing, and refine() took the mesh to ~16M nodes. Neither is needed: the
+# Threshold field above already gives 0.05 mm elements on 0.254 mm wires.
+# gmsh.model.mesh.recombine()
+# gmsh.model.mesh.refine()
 gmsh.write("wires2d.msh")
 # gmsh.fltk.run()
 gmsh.finalize()

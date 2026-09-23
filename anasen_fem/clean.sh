@@ -1,2 +1,2 @@
-rm wires2d.msh
-rm wires2d/*
+rm -f wires2d.msh
+rm -rf wires2d/*
