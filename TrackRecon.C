@@ -2064,8 +2064,8 @@ Bool_t TrackRecon::Process(Long64_t entry)
     // m17Fax/m27Alax reaction_ax_core calls below, by design. a1c0/a2c0 (the
     // former miscHistograms_oneWire) is folded in here now, gated on
     // onewire_analysis internally.
-    protonAlphaElastic_core(plotter, QQQ_Events, PC_Events, aClusters, true, "QQQ", 0.4, 6.0, TMath::Pi() / 4.0, 6.88);
-    protonAlphaElastic_core(plotter, SX3_Events, PC_Events, aClusters, false, "SX3", 0.5, 10.0, TMath::Pi() / 3.0, 6.88);
+    protonAlphaElastic_core(plotter, QQQ_Events, PC_Events, aClusters, true, "QQQ", 0.4, 6.0, TMath::Pi() / 4.0, 6.89);
+    protonAlphaElastic_core(plotter, SX3_Events, PC_Events, aClusters, false, "SX3", 0.5, 10.0, TMath::Pi() / 3.0, 6.89);
   }
 
   if (reactiondata)

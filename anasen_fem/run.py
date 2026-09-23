@@ -56,7 +56,7 @@ Z_VALUES = sorted(set(
 # anode sits directly radially outside a cathode, and the closest anode-cathode
 # approach over the whole range (4.339 mm) is at 19.707. It is deliberately off
 # the grid above, whose nearest point is 21.7875.
-Z_VALUES = [0.0, 19.794]
+# Z_VALUES = [19.690]
 
 # Stage 2 reuses whatever single mesh is sitting in wires2d/, so it cannot span
 # several z. Without this it would happily solve the weighting field on one z's
