@@ -122,7 +122,7 @@ private:
   //  const float zLen = 348.6; // mm
   const float zLen = 174.3 * 2; // mm
   const float radiusA = 37;
-  const float radiusC = 43;
+  const float radiusC = 42;
 
   double dAngle;
   double anodeLength;
@@ -626,7 +626,7 @@ inline double PW::GetZ0()
 // cathodes see the induced/mirror charge, and the guard wires are field-shaping, not read out.
 const double kPCHyperbC = 301.895;
 const double kPCAnodeWaist = 32.0429;                 // ring radius 37 mm -- readout
-const double kPCCathodeWaist = 32.0429 * 43.0 / 37.0; // ring radius 43 mm -- induced charge
+const double kPCCathodeWaist = 32.0429 * 42.0 / 37.0; // ring radius 43 mm -- induced charge
 const double kPCGuardWaist = 32.0429 * 32.0 / 37.0;   // ring radius 32 mm -- not read out
 
 // Intersection of the segment x1 -> x1+dx with the one-sheet hyperboloid of waist a, flare c.

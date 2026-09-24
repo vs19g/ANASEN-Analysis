@@ -269,8 +269,7 @@ struct AAEjectileMasses
   double m_p, m_rp; // proton ejectile, recoil
 };
 
-const double a1c1_zg[8] = {147.998, 101.946, 59.7634, 19.6965, -19.6965, -59.7634, -101.946, -147.998};
-
+const double a1c1_zg[8] = {148.2677, 102.1111, 59.8527, 19.7248, -19.7248, -59.8527, -102.1111, -148.2677};
 // cell:                                   0      1      2      3      4      5       6
 static const double a1c1_cfmin_17F[7] = {0.410, 0.420, 0.398, 0.415, 0.402, 0.420, 0.410};
 static const double a1c1_k_17F[7] = {0.075, 0.099, 0.086, 0.069, 0.163, 0.099, 0.075};

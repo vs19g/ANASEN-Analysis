@@ -314,7 +314,8 @@ inline double a1c2_zfix(double z)
 {
   double result = z;
   double slope = 0.52;
-  double z_grid[8] = {147.998, 101.946, 59.7634, 19.6965, -19.6965, -59.7634, -101.946, -147.998};
+  double z_grid[8] = {148.2677, 102.1111, 59.8527, 19.7248, -19.7248, -59.8527, -102.1111, -148.2677};
+
   for (int i = 0; i < 7; i++)
   {
     if (z <= z_grid[i] && z > z_grid[i + 1])
