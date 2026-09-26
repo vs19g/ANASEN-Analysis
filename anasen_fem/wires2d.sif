@@ -110,7 +110,7 @@ End
 
 Boundary Condition 5
   Target Boundaries = 20
-  Potential = 650
+  Potential = 660
   Calculate Electric Force = True
 End
 

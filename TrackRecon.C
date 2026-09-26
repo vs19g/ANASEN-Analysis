@@ -43,15 +43,15 @@ Int_t colors[40] = {
 bool process_alpha_proton_scattering = false,
      doMiscHistograms = true,
      doRawHistos = false,
-     doPCSX3ClusterAnalysis = true,
-     doPCQQQClusterAnalysis = true,
+     doPCSX3ClusterAnalysis = false,
+     doPCQQQClusterAnalysis = false,
      doOldAnalysis = false,
-     BenchMark = true,
+     BenchMark = false,
      onewire_analysis = true,
      diagnostic_eplots = true,
      diagnostic_tplots = true,
      reactiondata = false,
-     doPCEnergyCalibration = false,
+     doPCEnergyCalibration = true,
      ta_foil_run = false,
      source_run = false;
 
@@ -2867,15 +2867,15 @@ void PCSX3ClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
                     double oracle_pcz = (TMath::Abs(lo_pcz - pcz_ref) <= TMath::Abs(hi_pcz - pcz_ref)) ? lo_pcz : hi_pcz;
                     plotter->Fill2D("Benchmark_SX3_" + A + "C1_Cfrac_vs_ref_realpick", 400, -200, 200, 400, -200, 200, pcz_ref, sm.best().pcz, "Benchmark_SX3_ref");
                     plotter->Fill2D("Benchmark_SX3_" + A + "C1_Cfrac_vs_ref_oracle", 400, -200, 200, 400, -200, 200, pcz_ref, oracle_pcz, "Benchmark_SX3_ref");
-                    {
-                      double sep = TMath::Abs(lo_pcz - hi_pcz);
-                      double anodez_pcz = (TMath::Abs(lo_pcz - za0) <= TMath::Abs(hi_pcz - za0)) ? lo_pcz : hi_pcz;
-                      plotter->Fill2D("Benchmark_SX3_" + A + "C1_Cfrac_vs_ref_anodezpick", 400, -200, 200, 400, -200, 200, pcz_ref, anodez_pcz, "Benchmark_SX3_ref");
-                      // 1D residuals for all three picks so their RMS is directly comparable.
-                      plotter->Fill1D("Benchmark_SX3_" + A + "C1_Cfrac_minus_ref_realpick", 400, -100, 100, sm.best().pcz - pcz_ref, "Benchmark_SX3_ref");
-                      plotter->Fill1D("Benchmark_SX3_" + A + "C1_Cfrac_minus_ref_oracle", 400, -100, 100, oracle_pcz - pcz_ref, "Benchmark_SX3_ref");
-                      plotter->Fill1D("Benchmark_SX3_" + A + "C1_Cfrac_minus_ref_anodezpick", 400, -100, 100, anodez_pcz - pcz_ref, "Benchmark_SX3_ref");
-                    }
+                    double zf = xo_a1c1.Z();
+                    double za0 = pwinstance.getClosestWirePosAtWirePhi(apwire_bm, sx3event.pos.Phi()).Z();
+                    double sep = TMath::Abs(lo_pcz - hi_pcz);
+                    double anodez_pcz = (TMath::Abs(lo_pcz - za0) <= TMath::Abs(hi_pcz - za0)) ? lo_pcz : hi_pcz;
+                    plotter->Fill2D("Benchmark_SX3_" + A + "C1_Cfrac_vs_ref_anodezpick", 400, -200, 200, 400, -200, 200, pcz_ref, anodez_pcz, "Benchmark_SX3_ref");
+                    // 1D residuals for all three picks so their RMS is directly comparable.
+                    plotter->Fill1D("Benchmark_SX3_" + A + "C1_Cfrac_minus_ref_realpick", 400, -100, 100, sm.best().pcz - pcz_ref, "Benchmark_SX3_ref");
+                    plotter->Fill1D("Benchmark_SX3_" + A + "C1_Cfrac_minus_ref_oracle", 400, -100, 100, oracle_pcz - pcz_ref, "Benchmark_SX3_ref");
+                    plotter->Fill1D("Benchmark_SX3_" + A + "C1_Cfrac_minus_ref_anodezpick", 400, -100, 100, anodez_pcz - pcz_ref, "Benchmark_SX3_ref");
                   }
 
                   double zc = 0.5 * (a1c1_zg[cell_truth] + a1c1_zg[cell_truth + 1]);
@@ -3407,15 +3407,15 @@ void PCQQQClusterAnalysis(HistPlotter *plotter, const std::vector<Event> &QQQ_Ev
                       double oracle_pcz = (TMath::Abs(lo_pcz - pcz_ref) <= TMath::Abs(hi_pcz - pcz_ref)) ? lo_pcz : hi_pcz;
                       plotter->Fill2D("Benchmark_QQQ_" + A + "C1_Cfrac_vs_ref_realpick", 400, -200, 200, 400, -200, 200, pcz_ref, sm.best().pcz, "Benchmark_QQQ_ref");
                       plotter->Fill2D("Benchmark_QQQ_" + A + "C1_Cfrac_vs_ref_oracle", 400, -200, 200, 400, -200, 200, pcz_ref, oracle_pcz, "Benchmark_QQQ_ref");
-                      {
-                        double sep = TMath::Abs(lo_pcz - hi_pcz);
-                        double anodez_pcz = (TMath::Abs(lo_pcz - za0) <= TMath::Abs(hi_pcz - za0)) ? lo_pcz : hi_pcz;
-                        plotter->Fill2D("Benchmark_QQQ_" + A + "C1_Cfrac_vs_ref_anodezpick", 400, -200, 200, 400, -200, 200, pcz_ref, anodez_pcz, "Benchmark_QQQ_ref");
-                        // 1D residuals for all three picks so their RMS is directly comparable.
-                        plotter->Fill1D("Benchmark_QQQ_" + A + "C1_Cfrac_minus_ref_realpick", 400, -100, 100, sm.best().pcz - pcz_ref, "Benchmark_QQQ_ref");
-                        plotter->Fill1D("Benchmark_QQQ_" + A + "C1_Cfrac_minus_ref_oracle", 400, -100, 100, oracle_pcz - pcz_ref, "Benchmark_QQQ_ref");
-                        plotter->Fill1D("Benchmark_QQQ_" + A + "C1_Cfrac_minus_ref_anodezpick", 400, -100, 100, anodez_pcz - pcz_ref, "Benchmark_QQQ_ref");
-                      }
+                      double zf = xo_a1c1.Z();
+                      double za0 = pwinstance.getClosestWirePosAtWirePhi(apwire_bm, qqqevent.pos.Phi()).Z();
+                      double sep = TMath::Abs(lo_pcz - hi_pcz);
+                      double anodez_pcz = (TMath::Abs(lo_pcz - za0) <= TMath::Abs(hi_pcz - za0)) ? lo_pcz : hi_pcz;
+                      plotter->Fill2D("Benchmark_QQQ_" + A + "C1_Cfrac_vs_ref_anodezpick", 400, -200, 200, 400, -200, 200, pcz_ref, anodez_pcz, "Benchmark_QQQ_ref");
+                      // 1D residuals for all three picks so their RMS is directly comparable.
+                      plotter->Fill1D("Benchmark_QQQ_" + A + "C1_Cfrac_minus_ref_realpick", 400, -100, 100, sm.best().pcz - pcz_ref, "Benchmark_QQQ_ref");
+                      plotter->Fill1D("Benchmark_QQQ_" + A + "C1_Cfrac_minus_ref_oracle", 400, -100, 100, oracle_pcz - pcz_ref, "Benchmark_QQQ_ref");
+                      plotter->Fill1D("Benchmark_QQQ_" + A + "C1_Cfrac_minus_ref_anodezpick", 400, -100, 100, anodez_pcz - pcz_ref, "Benchmark_QQQ_ref");
                     }
 
                     double zc = 0.5 * (a1c1_zg[cell_truth] + a1c1_zg[cell_truth + 1]);
@@ -4178,8 +4178,10 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
         double ebeam_kin_2235keV = invertBeamEnergyMeV(m_beam, mass_4He, m3, m4, Efix, theta * 180 / M_PI, 2.235);
         double ebeam_kin_3498keV = invertBeamEnergyMeV(m_beam, mass_4He, m3, m4, Efix, theta * 180 / M_PI, 3.498);
         double ebeam_kin_3774keV = invertBeamEnergyMeV(m_beam, mass_4He, m3, m4, Efix, theta * 180 / M_PI, 3.774);
-        double ebeam_kin_4809keV = invertBeamEnergyMeV(m_beam, mass_4He, m3, m4, Efix, theta * 180 / M_PI, 4.809);
+        double ebeam_kin_4831keV = invertBeamEnergyMeV(m_beam, mass_4He, m3, m4, Efix, theta * 180 / M_PI, 4.831);
+        double ebeam_kin_5279keV = invertBeamEnergyMeV(m_beam, mass_4He, m3, m4, Efix, theta * 180 / M_PI, 5.279);
         double ebeam_kin_5614keV = invertBeamEnergyMeV(m_beam, mass_4He, m3, m4, Efix, theta * 180 / M_PI, 5.614);
+        double ebeam_kin_5951keV = invertBeamEnergyMeV(m_beam, mass_4He, m3, m4, Efix, theta * 180 / M_PI, 5.951);
         double ebeam_kin_6550keV = invertBeamEnergyMeV(m_beam, mass_4He, m3, m4, Efix, theta * 180 / M_PI, 6.550);
 
         // Gated output: only fill when this hypothesis (proton "_p" / alpha "_a") agrees
@@ -4196,16 +4198,17 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
           plotter->Fill2D(rx + "_VertexReconZ_vs_Ef" + ejtag + t + sfx, 800, -400, 400, 800, 0, ef_max, vertex_z, Efix, pmlabel);
           plotter->Fill2D(rx + "_VertexReconZ_vs_E" + ejtag + sfx, 800, -400, 400, 800, 0, ef_max, vertex_z, sievent.Energy1, pmlabel);
           plotter->Fill2D(rx + "_VertexReconZ_vs_Ex" + ejtag + t + sfx, 800, -400, 400, 600, -10, 20, vertex_z, Ex, pmlabel);
+          plotter->Fill2D(rx + "_BeamE_vs_Ex" + ejtag + t + sfx, 800, 0, beamE0 * 1.5, 600, -10, 20, beam_energy_at_vertex, Ex, pmlabel);
           plotter->Fill2D(rx + "_Ex_vs_theta" + ejtag + t + sfx, 720, 0, 180, 600, -10, 20, theta * 180 / M_PI, Ex, pmlabel);
 
-          if (ebeam_kin_MeV > 0.0)
-            plotter->Fill2D(rx + "_BeamEnergy_ETrack_vs_EKin" + ejtag + t + sfx, 400, 0, beamE0 * 1.5, 400, 0, beamE0 * 1.5,
-                            beam_energy_at_vertex, ebeam_kin_MeV, pmlabel);
+          // if (ebeam_kin_MeV > 0.0)
+          //   plotter->Fill2D(rx + "_BeamEnergy_ETrack_vs_EKin" + ejtag + t + sfx, 400, 0, beamE0 * 1.5, 400, 0, beamE0 * 1.5,
+          //                   beam_energy_at_vertex, ebeam_kin_MeV, pmlabel);
 
-          if (beam_energy_at_vertex > 4.0 && beam_energy_at_vertex <= 12.0)
-          {
-            plotter->Fill2D(rx + "_EKin-ETrack2235keV_vs_phi" + ejtag + t + sfx, 45, -180, 180, 600, -20, 40, phi * 180 / M_PI, ebeam_kin_2235keV - beam_energy_at_vertex, pmlabel);
-          }
+          // if (beam_energy_at_vertex > 4.0 && beam_energy_at_vertex <= 12.0)
+          // {
+          //   plotter->Fill2D(rx + "_EKin-ETrack2235keV_vs_phi" + ejtag + t + sfx, 45, -180, 180, 600, -20, 40, phi * 180 / M_PI, ebeam_kin_2235keV - beam_energy_at_vertex, pmlabel);
+          // }
           if (ejtag == "_p" && rx == "m27Alax")
           {
             plotter->Fill2D(rx + "_ETrack_vs_EKinGS" + ejtag + t + sfx, 400, 0, beamE0 * 1.5, 400, 0, beamE0 * 1.5,
@@ -4216,10 +4219,14 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
                             beam_energy_at_vertex, ebeam_kin_3498keV, folderPrefix + "ETrackvsKin_assumed");
             plotter->Fill2D(rx + "_ETrack_vs_EKin3774keV" + ejtag + t + sfx, 400, 0, beamE0 * 1.5, 400, 0, beamE0 * 1.5,
                             beam_energy_at_vertex, ebeam_kin_3774keV, folderPrefix + "ETrackvsKin_assumed");
-            plotter->Fill2D(rx + "_ETrack_vs_EKin4809keV" + ejtag + t + sfx, 400, 0, beamE0 * 1.5, 400, 0, beamE0 * 1.5,
-                            beam_energy_at_vertex, ebeam_kin_4809keV, folderPrefix + "ETrackvsKin_assumed");
+            plotter->Fill2D(rx + "_ETrack_vs_EKin4831keV" + ejtag + t + sfx, 400, 0, beamE0 * 1.5, 400, 0, beamE0 * 1.5,
+                            beam_energy_at_vertex, ebeam_kin_4831keV, folderPrefix + "ETrackvsKin_assumed");
+            plotter->Fill2D(rx + "_ETrack_vs_EKin5279keV" + ejtag + t + sfx, 400, 0, beamE0 * 1.5, 400, 0, beamE0 * 1.5,
+                            beam_energy_at_vertex, ebeam_kin_5279keV, folderPrefix + "ETrackvsKin_assumed");
             plotter->Fill2D(rx + "_ETrack_vs_EKin5614keV" + ejtag + t + sfx, 400, 0, beamE0 * 1.5, 400, 0, beamE0 * 1.5,
                             beam_energy_at_vertex, ebeam_kin_5614keV, folderPrefix + "ETrackvsKin_assumed");
+            plotter->Fill2D(rx + "_ETrack_vs_EKin5951keV" + ejtag + t + sfx, 400, 0, beamE0 * 1.5, 400, 0, beamE0 * 1.5,
+                            beam_energy_at_vertex, ebeam_kin_5951keV, folderPrefix + "ETrackvsKin_assumed");
             plotter->Fill2D(rx + "_ETrack_vs_EKin6550keV" + ejtag + t + sfx, 400, 0, beamE0 * 1.5, 400, 0, beamE0 * 1.5,
                             beam_energy_at_vertex, ebeam_kin_6550keV, folderPrefix + "ETrackvsKin_assumed");
           }
@@ -4299,7 +4306,7 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
       };
 
       fillHypothesis(ej_m.m_p, ej_m.m_rp, MeV_to_cm_p_spl, cm_to_MeVp_spl, "_p");
-      // fillHypothesis(ej_m.m_a, ej_m.m_ra, MeV_to_cm_spl, cm_to_MeV_spl, "_a");
+      fillHypothesis(ej_m.m_a, ej_m.m_ra, MeV_to_cm_spl, cm_to_MeV_spl, "_a");
 
       // std::string corrLabel = globaltag + "_" + rx + "+misc_" + det;
       // auto fillExCorr = [&](const std::string &topo)

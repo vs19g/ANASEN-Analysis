@@ -88,7 +88,7 @@ if [[ 1 -eq 1 ]]; then
     export source_vertex=-73.96; process_run 21
     hadd -j 4 -f -k ${OUT_DIR}/F_alpha.root ${OUT_DIR}/results_run0{18,19,20,21}.root
     hadd -j 4 -f -k ${OUT_DIR}/all.root ${OUT_DIR}/results_run*.root
-    exit
+    # exit
 fi
 
 # --- Block 5: 27Al Protons+Gas Runs (15, 17-22) ---
