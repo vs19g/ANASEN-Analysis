@@ -9,7 +9,7 @@ export CO2percent=3
 export pressure_in_torr=250
 export CATHODE_GAIN=3.0
 export source_vertex=-200.0
-export DEDX_SCALE=0.87
+export DEDX_SCALE=0.89
 
 # export BEAM_AXIS_Z0=-200
 export BEAM_AXIS_X=0

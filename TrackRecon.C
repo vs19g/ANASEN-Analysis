@@ -76,7 +76,9 @@ double source_vertex = 53.0,
        beam_tilt_x = 0.0,
        beam_tilt_y = 0.0,
        ta_foil_z_mm = 0.0,
-       alpha_source_mev = 5.486;
+       alpha_source_mev = 5.486,
+       pccal_src_dz_max = 60.0,
+       pccal_src_dphi_max_deg = 30.0;
 
 // --- Immutable Constants ---
 const double qqq_z = 105.0,
@@ -518,6 +520,8 @@ int anodeIndex = -1, cathodeIndex = -1;
 
 double a1c1_cfrac_pcz(const Event &pcevent, const TVector3 &si, bool &inband);
 void protonAlphaHistograms(HistPlotter *plotter, const std::vector<Event> &QQQ_Events, const std::vector<Event> &SX3_Events, const std::vector<Event> &PC_Events);
+void alphaSourceElossHistograms(HistPlotter *plotter, const std::vector<Event> &QQQ_Events, const std::vector<Event> &SX3_Events, const std::vector<Event> &PC_Events);
+void alphaSourceVertexHistograms(HistPlotter *plotter, const std::vector<Event> &QQQ_Events, const std::vector<Event> &SX3_Events, const std::vector<Event> &PC_Events);
 void pcCalibratedHistograms(HistPlotter *plotter, const std::vector<Event> &QQQ_Events, const std::vector<Event> &SX3_Events, const std::vector<Event> &PC_Events_calibrated);
 void protonAlphaElastic_core(HistPlotter *plotter, const std::vector<Event> &Si_Events, const std::vector<Event> &PC_Events,
                              const std::vector<std::vector<std::tuple<int, double, double>>> &aClusters,
@@ -985,26 +989,35 @@ inline void pcEnergyCalibrationAccumulate(const std::vector<Event> &PC_Events,
   const TVector3 source_pos(beam_axis_x, beam_axis_y, source_vertex);
   for (const auto &pcevent : PC_Events)
   {
-    if (!(pcevent.multi1 >= 1 && pcevent.multi2 >= 1))
+
+    if (!(pcevent.multi1 >= 1 || pcevent.multi2 >= 1))
       continue;
 
-    // Every calibration point is anchored to a real, phi/time-matched Si hit.
-    // source_pos is known exactly, but that alone can't resolve A1C1's z (needs a
-    // second reference point to pick a cfrac branch), and A1C2's own crossover z,
-    // though unambiguous, is no better than the Si hit's position once one exists.
-    // There's no case where skipping the Si hit gives a more trustworthy point.
-    auto considerSi = [&](const Event &sievent, double phi_win, bool isSX3)
+    auto considerSi = [&](const Event &sievent, double phi_win)
     {
-      if (TMath::Abs(sievent.pos.DeltaPhi(pcevent.pos)) > phi_win)
+      double dphi = TMath::Abs(sievent.pos.DeltaPhi(pcevent.pos));
+      if (dphi > phi_win)
         return;
       if (!siPcCoincident(sievent.Time1, pcevent.Time1))
         return;
       double theta = (sievent.pos - source_pos).Theta();
       if (theta <= 0.0 || !std::isfinite(theta))
         return;
-      double z = z_to_crossover_rho(pcevent.pos.Z()) / TMath::Tan(theta) + source_vertex;
-      if (!std::isfinite(z) || TMath::Abs(z) > 200)
+
+      constexpr double kNominalAnodeRho = 37.0;
+      const bool hasPcZ = (pcevent.multi2 >= 1);
+      double rho_pred = hasPcZ ? z_to_crossover_rho(pcevent.pos.Z()) : kNominalAnodeRho;
+      double pczpred = rho_pred / TMath::Tan(theta) + source_vertex;
+      if (!std::isfinite(pczpred) || TMath::Abs(pczpred) > 200)
         return;
+
+      if (hasPcZ && pccal_src_dz_max > 0.0 &&
+          TMath::Abs(pcevent.pos.Z() - pczpred) > pccal_src_dz_max)
+        return;
+      if (pccal_src_dphi_max_deg > 0.0 &&
+          dphi > pccal_src_dphi_max_deg * M_PI / 180.0)
+        return;
+
       PCCollect pc = pcCollectionPath(source_pos, sievent.pos);
       if (!pc.ok)
         return;
@@ -1018,20 +1031,15 @@ inline void pcEnergyCalibrationAccumulate(const std::vector<Event> &PC_Events,
       double Ex = evalElossForward(MeV_to_cm_spl, cm_to_MeV_spl, alpha_source_mev, d_ex);
       if (!std::isfinite(Ee) || Ee <= 0.0 || !std::isfinite(Ex) || Ex < 0.0 || Ee <= Ex)
         return;
-      // Anode: restricted to A1C2 topology, gated on SX3 coincidence only --
-      // the trusted combination. QQQ-coincident and A1C1 points no longer
-      // contribute anode calibration data (cathode, below, is unaffected).
-      if (isSX3 && pcevent.multi1 == 1 && pcevent.multi2 == 2 &&
-          pcevent.Anodech >= 0 && pcevent.Anodech < 24)
+      if (pcevent.multi1 == 1 && pcevent.Anodech >= 0 && pcevent.Anodech < 24)
         pcCalibData[pcevent.Anodech].push_back({pcevent.Energy1, Ee - Ex});
-      // Cathode: unchanged -- still A1C1, still both QQQ- and SX3-coincident.
       if (pcevent.multi2 == 1 && pcevent.Cathodech >= 0 && pcevent.Cathodech < 24)
         pcCalibData[24 + pcevent.Cathodech].push_back({pcevent.Energy2, Ee - Ex});
     };
     for (const auto &qqqevent : QQQ_Events)
-      considerSi(qqqevent, TMath::Pi() / 4.0, false);
+      considerSi(qqqevent, TMath::Pi() / 4.0);
     for (const auto &sx3event : SX3_Events)
-      considerSi(sx3event, TMath::Pi() / 3.0, true);
+      considerSi(sx3event, TMath::Pi() / 3.0);
   }
 }
 
@@ -1465,8 +1473,8 @@ Bool_t TrackRecon::Process(Long64_t entry)
           {
             plotter->Fill2D("WedgeE_Vs_RingECal_selected", 1000, 0, 10, 1000, 0, 10, eWedgeMeV, eRingMeV, "hCalQQQ");
 
-            plotter->Fill1D("QQQECal", 2048, 0, 10, eRingMeV);
-            plotter->Fill1D("QQQECal", 2048, 0, 10, eWedgeMeV);
+            plotter->Fill1D("QQQECal", 800, 0, 10000, eRingMeV * 1000);
+            plotter->Fill1D("QQQECal", 800, 0, 10000, eWedgeMeV * 1000);
 
             const int channelsPerDetector = MAX_RING + MAX_WEDGE;
             int globalRingChannel = chRing + (qqq.id[i] * channelsPerDetector);
@@ -1995,6 +2003,12 @@ Bool_t TrackRecon::Process(Long64_t entry)
     // return kTRUE;
   } // end if(process_alpha_proton_scattering)
 
+  if (source_run)
+  {
+    alphaSourceElossHistograms(plotter, QQQ_Events, SX3_Events, PC_Events);
+    alphaSourceVertexHistograms(plotter, QQQ_Events, SX3_Events, PC_Events);
+  }
+
   if (pcEnergyCalibLoaded && diagnostic_eplots)
     pcCalibratedHistograms(plotter, QQQ_Events, SX3_Events, PC_Events_calibrated);
 
@@ -2251,6 +2265,147 @@ void protonAlphaHistograms(HistPlotter *plotter, const std::vector<Event> &QQQ_E
   } // end QQQ_Events for loop, end sidetrack a(p,p)
 
   return;
+}
+
+void alphaSourceElossHistograms(HistPlotter *plotter, const std::vector<Event> &QQQ_Events, const std::vector<Event> &SX3_Events, const std::vector<Event> &PC_Events)
+{
+  if (!source_run)
+    return; 
+
+  const std::string fld = "AlphaSourceEloss";
+  const TVector3 source_pos(beam_axis_x, beam_axis_y, source_vertex); 
+
+  auto pcCoincident = [&](const Event &sievent, double phi_win) -> bool
+  {
+    for (const auto &pcevent : PC_Events)
+    {
+      if (pcevent.multi1 < 1)
+        continue;
+      if (!siPcCoincident(sievent.Time1, pcevent.Time1))
+        continue;
+      if (TMath::Abs(sievent.pos.DeltaPhi(pcevent.pos)) <= phi_win)
+        return true;
+    }
+    return false;
+  };
+
+  auto processDet = [&](const Event &sievent, const std::string &det, double phi_win)
+  {
+    if (!(sievent.Energy1 > 0.1) || !std::isfinite(sievent.Energy1))
+      return; // reject empty / noise Si channels
+
+    double theta = (sievent.pos - source_pos).Theta();
+    if (!std::isfinite(theta) || theta <= 0.0)
+      return;
+    double theta_deg = theta * 180.0 / M_PI;
+
+    double path_cm = pathLengthCm(source_pos, sievent.pos); // source -> Si, cm
+    if (!std::isfinite(path_cm) || path_cm <= 0.0)
+      return;
+
+    double Efix = evalEloss(MeV_to_cm_spl, cm_to_MeV_spl, sievent.Energy1, path_cm);
+
+    plotter->Fill1D("srcae_siE_raw_" + det, 800, 0, 10, sievent.Energy1, fld);
+    plotter->Fill2D("srcae_siE_vs_theta_" + det, 180, 0, 180, 400, 0, 10, theta_deg, sievent.Energy1, fld);
+    plotter->Fill2D("srcae_siE_vs_pathlen_" + det, 300, 0, 30, 400, 0, 10, path_cm, sievent.Energy1, fld);
+
+    if (Efix <= 0.0 || !std::isfinite(Efix))
+      return; 
+      
+    plotter->Fill1D("srcae_Efix_" + det, 800, 0, 10, Efix, fld);
+    plotter->Fill1D("srcae_Efix_resid_" + det, 400, -2, 2, Efix - alpha_source_mev, fld);
+    plotter->Fill2D("srcae_Efix_vs_theta_" + det, 180, 0, 180, 400, 0, 10, theta_deg, Efix, fld);
+    plotter->Fill2D("srcae_Efix_vs_pathlen_" + det, 300, 0, 30, 400, 0, 10, path_cm, Efix, fld);
+
+    // Combined (all detectors) spectra for a single at-a-glance check.
+    plotter->Fill1D("srcae_Efix_all", 800, 0, 10, Efix, fld);
+    plotter->Fill1D("srcae_Efix_resid_all", 400, -2, 2, Efix - alpha_source_mev, fld);
+    plotter->Fill2D("srcae_Efix_vs_theta_all", 180, 0, 180, 400, 0, 10, theta_deg, Efix, fld);
+
+    // Cleaner cross-check: same reconstruction, restricted to PC-coincident Si hits.
+    if (pcCoincident(sievent, phi_win))
+    {
+      plotter->Fill1D("srcae_Efix_pc_" + det, 800, 0, 10, Efix, fld);
+      plotter->Fill1D("srcae_Efix_resid_pc_" + det, 400, -2, 2, Efix - alpha_source_mev, fld);
+      plotter->Fill2D("srcae_Efix_vs_theta_pc_" + det, 180, 0, 180, 400, 0, 10, theta_deg, Efix, fld);
+    }
+  };
+
+  // phi windows match the rest of the file: QQQ at pi/4, SX3 at the longer lever arm pi/3.
+  for (const auto &qqqevent : QQQ_Events)
+    processDet(qqqevent, "qqq", TMath::Pi() / 4.0);
+  for (const auto &sx3event : SX3_Events)
+    processDet(sx3event, "sx3", TMath::Pi() / 3.0);
+}
+
+void alphaSourceVertexHistograms(HistPlotter *plotter, const std::vector<Event> &QQQ_Events, const std::vector<Event> &SX3_Events, const std::vector<Event> &PC_Events)
+{
+  if (!source_run)
+    return; // known-source_vertex comparison is only valid for source runs
+
+  const std::string fld = "AlphaSourceVertex";
+
+  for (const auto &pcevent : PC_Events)
+  {
+    
+    if (!(pcevent.multi1 == 1 && (pcevent.multi2 == 1 || pcevent.multi2 == 2)))
+      continue;
+
+    auto considerSi = [&](const Event &sievent, double phi_win, const std::string &det)
+    {
+      if (TMath::Abs(sievent.pos.DeltaPhi(pcevent.pos)) > phi_win)
+        return;
+      if (!siPcCoincident(sievent.Time1, pcevent.Time1))
+        return;
+
+      // Independent PC-z measurement from the matching cathode topology.
+      double pcz;
+      std::string topo;
+      if (pcevent.multi2 == 2)
+      {
+        pcz = a1c2_zfix(pcevent.pos.Z());
+        topo = "_A1C2";
+      }
+      else if (pcevent.multi2 == 1)
+      {
+        bool inband = false;
+        pcz = a1c1_cfrac_pcz(pcevent, sievent.pos, inband);
+        if (!inband)
+          return; // only trust in-band A1C1 solutions, as in the calibration path
+        topo = "_A1C1";
+      }
+      else
+        return; // no z model for other cathode multiplicities
+      if (!std::isfinite(pcz))
+        return;
+
+      TVector3 x2(pcevent.pos.X(), pcevent.pos.Y(), pcz);
+      TVector3 vtx = beamVertex(sievent.pos, x2 - sievent.pos); // POCA to the beam axis
+      double vz = vtx.Z();
+      if (!std::isfinite(vz))
+        return;
+      double theta_deg = (sievent.pos - beamAxisPoint(source_vertex)).Theta() * 180.0 / M_PI;
+      double resid = vz - source_vertex; // should peak at 0 if geometry is right
+
+      plotter->Fill1D("srcv_VertexZ_" + det, 800, -300, 300, vz, fld);
+      plotter->Fill1D("srcv_VertexZ_resid_" + det, 400, -100, 100, resid, fld);
+      plotter->Fill2D("srcv_VertexZ_vs_theta_" + det, 180, 0, 180, 600, -300, 300, theta_deg, vz, fld);
+      plotter->Fill2D("srcv_VertexZresid_vs_theta_" + det, 180, 0, 180, 400, -100, 100, theta_deg, resid, fld);
+
+      // per-topology, so A1C1 vs A1C2 reconstruction quality is separable
+      plotter->Fill1D("srcv_VertexZ_" + det + topo, 800, -300, 300, vz, fld);
+      plotter->Fill1D("srcv_VertexZ_resid_" + det + topo, 400, -100, 100, resid, fld);
+
+      // combined (both detectors) for a single at-a-glance check
+      plotter->Fill1D("srcv_VertexZ_all", 800, -300, 300, vz, fld);
+      plotter->Fill1D("srcv_VertexZ_resid_all", 400, -100, 100, resid, fld);
+    };
+
+    for (const auto &qqqevent : QQQ_Events)
+      considerSi(qqqevent, TMath::Pi() / 4.0, "qqq");
+    for (const auto &sx3event : SX3_Events)
+      considerSi(sx3event, TMath::Pi() / 3.0, "sx3");
+  }
 }
 
 void a1c1CalibDiagnostic(HistPlotter *plotter, const std::vector<Event> &PC_Events)
@@ -3826,6 +3981,11 @@ void protonAlphaElastic_core(HistPlotter *plotter, const std::vector<Event> &Si_
                             beam_energy_at_vertex, ebeam_kin, pmlabel);
             plotter->Fill2D(rx + "_EKin_vs_ESi" + ejtag + t + sfx, 400, 0, initial_energy * 1.5, 800, 0, 10, ebeam_kin, sievent.Energy1, pmlabel);
           }
+          PCCollect pcc = pcCollectionPath(r_rhoMin_fix, sievent.pos);
+          if (pcc.ok && anodeE_MeV > 0.0)
+          {
+            plotter->Fill2D(rx + "_dEgasCalib_vs_Ex" + ejtag + t + sfx, 800, -10, 10, 800, 0, 0.6, Ex, anodeE_MeV, pmlabel);
+          }
         };
         std::string topo1;
         if (multi2 == 2)
@@ -3846,7 +4006,7 @@ void protonAlphaElastic_core(HistPlotter *plotter, const std::vector<Event> &Si_
           double E_ca = evalEloss(ej_fwd, ej_inv, sievent.Energy1, pcc.cathode_cm);
           double dE_pred = E_gu - E_ca;
           plotter->Fill2D(rx + "_dEgas_vs_Ef" + ejtag + sfx, 400, 0, 10, 400, 0, 0.6, Efix, dE_pred, pmlabel);
-          if (anodeE_MeV >= 0.0)
+          if (anodeE_MeV > 0.0)
           {
             plotter->Fill2D(rx + "_dEgasCalib_vs_Ef" + ejtag + sfx, 400, 0, 10, 800, 0, 0.6, Efix, anodeE_MeV, pmlabel);
             plotter->Fill2D(rx + "_dEgasCalib_vs_E" + ejtag + sfx, 400, 0, 10, 800, 0, 0.6, sievent.Energy1, anodeE_MeV, pmlabel);
@@ -3856,8 +4016,7 @@ void protonAlphaElastic_core(HistPlotter *plotter, const std::vector<Event> &Si_
             if (anodeCh >= 0 && anodeCh < 24)
               // plotter->Fill2D(rx + "_dEgasCalib_vs_E" + ejtag + sfx + "_anode" + pad2(anodeCh),
               // 400, 0, 10, 800, 0, 0.6, sievent.Energy1, anodeE_MeV, pmlabel);
-              plotter->Fill2D(rx + "_dEgasCalib_vs_Ex" + ejtag + sfx, 800, -10, 10, 800, 0, 0.6, Ex, anodeE_MeV, pmlabel);
-            plotter->Fill2D(rx + "_dEgasCalib_vs_Z" + ejtag + sfx, 800, -400, 400, 800, 0, 0.6, vertex_z, anodeE_MeV, pmlabel);
+              plotter->Fill2D(rx + "_dEgasCalib_vs_Z" + ejtag + sfx, 800, -400, 400, 800, 0, 0.6, vertex_z, anodeE_MeV, pmlabel);
             plotter->Fill2D(rx + "_dEgasPred_vs_dEgasCalib" + ejtag + sfx, 800, 0, 0.6, 800, 0, 0.6, anodeE_MeV, dE_pred, pmlabel);
           }
         }
