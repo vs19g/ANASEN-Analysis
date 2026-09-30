@@ -13,6 +13,8 @@
 #include <TPaveText.h>
 #include <TLine.h>
 #include <fstream>
+#include <sstream>
+#include <string>
 #include <iostream>
 #include <vector>
 #include <iomanip>
@@ -29,12 +31,66 @@
 // calibration and is excluded here rather than trusted. Update this list as more
 // dead channels are identified; currently anode 9 and 12.
 void fit_pc_energy_calibration(const std::string& dataset_filter = "",
-                                const std::vector<int>& known_dead_wires = {9, 12})
+                                const std::vector<int>& known_dead_wires = {},
+                                const std::string& ratio_reference = "",
+                                const std::string& ref_sides = "both")
 {
   std::vector<bool> isDead(48, false);
   for (int w : known_dead_wires)
     if (w >= 0 && w < 48)
       isDead[w] = true;
+
+  const bool useRef = !ratio_reference.empty();
+  std::vector<double> refSlope(48, 0.0);
+  std::vector<bool> refOk(48, false);
+  std::vector<int> refMethod(48, -1); // -1 = wire absent from the reference
+  // rescaleSide[s]: s=0 anode, s=1 cathode. A side that isn't rescaled is copied
+  // from the reference verbatim in Pass 2.
+  bool rescaleSide[2] = {true, true};
+  if (useRef)
+  {
+    if (ref_sides == "anode")
+      rescaleSide[1] = false;
+    else if (ref_sides == "cathode")
+      rescaleSide[0] = false;
+    else if (ref_sides != "both")
+    {
+      std::cerr << "fit_pc_energy_calibration: ref_sides must be \"both\", \"anode\" or \"cathode\", got '"
+                << ref_sides << "' -- aborting." << std::endl;
+      return;
+    }
+    std::ifstream rf(ratio_reference);
+    if (!rf.is_open())
+    {
+      std::cerr << "fit_pc_energy_calibration: can't open ratio_reference '" << ratio_reference
+                << "' -- aborting rather than silently writing an unreferenced table." << std::endl;
+      return;
+    }
+    std::string rline;
+    int nRef = 0;
+    while (std::getline(rf, rline))
+    {
+      std::istringstream rs(rline);
+      int rw, rm;
+      double rsl, rint;
+      if (!(rs >> rw >> rsl >> rint >> rm) || rw < 0 || rw >= 48)
+        continue;
+      refSlope[rw] = rsl;
+      refMethod[rw] = rm;
+      refOk[rw] = (rsl > 0.0) && (rm == 1 || rm == 2 || rm == 4);
+      nRef += refOk[rw];
+    }
+    std::cout << "fit_pc_energy_calibration: ratio_reference " << ratio_reference << ": "
+              << nRef << "/48 usable wire(s); rescaling " << ref_sides
+              << (ref_sides == "both" ? "" : " only, other side copied from the reference") << std::endl;
+    for (int w = 0; w < 48; ++w)
+      if (!rescaleSide[w < 24 ? 0 : 1] && refMethod[w] < 0)
+      {
+        std::cerr << "fit_pc_energy_calibration: wire " << w << " is on the side to copy but missing from "
+                  << ratio_reference << " -- aborting rather than inventing a row." << std::endl;
+        return;
+      }
+  }
 
   std::vector<std::pair<double, double>> pts[48]; // [wire] -> (ADC, dE_gas MeV)
 
@@ -48,8 +104,10 @@ void fit_pc_energy_calibration(const std::string& dataset_filter = "",
   }
 
   int nFiles = 0;
+  int nFilesLegacyOverflow = 0;
   long long nOverflowCut = 0;
   long long nOverflowCutPerWire[48] = {0};
+  const double kLegacyOverflowADC = 64000.0;
   TIter next(files);
   TSystemFile *f;
   
@@ -68,13 +126,34 @@ void fit_pc_energy_calibration(const std::string& dataset_filter = "",
     if (!infile.is_open())
       continue;
       
-    int wire;
-    double adc, dE_gas;
-    while (infile >> wire >> adc >> dE_gas)
+    std::vector<double> overflowThr(48, kLegacyOverflowADC);
+    bool hasOverflowHeader = false;
+    std::string line;
+    while (std::getline(infile, line))
     {
+      if (line.empty())
+        continue;
+      if (line[0] == '#')
+      {
+        std::istringstream hs(line.substr(1));
+        std::string key;
+        int hw;
+        double thr;
+        if (hs >> key && key == "overflow" && hs >> hw >> thr && hw >= 0 && hw < 48)
+        {
+          overflowThr[hw] = thr;
+          hasOverflowHeader = true;
+        }
+        continue;
+      }
+      std::istringstream ls(line);
+      int wire;
+      double adc, dE_gas;
+      if (!(ls >> wire >> adc >> dE_gas))
+        continue;
       if (wire >= 0 && wire < 48)
       {
-        if (adc < 64000.0) {
+        if (adc < overflowThr[wire]) {
           pts[wire].push_back({adc, dE_gas});
         } else {
           nOverflowCut++;
@@ -82,13 +161,23 @@ void fit_pc_energy_calibration(const std::string& dataset_filter = "",
         }
       }
     }
+    if (!hasOverflowHeader)
+    {
+      ++nFilesLegacyOverflow;
+      std::cerr << "fit_pc_energy_calibration: " << name.Data()
+                << " has no '# overflow' header (pre-dates it) -- using flat legacy cut ADC < "
+                << kLegacyOverflowADC << ", which is wrong for gain-matched wires and for any"
+                << " cathode run with CATHODE_GAIN != 1. Regenerate it with the current TrackRecon.C."
+                << std::endl;
+    }
     ++nFiles;
   }
-  
-  std::cout << "fit_pc_energy_calibration: read " << nFiles 
-            << " run file(s) from pc_calib_raw/ (Filter: '" << dataset_filter << "')" << std::endl;
-  std::cout << "fit_pc_energy_calibration: cut " << nOverflowCut 
-            << " points due to ADC >= 64k overflow." << std::endl;
+
+  std::cout << "fit_pc_energy_calibration: read " << nFiles
+            << " run file(s) from pc_calib_raw/ (Filter: '" << dataset_filter << "'), "
+            << nFilesLegacyOverflow << " with legacy flat overflow cut" << std::endl;
+  std::cout << "fit_pc_energy_calibration: cut " << nOverflowCut
+            << " points at the per-wire ADC overflow threshold." << std::endl;
   std::cout << "fit_pc_energy_calibration: per-wire overflow breakdown (wire: cut / kept):" << std::endl;
   for (int wire = 0; wire < 48; ++wire)
   {
@@ -130,38 +219,65 @@ void fit_pc_energy_calibration(const std::string& dataset_filter = "",
       int b = std::min(kFloorHistBins - 1, static_cast<int>(v / binW));
       if (b >= 0) hist[b]++;
     }
-    int tallest = *std::max_element(hist.begin(), hist.end());
-    if (tallest <= 0)
+
+    std::vector<double> sm(kFloorHistBins, 0.0);
+    for (int b = 0; b < kFloorHistBins; ++b)
+    {
+      int lo = std::max(0, b - 1), hi = std::min(kFloorHistBins - 1, b + 1);
+      double s = 0.0;
+      for (int k = lo; k <= hi; ++k)
+        s += hist[k];
+      sm[b] = s / (hi - lo + 1);
+    }
+    double tallest = *std::max_element(sm.begin(), sm.end());
+    if (tallest <= 0.0)
       return 0.0;
 
-    // Scan from the highest-ADC bin down; the first local maximum that's
-    // prominent enough is taken as "the" peak.
-    int peakBin = -1;
-    for (int b = kFloorHistBins - 1; b >= 1; --b)
+    const double kValleyRiseSigma = 2.0;
+    const double kValleyDepthFrac = 0.5;
+    int b = kFloorHistBins - 2;
+    while (b >= 1)
     {
-      if (hist[b] < kPeakProminenceFrac * tallest)
-        continue;
-      bool isLocalMax = hist[b] >= hist[b - 1] && (b == kFloorHistBins - 1 || hist[b] >= hist[b + 1]);
-      if (isLocalMax)
+      int peakBin = -1;
+      for (; b >= 1; --b)
       {
-        peakBin = b;
-        break;
+        if (sm[b] < kPeakProminenceFrac * tallest)
+          continue;
+        if (sm[b] >= sm[b - 1] && sm[b] >= sm[b + 1])
+        {
+          peakBin = b;
+          break;
+        }
       }
-    }
-    if (peakBin <= 0)
-      return 0.0; // no clear peak below the top edge -- nothing to cut against
+      if (peakBin <= 0)
+        return 0.0; // no clear peak below the top edge -- nothing to cut against
 
-    // Walk down from the peak to the valley: the floor is the bin where the
-    // count stops falling and starts rising again (the start of a lower
-    // population), or the histogram runs out.
-    int valleyBin = peakBin;
-    for (int b = peakBin - 1; b >= 0; --b)
-    {
-      if (hist[b] > hist[valleyBin])
-        break;
-      valleyBin = b;
+      int valleyBin = peakBin, riseBin = -1;
+      for (int v = peakBin - 1; v >= 0; --v)
+      {
+        if (sm[v] <= sm[valleyBin])
+        {
+          valleyBin = v;
+          continue;
+        }
+        double tol = kValleyRiseSigma * std::sqrt(std::max(sm[valleyBin], 1.0) / 3.0);
+        if (sm[v] > sm[valleyBin] + tol)
+        {
+          riseBin = v;
+          break;
+        }
+      }
+      if (riseBin < 0)
+        return 0.0; // single population all the way down -- nothing to cut
+
+      double depthTol = kValleyRiseSigma * std::sqrt(std::max(sm[peakBin], 1.0) / 3.0);
+      if (sm[valleyBin] <= kValleyDepthFrac * sm[peakBin] &&
+          sm[peakBin] - sm[valleyBin] > depthTol)
+        return valleyBin * binW;
+
+      b = riseBin; // shoulder, not a peak -- keep looking below
     }
-    return valleyBin * binW;
+    return 0.0;
   };
 
   std::vector<std::pair<double, double>> ptsFit[48]; // math uses this; pts[] stays raw for display
@@ -298,6 +414,40 @@ void fit_pc_energy_calibration(const std::string& dataset_filter = "",
             << consensusCathodeDEgas << " MeV from " << cathodeConsensusPts.size()
             << " point(s) across " << nTrustedCathode << " trusted cathode wire(s)" << std::endl;
 
+  double refK[2] = {0.0, 0.0}; 
+  if (useRef)
+  {
+    std::vector<double> kw[2];
+    for (int wire = 0; wire < 48; ++wire)
+    {
+      if (!refOk[wire] || isDead[wire] || !ok_arr[wire] || isOutlier[wire])
+        continue;
+      kw[wire < 24 ? 0 : 1].push_back(slope_lsq[wire] / refSlope[wire]);
+    }
+    for (int s = 0; s < 2; ++s)
+    {
+      refK[s] = medianOf(kw[s]);
+      std::cout << "fit_pc_energy_calibration: ratio_reference scale K_" << (s == 0 ? "anode" : "cathode")
+                << " = " << refK[s] << " (median over " << kw[s].size() << " trusted wire(s))"
+                << (!rescaleSide[s] ? " -- NOT applied (ref_sides), rows copied from the reference"
+                                    : (refK[s] > 0.0 ? "" : " -- NOT fitted, this side keeps per-wire results"))
+                << std::endl;
+    }
+    // Per-wire cross-check: what each wire's own least-squares fit says its scale
+    // should be, relative to K. Far from 1 means the reference ratio for that wire
+    // disagrees with this data -- the table still uses the reference, this is only
+    // so it's visible.
+    std::cout << "fit_pc_energy_calibration: per-wire (own lsq / (K*ref)) -- 1.00 = reference ratio agrees with data:" << std::endl;
+    for (int wire = 0; wire < 48; ++wire)
+    {
+      int s = (wire < 24) ? 0 : 1;
+      if (!refOk[wire] || isDead[wire] || !ok_arr[wire] || refK[s] <= 0.0)
+        continue;
+      std::cout << "  " << (s == 0 ? "anode " : "cathode ") << (s == 0 ? wire : wire - 24) << ": "
+                << Form("%.2f", slope_lsq[wire] / (refK[s] * refSlope[wire])) << std::endl;
+    }
+  }
+
   // --- Setup ROOT Diagnostic Graphics ---
   gROOT->SetBatch(kTRUE); // Run silently without popping up windows
   gStyle->SetOptStat(0);
@@ -326,7 +476,8 @@ void fit_pc_energy_calibration(const std::string& dataset_filter = "",
     double n = n_arr[wire];
     bool ok = ok_arr[wire];
     double slope = 1.0, intercept = 0.0;
-    int method = 0; // 0 = identity/no data, 1 = least-squares, 2 = peak-matched (a1c2 consensus), 3 = known dead
+    int method = 0; // 0 = identity/no data, 1 = least-squares, 2 = peak-matched (a1c2 consensus), 3 = known dead,
+                    // 4 = ratio_reference x per-side scale
 
     if (isDead[wire])
     {
@@ -376,6 +527,17 @@ void fit_pc_energy_calibration(const std::string& dataset_filter = "",
       // else: n>=1 but medX<=0 and no lsq fit either -- falls through to identity below.
     }
 
+    if (useRef && !rescaleSide[wire < 24 ? 0 : 1])
+    {
+      slope = refSlope[wire]; // side excluded by ref_sides: reference row verbatim
+      method = refMethod[wire];
+    }
+    else if (useRef && refOk[wire] && !isDead[wire] && refK[wire < 24 ? 0 : 1] > 0.0)
+    {
+      slope = refK[wire < 24 ? 0 : 1] * refSlope[wire];
+      method = 4; // reference ratio x per-side physics scale
+    }
+
     if (method == 0 && !isDead[wire]) {
       std::cerr << "fit_pc_energy_calibration: wire " << wire << " has " << n
                 << " point(s) and no usable consensus target -- writing identity (slope=1, intercept=0)" << std::endl;
@@ -411,7 +573,7 @@ void fit_pc_energy_calibration(const std::string& dataset_filter = "",
     if (drawFit) {
         fitLine = new TF1(Form("fit_%d", wire), "[0]*x", 0, maxX * 1.05); // Formula is strictly y = m*x
         fitLine->SetParameter(0, slope);
-        fitLine->SetLineColor(method == 2 ? kMagenta : kRed);
+        fitLine->SetLineColor(method == 4 ? kBlue : (method == 2 ? kMagenta : kRed));
         fitLine->SetLineWidth(2);
 
         pt = new TPaveText(0.15, 0.72, 0.55, 0.88, "NDC");
@@ -422,6 +584,8 @@ void fit_pc_energy_calibration(const std::string& dataset_filter = "",
         pt->AddText("b = 0 (Fixed)");
         if (method == 2)
           pt->AddText("PEAK-MATCHED (a1c2 consensus)");
+        if (method == 4)
+          pt->AddText(Form("REF RATIO x K = %.3g", refK[wire < 24 ? 0 : 1]));
         if (floorADC[wire] > 0.0)
           pt->AddText(Form("floor cut @ %.0f ADC", floorADC[wire]));
     }
