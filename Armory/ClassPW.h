@@ -322,14 +322,14 @@ PW::Make_Clusters(const std::unordered_map<int, std::tuple<int, double, double>>
   }
 
   if (wireClusters.size() > 1)
-  {                                            // Deal with wraparound if required
-    auto first_cluster = wireClusters.front(); // front and back provide references to the elements themselves. less copy, can modify etc
-    auto last_cluster = wireClusters.back();
+  {
+    auto &first_cluster = wireClusters.front();
+    auto &last_cluster = wireClusters.back();
     if (std::get<0>(last_cluster.back()) == 23 && std::get<0>(first_cluster.front()) == 0)
     {
       last_cluster.insert(last_cluster.end(), first_cluster.begin(), first_cluster.end());
+      wireClusters.erase(wireClusters.begin()); // invalidates the references above; not used after this
     }
-    wireClusters.erase(wireClusters.begin()); // canonically, erase() needs an iterator, hence begin() not front()
     // TODO: Can also deal with 'gaps' of missing wires similarly. end of one segment and beginning of another segment will be separated by missing wire --> combine the two
     // TODO: Also needs some development regarding the time-correlation. Don't put wires in the same cluster if they aren't time coincident
   }
@@ -621,12 +621,12 @@ inline double PW::GetZ0()
 // the ring radius. The anode waist was fit to the measured anode crossover points; the
 // other families share the flare 'c' and scale their waist with the ring radius.
 //
-// Radial ordering, inner to outer:  guard (ring 32) < anode (ring 37) < cathode (ring 43).
+// Radial ordering, inner to outer:  guard (ring 32) < anode (ring 37) < cathode (ring 42).
 // Charge collection spans guard -> cathode. The anodes in the middle are the readout, the
 // cathodes see the induced/mirror charge, and the guard wires are field-shaping, not read out.
 const double kPCHyperbC = 301.895;
 const double kPCAnodeWaist = 32.0429;                 // ring radius 37 mm -- readout
-const double kPCCathodeWaist = 32.0429 * 42.0 / 37.0; // ring radius 43 mm -- induced charge
+const double kPCCathodeWaist = 32.0429 * 42.0 / 37.0; // ring radius 42 mm -- induced charge
 const double kPCGuardWaist = 32.0429 * 32.0 / 37.0;   // ring radius 32 mm -- not read out
 
 // Intersection of the segment x1 -> x1+dx with the one-sheet hyperboloid of waist a, flare c.
