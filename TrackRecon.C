@@ -44,11 +44,11 @@ Int_t colors[40] = {
 bool process_alpha_proton_scattering = false,
      doMiscHistograms = true,
      doRawHistos = false,
-     doSingles = true,
+     doSingles = false,
      diagnostic_eplots = true,
      diagnostic_tplots = true,
-     doPCSX3ClusterAnalysis = true,
-     doPCQQQClusterAnalysis = true,
+     doPCSX3ClusterAnalysis = false,
+     doPCQQQClusterAnalysis = false,
      BenchMark = true,
      onewire_analysis = true,
      doOldAnalysis = false,
@@ -493,8 +493,8 @@ bool pcEnergyCalibLoaded = false;
 // impact on downstream histograms can be compared against the default (off).
 static const std::set<int> badAnodeWires = {6, 12, 19, 21, 22, 23};
 bool excludeBadAnodeWires = false; // set in Begin() from DISABLE_BAD_ANODE_WIRES
-bool pcUniqueCathode = true;  // set in Begin() from PC_UNIQUE_CATHODE
-bool pcA1C0PerCluster = true; // set in Begin() from PC_A1C0_PER_CLUSTER
+bool pcUniqueCathode = true;       // set in Begin() from PC_UNIQUE_CATHODE
+bool pcA1C0PerCluster = true;      // set in Begin() from PC_A1C0_PER_CLUSTER
 inline bool isAnodeWireExcluded(int wire)
 {
   return excludeBadAnodeWires && badAnodeWires.count(wire) > 0;
@@ -2224,7 +2224,7 @@ void TrackRecon::Terminate()
     std::string outname = "pc_calib_raw/points_" + tag + ".dat";
     std::ofstream outfile(outname);
     outfile << std::scientific << std::setprecision(6);
-    
+
     const double kPcRawOverflowADC = 64000.0;
     for (int wire = 0; wire < 48; ++wire)
     {
@@ -2362,10 +2362,10 @@ void protonAlphaHistograms(HistPlotter *plotter, const std::vector<Event> &QQQ_E
 void alphaSourceElossHistograms(HistPlotter *plotter, const std::vector<Event> &QQQ_Events, const std::vector<Event> &SX3_Events, const std::vector<Event> &PC_Events)
 {
   if (!source_run)
-    return; 
+    return;
 
   const std::string fld = "AlphaSourceEloss";
-  const TVector3 source_pos(beam_axis_x, beam_axis_y, source_vertex); 
+  const TVector3 source_pos(beam_axis_x, beam_axis_y, source_vertex);
 
   auto pcCoincident = [&](const Event &sievent, double phi_win) -> bool
   {
@@ -2402,8 +2402,8 @@ void alphaSourceElossHistograms(HistPlotter *plotter, const std::vector<Event> &
     plotter->Fill2D("srcae_siE_vs_pathlen_" + det, 300, 0, 30, 400, 0, 10, path_cm, sievent.Energy1, fld);
 
     if (Efix <= 0.0 || !std::isfinite(Efix))
-      return; 
-      
+      return;
+
     plotter->Fill1D("srcae_Efix_" + det, 800, 0, 10, Efix, fld);
     plotter->Fill1D("srcae_Efix_resid_" + det, 400, -2, 2, Efix - alpha_source_mev, fld);
     plotter->Fill2D("srcae_Efix_vs_theta_" + det, 180, 0, 180, 400, 0, 10, theta_deg, Efix, fld);
@@ -2439,7 +2439,7 @@ void alphaSourceVertexHistograms(HistPlotter *plotter, const std::vector<Event> 
 
   for (const auto &pcevent : PC_Events)
   {
-    
+
     if (!(pcevent.multi1 == 1 && (pcevent.multi2 == 1 || pcevent.multi2 == 2)))
       continue;
 
@@ -4014,7 +4014,9 @@ void protonAlphaElastic_core(HistPlotter *plotter, const std::vector<Event> &Si_
         TSpline3 *ej_fwd = alphaHyp ? MeV_to_cm_spl : MeV_to_cm_p_spl;
         TSpline3 *ej_inv = alphaHyp ? cm_to_MeV_spl : cm_to_MeVp_spl;
         double Efix = evalEloss(ej_fwd, ej_inv, sievent.Energy1, path_length);
-        double Ex = alphaHyp ? apkin_a.getExc(Efix, theta * 180 / M_PI) : apkin_p.getExc(Efix, theta * 180 / M_PI);
+        Kinematics &apkin = alphaHyp ? apkin_a : apkin_p;
+        apkin.setEBeam(beam_energy_at_vertex);
+        double Ex = apkin.getExc(Efix, theta * 180 / M_PI);
 
         plotter->Fill2D(rx + "_dE_E_Anode" + ejtag + sfx, 400, 0, 10, 800, 0, 40000, sievent.Energy1, anodeE_raw, pmlabel);
         if (hasCathode)

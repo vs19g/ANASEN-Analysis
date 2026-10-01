@@ -56,7 +56,7 @@ if [[ 1 -eq 0 ]]; then
 fi
 
 # --- Block 3: 27Al Alpha+Gas Runs (9, 12) ---
-if [[ 1 -eq 0 ]]; then
+if [[ 1 -eq 1 ]]; then
     export DATASET="27Al"
     export PREFIX="Run_"
     export OUT_DIR="Output_a"
@@ -66,6 +66,7 @@ if [[ 1 -eq 0 ]]; then
     echo "Processing 27Al alpha+gas runs..."
     # export source_vertex=-5.36; export timecut_low=12.0; export timecut_high=119.0; process_run 9 "$slope"
     # unset timecut_high
+    export pressure_in_torr=250
     export source_vertex=53.44; export timecut_low=400.0; process_run 12 "$slope"
     unset Gain
     unset CATHODE_GAIN
