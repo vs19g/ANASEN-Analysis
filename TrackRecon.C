@@ -55,9 +55,8 @@ bool process_alpha_proton_scattering = false,
      reactiondata = false,
      doPCEnergyCalibration = false,
      ta_foil_run = false,
-     source_run = false;
-
-bool si_pixel_dither = false;
+     source_run = false,
+     si_pixel_dither = false;
 
 // --- Geometry, Calibration, & Model Variables ---
 //  z_entrance = -174.3 - 9.7 - 100.0,
