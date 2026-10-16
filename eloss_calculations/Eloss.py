@@ -2,15 +2,16 @@ import pycatima as catima
 import numpy as np
 import os
 
-DEDX_SCALE = float(os.environ.get("DEDX_SCALE", "0.89"))
+DEDX_SCALE = float(os.environ.get("DEDX_SCALE", "1"))
 print(f"Using dEdX scale factor: {DEDX_SCALE}")
 
 # --- 1. Constants ---
-P_TORR = 250
-TEMP_K = 293.15 
+# Same variables TrackRecon.C reads, so the table written is the one it loads.
+P_TORR = int(os.environ.get("pressure_in_torr", "250"))
+TEMP_K = 293.15
 R = 8.3144
 MEV2U = 1.0 / 931.494
-P_CO2 = 3
+P_CO2 = int(os.environ.get("CO2percent", "3"))
 
 # Gas Density Calculations
 p_pa = P_TORR * 133.322
@@ -21,7 +22,7 @@ rho_g_cm3 = (molar_density * m_mix_avg) / 1e6
 print(f"Gas density at {P_TORR} Torr: {rho_g_cm3:.6e} g/cm^3")
 
 # --- 2. Material & Step Setup ---
-material_def = [(m_he, 2, (1 - P_CO2 / 100)), (m_c, 6, P_CO2 / 100), (m_o, 8, 2*P_CO2 / 100)]
+material_def = [(m_he, 2, 100 - P_CO2), (m_c, 6, P_CO2), (m_o, 8, 2 * P_CO2)]
 gas_mix = catima.Material(material_def)
 gas_mix.density(rho_g_cm3)
 

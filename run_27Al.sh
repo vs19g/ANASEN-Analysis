@@ -9,7 +9,7 @@ export CO2percent=3
 export pressure_in_torr=250
 export CATHODE_GAIN=3.0
 export source_vertex=-200.0
-export DEDX_SCALE=0.89
+export DEDX_SCALE=0.962
 
 # export BEAM_AXIS_Z0=-200
 export BEAM_AXIS_X=0
@@ -60,8 +60,8 @@ export -f process_run
         python3 eloss_calculations/Eloss.py
         
         echo "Starting parallel processing..."
-        # time parallel --bar -j 12 process_run ::: {24..41} 44 45 46 {50..59}
-        time parallel --bar -j 12 process_run ::: {24..41} 
+        time parallel --bar -j 12 process_run ::: {24..41} 44 45 46 {50..59}
+        # time parallel --bar -j 12 process_run ::: {24..41} 
         # time parallel --bar -j 10 process_run ::: 44 45 46 {50..59}
         # time parallel --bar -j 1 process_run ::: 48 # pc without coincidence
         # mv "${CURRENT_OUT_DIR}/results_run048.root" "Output_27Al_run48/."

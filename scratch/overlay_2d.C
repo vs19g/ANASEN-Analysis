@@ -68,7 +68,7 @@ void overlay_2d(TString rootFile, TString xAxisLabel, TString yAxisLabel,
     // ---- Hardcoded selection: edit these to choose what to plot ----
     TString reaction = "m27Alax"; // reaction tag, e.g. "m27Alax", "m17Fax"
     TString ejtag = "p";          // ejectile: "p" (proton) or "a" (alpha)
-    TString topology = "a1c1_inband";    // e.g. "a1c0", "a1c1", "a1c2fix", "a2c0", "a1c1c2"
+    TString topology = "a1c0";  // e.g. "a1c0", "a1c1", "a1c2fix", "a2c0", "a1c1c2"
     TString detector = "sx3";     // "sx3" or "qqq"
 
     // Excited states to overlay, in the same order as labels[]/xlo[]/xhi[]
@@ -76,16 +76,22 @@ void overlay_2d(TString rootFile, TString xAxisLabel, TString yAxisLabel,
     // note 3498's tag is lowercase "kev" (TrackRecon.C:4028), unlike every
     // other state's "keV". 3774 keV is deliberately left out (too close
     // to 3498, spin-parity predicts it's weaker anyway).
-    TString states[] = {"GS", "2235keV", "3498keV", "4810keV", "6550keV"};
-    TString labels[] = {"Ground State", "2.235 MeV", "3.498 MeV",
-                        "4.810 MeV", "6.550 MeV"};
+    // TString states[] = {"GS", "2235keV", "3498keV", "4810keV", "6550keV"};
+    // TString labels[] = {"Ground State", "2.235 MeV", "3.498 MeV", "4.810 MeV", "6.550 MeV"};
+    // // double xlo[] = {0, 4, 12, 24, 36};
+    // // double xhi[] = {4, 12, 24, 36, 90};
 
-    // Per-state display window (MeV), same order as states[] above.
-    // See the header comment for why these are currently a no-op.
-    // double xlo[] = {0, 4, 12, 24, 36};
-    // double xhi[] = {4, 12, 24, 36, 90};
-    double xlo[] = {0, 4, 16, 28, 36};
-    double xhi[] = {4, 16, 28, 36, 90};
+    // TString states[] = {"GS", "2235keV", "3498keV", "5279keV"};//, "6550keV"};
+    // TString labels[] = {"Ground State", "2.235 MeV", "3.498 MeV", "5.279 MeV"};//, "6.550 MeV"};
+    // double xlo[] = {0, 4, 16, 28};
+    // double xhi[] = {4, 16, 28, 90};
+
+    TString states[] = {"2235keV", "3498keV", "5279keV", "5951keV"};         //"GS", "6550keV"
+    TString labels[] = {"2.235 MeV", "3.498 MeV", "5.279 MeV", "5.951 MeV"}; //"Ground State", "6.550 MeV"
+    // Boundary where the band centroid (a7_band_slices.csv) passes midway
+    // between the two assumed states: 2.87, 4.39, 5.62 MeV.
+    double xlo[] = {4, 16, 27, 35};
+    double xhi[] = {16, 27, 35, 90};
 
     const size_t nStates = sizeof(states) / sizeof(states[0]);
     if (sizeof(labels) / sizeof(labels[0]) != nStates ||
@@ -154,7 +160,14 @@ void overlay_2d(TString rootFile, TString xAxisLabel, TString yAxisLabel,
         }
         hists[i]->RebinX(rebinX);
         hists[i]->RebinY(rebinY);
-        hists[i]->SetMinimum(minz);
+        // hists[i]->SetMinimum(minz);
+        // Display floor per state: never above minz, but lowered for a sparse
+        // window so it is not hidden -- 2% of this state's own peak bin, at
+        // least 2 counts.
+        double thr = std::min(minz, std::max(2.0, 0.02 * hists[i]->GetMaximum()));
+        hists[i]->SetMinimum(thr);
+        std::cout << states[i] << ": peak " << hists[i]->GetMaximum()
+                  << ", floor " << thr << "\n";
     }
 
     double globalMax = 0;

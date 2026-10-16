@@ -8,7 +8,6 @@ export pressure_in_torr=250
 export CATHODE_GAIN=1
 export source_vertex=-200.0
 export DEDX_SCALE=0.89
-export A1C1_LOWBAND_RFACTOR=7.0
 export CUTLIST=cuts_list.txt
 
 run_once() {

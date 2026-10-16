@@ -45,10 +45,10 @@ bool process_alpha_proton_scattering = false,
      doMiscHistograms = true,
      doRawHistos = false,
      doSingles = false,
-     diagnostic_eplots = true,
+     diagnostic_eplots = false,
      diagnostic_tplots = true,
-     doPCSX3ClusterAnalysis = false,
-     doPCQQQClusterAnalysis = false,
+     doPCSX3ClusterAnalysis = true,
+     doPCQQQClusterAnalysis = true,
      BenchMark = true,
      onewire_analysis = true,
      doOldAnalysis = false,
@@ -56,6 +56,8 @@ bool process_alpha_proton_scattering = false,
      doPCEnergyCalibration = false,
      ta_foil_run = false,
      source_run = false;
+
+bool si_pixel_dither = false;
 
 // --- Geometry, Calibration, & Model Variables ---
 //  z_entrance = -174.3 - 9.7 - 100.0,
@@ -495,6 +497,11 @@ static const std::set<int> badAnodeWires = {6, 12, 19, 21, 22, 23};
 bool excludeBadAnodeWires = false; // set in Begin() from DISABLE_BAD_ANODE_WIRES
 bool pcUniqueCathode = true;       // set in Begin() from PC_UNIQUE_CATHODE
 bool pcA1C0PerCluster = true;      // set in Begin() from PC_A1C0_PER_CLUSTER
+
+std::vector<char> aClusterHasCathode;
+bool fillPooledTier = false;
+int qqqPairRule = 0;
+double qqqFbTol = 0.15;
 inline bool isAnodeWireExcluded(int wire)
 {
   return excludeBadAnodeWires && badAnodeWires.count(wire) > 0;
@@ -674,6 +681,20 @@ void TrackRecon::Begin(TTree * /*tree*/)
     a1c1_dead_cathode = &a1c1_dead_cathode_27Al;
   }
   a1c1_rebuild_dead_masks();
+  if (getenv("QQQ_FB_TOL"))
+  {
+    qqqFbTol = std::atof(getenv("QQQ_FB_TOL"));
+    std::cout << "QQQ front/back tolerance: " << qqqFbTol
+              << " (ratio " << (1 - qqqFbTol) / (1 + qqqFbTol) << " to "
+              << (1 + qqqFbTol) / (1 - qqqFbTol) << ")" << std::endl;
+  }
+  if (getenv("QQQ_PAIR_RULE"))
+  {
+    std::string r = getenv("QQQ_PAIR_RULE");
+    qqqPairRule = (r == "worst") ? 1 : (r == "all") ? 2
+                                                    : 0;
+    std::cout << "QQQ pairing rule: " << r << " (" << qqqPairRule << ")" << std::endl;
+  }
   if (getenv("A1C1_LOWBAND_RFACTOR"))
     a1c1_lowband_rfactor = std::atof(getenv("A1C1_LOWBAND_RFACTOR"));
   if (getenv("A1C1_Z_SCALE_QQQ"))
@@ -1379,6 +1400,14 @@ Bool_t TrackRecon::Process(Long64_t entry)
   //  QQQ Processing
 
   int qqqCount = 0;
+
+  struct QQQCand
+  {
+    int id, chRing, chWedge;
+    double mismatch;
+    Event ev;
+  };
+  std::vector<QQQCand> qqqCands;
   std::vector<Event> QQQ_Events, PC_Events;
   std::vector<Event> PC_Events_calibrated; // independent of PC_Events; ADC->MeV via pcEnergySlope/Intercept
   // std::vector<Event> QQQ_Events_Raw, PC_Events_Raw;
@@ -1471,7 +1500,21 @@ Bool_t TrackRecon::Process(Long64_t entry)
           eWedgeMeV = eWedge * qqqCalib[qqq.id[i]][chWedge][chRing] / 1000;
           eRingMeV = eRing * qqqCalib[qqq.id[i]][chWedge][chRing] / 1000;
 
-          if (eRingMeV / eWedgeMeV > 3.0 || eRingMeV / eWedgeMeV < 1.0 / 3.0)
+          // Front/back energy consistency. qqqFbTol <= 0 restores the legacy
+          // 1/3 < ratio < 3 behaviour for A/B comparison.
+          if (qqqFbTol > 0.0)
+          {
+            double sumE = eRingMeV + eWedgeMeV;
+            plotter->Fill1D("QQQdiag_fbAsym", 400, -1, 1,
+                            sumE > 0 ? (eRingMeV - eWedgeMeV) / sumE : -2.0, "QQQdiag");
+            if (!(sumE > 0) || TMath::Abs(eRingMeV - eWedgeMeV) / sumE > qqqFbTol)
+            {
+              plotter->Fill1D("QQQdiag_fbReject", 2, 0, 2, 1.0, "QQQdiag");
+              continue; // front and back disagree -- skip this ring/wedge pair
+            }
+            plotter->Fill1D("QQQdiag_fbReject", 2, 0, 2, 0.0, "QQQdiag");
+          }
+          else if (eRingMeV / eWedgeMeV > 3.0 || eRingMeV / eWedgeMeV < 1.0 / 3.0)
             continue;
           // if(eRingMeV<1.2 || eWedgeMeV<1.2) continue;
 
@@ -1484,7 +1527,9 @@ Bool_t TrackRecon::Process(Long64_t entry)
           Event qqqevent(TVector3(rho * TMath::Cos(phi_qqq), rho * TMath::Sin(phi_qqq), qqq_z), eRingMeV, eWedgeMeV, tRing, tWedge, chRing + qqq.id[i] * 16, chWedge + qqq.id[i] * 16);
           // Event qqqeventr(TVector3(rho * TMath::Cos(theta), rho * TMath::Sin(theta), qqq_z), eRing, eWedge, tRing, tWedge, chRing + qqq.id[i] * 16, chWedge + qqq.id[i] * 16);
 
-          QQQ_Events.push_back(qqqevent);
+          qqqCands.push_back({qqq.id[i], chRing, chWedge,
+                              TMath::Abs(eRingMeV - eWedgeMeV) / (eRingMeV + eWedgeMeV),
+                              qqqevent});
           // QQQ_Events_Raw.push_back(qqqeventr);
           if (diagnostic_eplots)
           {
@@ -1568,6 +1613,98 @@ Bool_t TrackRecon::Process(Long64_t entry)
       } // if j==i
     } // j loop end
   } // i loop end
+
+  for (int id = 0; id < 8; ++id)
+  {
+    const QQQCand *cs[64];
+    int nc = 0;
+    for (const auto &c : qqqCands)
+      if (c.id == id && nc < 64)
+        cs[nc++] = &c;
+    if (nc == 0)
+      continue;
+    bool seenR[16] = {}, seenW[16] = {};
+    int nR = 0, nW = 0;
+    for (int i = 0; i < nc; ++i)
+    {
+      if (cs[i]->chRing >= 0 && cs[i]->chRing < 16 && !seenR[cs[i]->chRing])
+      {
+        seenR[cs[i]->chRing] = true;
+        ++nR;
+      }
+      if (cs[i]->chWedge >= 0 && cs[i]->chWedge < 16 && !seenW[cs[i]->chWedge])
+      {
+        seenW[cs[i]->chWedge] = true;
+        ++nW;
+      }
+    }
+    plotter->Fill1D("QQQdiag_nCand", 12, 0, 12, nc, "QQQdiag");
+    // Single-candidate events: ring and wedge are opposite faces of the same
+    // detector and both collect the full charge, so E_ring/E_wedge should be 1.
+    // A strip next to a dead one leaks part of its charge into the dead strip
+    // and shows a deficit -- with no multiplicity to flag it.
+    if (nc == 1 && cs[0]->ev.Energy2 > 0 && cs[0]->ev.Energy1 > 0)
+    {
+      plotter->Fill2D(Form("QQQdiag_ringRatio_vs_ring_det%d", id), 16, 0, 16, 300, 0, 3,
+                      cs[0]->chRing, cs[0]->ev.Energy1 / cs[0]->ev.Energy2, "QQQdiag");
+      plotter->Fill2D(Form("QQQdiag_wedgeRatio_vs_wedge_det%d", id), 16, 0, 16, 300, 0, 3,
+                      cs[0]->chWedge, cs[0]->ev.Energy2 / cs[0]->ev.Energy1, "QQQdiag");
+    }
+    plotter->Fill2D("QQQdiag_nRing_vs_nWedge", 6, 0, 6, 6, 0, 6, nR, nW, "QQQdiag");
+
+    if (nc == 2 && nR == 2 && nW == 1)
+    { // two rings sharing one wedge
+      int dr = TMath::Abs(cs[0]->chRing - cs[1]->chRing);
+      double sum = cs[0]->ev.Energy1 + cs[1]->ev.Energy1;
+      double w = cs[0]->ev.Energy2;
+      plotter->Fill1D("QQQdiag_dRing", 16, 0, 16, dr, "QQQdiag");
+      if (w > 0)
+      {
+        plotter->Fill2D("QQQdiag_sumRing_over_wedge_vs_dRing", 16, 0, 16, 300, 0, 3, dr, sum / w, "QQQdiag");
+        plotter->Fill2D("QQQdiag_maxRing_over_wedge_vs_dRing", 16, 0, 16, 300, 0, 3, dr,
+                        TMath::Max(cs[0]->ev.Energy1, cs[1]->ev.Energy1) / w, "QQQdiag");
+      }
+    }
+    if (nc == 2 && nW == 2 && nR == 1)
+    { // two wedges sharing one ring
+      int dw = TMath::Abs(cs[0]->chWedge - cs[1]->chWedge);
+      double sum = cs[0]->ev.Energy2 + cs[1]->ev.Energy2;
+      double r = cs[0]->ev.Energy1;
+      plotter->Fill1D("QQQdiag_dWedge", 16, 0, 16, dw, "QQQdiag");
+      if (r > 0)
+      {
+        plotter->Fill2D("QQQdiag_sumWedge_over_ring_vs_dWedge", 16, 0, 16, 300, 0, 3, dw, sum / r, "QQQdiag");
+        plotter->Fill2D("QQQdiag_maxWedge_over_ring_vs_dWedge", 16, 0, 16, 300, 0, 3, dw,
+                        TMath::Max(cs[0]->ev.Energy2, cs[1]->ev.Energy2) / r, "QQQdiag");
+      }
+    }
+  }
+
+  if (qqqPairRule == 2)
+  {
+    for (const auto &c : qqqCands)
+      QQQ_Events.push_back(c.ev);
+  }
+  else
+  {
+    const bool worstFirst = (qqqPairRule == 1);
+    std::sort(qqqCands.begin(), qqqCands.end(),
+              [worstFirst](const QQQCand &a, const QQQCand &b)
+              { return worstFirst ? (a.mismatch > b.mismatch) : (a.mismatch < b.mismatch); });
+    bool usedRing[8][16] = {};
+    bool usedWedge[8][16] = {};
+    for (const auto &c : qqqCands)
+    {
+      if (c.id < 0 || c.id >= 8 || c.chRing < 0 || c.chRing >= 16 ||
+          c.chWedge < 0 || c.chWedge >= 16)
+        continue;
+      if (usedRing[c.id][c.chRing] || usedWedge[c.id][c.chWedge])
+        continue;
+      usedRing[c.id][c.chRing] = true;
+      usedWedge[c.id][c.chWedge] = true;
+      QQQ_Events.push_back(c.ev);
+    }
+  }
 
   PCQQQTimeCut = PCAQQQTimeCut && PCCQQQTimeCut;
   if (doRawHistos)
@@ -1781,8 +1918,10 @@ Bool_t TrackRecon::Process(Long64_t entry)
     return scan(QQQ_Events, true) || scan(SX3_Events, false);
   };
 
-  for (const auto &aCluster : aClusters)
+  aClusterHasCathode.assign(aClusters.size(), 0);
+  for (size_t aClusterIdx = 0; aClusterIdx < aClusters.size(); ++aClusterIdx)
   {
+    const auto &aCluster = aClusters[aClusterIdx];
     if (clusterHasExcludedAnode(aCluster))
       continue;
     if (aCluster.size() == 2)
@@ -1817,7 +1956,7 @@ Bool_t TrackRecon::Process(Long64_t entry)
         double ahi_MeV = std::max(ae0_MeV, ae1_MeV);
         double aratio_MeV = alo_MeV / ahi_MeV;
         plotter->Fill1D("A2_anode_ratio_calib", 120, 0, 1.2, aratio_MeV, "hGMPC");
-        plotter->Fill2D("A1_vs_A2_calib", 800, 0, 0.4, 800, 0, 0.4, ae0_MeV, ae1_MeV, "hGMPC");
+        plotter->Fill2D("A1_vs_A2_calib", 800, 0, 0.2, 800, 0, 0.2, ae0_MeV, ae1_MeV, "hGMPC");
         plotter->Fill2D("A2_anode_ratio_calib_vs_lowerIndex", 24, 0, 24, 120, 0, 1.2,
                         std::min(wi0, wi1), aratio_MeV, "hGMPC");
       }
@@ -1924,6 +2063,8 @@ Bool_t TrackRecon::Process(Long64_t entry)
 
     if (pcUniqueCathode && bestC)
       pushPaired(*bestC);
+
+    aClusterHasCathode[aClusterIdx] = (nCathodeMatches > 0) ? 1 : 0;
 
     if (pcA1C0PerCluster && nCathodeMatches == 0)
       pushAnodeOnly(aCluster);
@@ -3947,12 +4088,25 @@ template <typename FillOneTier>
 static void forEachTier(const std::string &topo1, const std::string &topo2,
                         const std::string &methodGroup, FillOneTier &&fillOneTier)
 {
-  fillOneTier("");
+  if (fillPooledTier)
+    fillOneTier("");
   fillOneTier(topo1);
   if (!topo2.empty())
     fillOneTier(topo2);
   if (!methodGroup.empty())
     fillOneTier(methodGroup);
+}
+
+static TVector3 siPixelSpread(const TVector3 &si, bool isQQQ, TRandom3 &rand)
+{
+  if (!si_pixel_dither)
+    return si;
+  const double phi_pitch = isQQQ ? qqq_wedge_pitch : sx3_phi_pitch;
+  double phi = si.Phi() + rand.Uniform(-phi_pitch / 2.0, phi_pitch / 2.0);
+  double rho = si.Perp();
+  if (isQQQ)
+    rho += rand.Uniform(-qqq_ring_pitch / 2.0, qqq_ring_pitch / 2.0);
+  return TVector3(rho * TMath::Cos(phi), rho * TMath::Sin(phi), si.Z());
 }
 
 void protonAlphaElastic_core(HistPlotter *plotter, const std::vector<Event> &Si_Events, const std::vector<Event> &PC_Events,
@@ -3975,6 +4129,8 @@ void protonAlphaElastic_core(HistPlotter *plotter, const std::vector<Event> &Si_
     if (sievent.Energy1 < si_ecut)
       continue; // coarse gating
 
+    TVector3 si_pos = sievent.pos;
+
     // Shared vertex/beam reconstruction + proton/alpha dispatch, called from
     // both the PC_Events loop (a1c1/a1c2) and the aClusters loop (a1c0/a2c0)
     // below -- pid is classified by the caller (each loop's anode source is
@@ -3983,14 +4139,14 @@ void protonAlphaElastic_core(HistPlotter *plotter, const std::vector<Event> &Si_
                                   double anodeE_MeV, SiPcPid pid, int multi1, int multi2, int anodeCh, bool hasCathode)
     {
       TVector3 x2f(pcXY.X(), pcXY.Y(), pcz_fix);
-      TVector3 r_rhoMin_fix = beamVertex(sievent.pos, x2f - sievent.pos);
+      TVector3 r_rhoMin_fix = beamVertex(si_pos, x2f - si_pos);
       double vertex_z = r_rhoMin_fix.Z();
       const bool axisSafe = (multi2 == 2) || (multi1 == 2 && multi2 == 0);
-      // fillBeamProfile(plotter, r_rhoMin_fix, sievent.pos, x2f - sievent.pos, "elastic_" + det, axisSafe);
+      // fillBeamProfile(plotter, r_rhoMin_fix, si_pos, x2f - si_pos, "elastic_" + det, axisSafe);
       if (vertex_z < z_entrance)
         return;
-      double theta = (sievent.pos - r_rhoMin_fix).Theta();
-      double path_length = pathLengthCm(sievent.pos, r_rhoMin_fix);
+      double theta = (si_pos - r_rhoMin_fix).Theta();
+      double path_length = pathLengthCm(si_pos, r_rhoMin_fix);
 
       double beam_path_length = TMath::Abs(vertex_z - z_entrance) * 0.1;
       double beam_energy_at_vertex = evalElossForward(MeV_to_cm_p_spl, cm_to_MeVp_spl, initial_energy, beam_path_length);
@@ -4047,7 +4203,7 @@ void protonAlphaElastic_core(HistPlotter *plotter, const std::vector<Event> &Si_
           if (TMath::Abs(sievent.pos.DeltaPhi(pcevent.pos)) > phi_win)
             continue;
           plotter->Fill2D(rx + "_Ex_vs_dT" + ejtag + sfx, 500, -2000, 2000, 600, -10, 20, (sievent.Time1 - pcevent.Time1), Ex, pmlabel);
-          plotter->Fill2D(rx + "_dEgasCalib_vs_dT" + ejtag + sfx, 500, -2000, 2000, 800, 0, 0.4, (sievent.Time1 - pcevent.Time1), anodeE_MeV, pmlabel);
+          plotter->Fill2D(rx + "_dEgasCalib_vs_dT" + ejtag + sfx, 500, -2000, 2000, 800, 0, 0.2, (sievent.Time1 - pcevent.Time1), anodeE_MeV, pmlabel);
         }
 
         // Ground-state beam-energy consistency check -- elastic scattering has
@@ -4080,10 +4236,10 @@ void protonAlphaElastic_core(HistPlotter *plotter, const std::vector<Event> &Si_
                             beam_energy_at_vertex, ebeam_kin, pmlabel);
             plotter->Fill2D(rx + "_EKin_vs_ESi" + ejtag + t + sfx, 400, 0, initial_energy * 1.5, 800, 0, 10, ebeam_kin, sievent.Energy1, pmlabel);
           }
-          PCCollect pcc = pcCollectionPath(r_rhoMin_fix, sievent.pos);
+          PCCollect pcc = pcCollectionPath(r_rhoMin_fix, si_pos);
           if (pcc.ok && anodeE_MeV > 0.0)
           {
-            plotter->Fill2D(rx + "_dEgasCalib_vs_Ex" + ejtag + t + sfx, 800, -10, 10, 800, 0, 0.4, Ex, anodeE_MeV, pmlabel);
+            plotter->Fill2D(rx + "_dEgasCalib_vs_Ex" + ejtag + t + sfx, 800, -10, 10, 800, 0, 0.2, Ex, anodeE_MeV, pmlabel);
           }
         };
         std::string topo1;
@@ -4098,25 +4254,25 @@ void protonAlphaElastic_core(HistPlotter *plotter, const std::vector<Event> &Si_
 
         // Gas segmentation validation (dEgas family), uniform for every
         // topology including a1c0/a2c0.
-        PCCollect pcc = pcCollectionPath(r_rhoMin_fix, sievent.pos);
+        PCCollect pcc = pcCollectionPath(r_rhoMin_fix, si_pos);
         if (pcc.ok)
         {
           double E_gu = evalEloss(ej_fwd, ej_inv, sievent.Energy1, pcc.guard_cm);
           double E_ca = evalEloss(ej_fwd, ej_inv, sievent.Energy1, pcc.cathode_cm);
           double dE_pred = E_gu - E_ca;
-          plotter->Fill2D(rx + "_dEgas_vs_Ef" + ejtag + sfx, 400, 0, 10, 400, 0, 0.4, Efix, dE_pred, pmlabel);
+          plotter->Fill2D(rx + "_dEgas_vs_Ef" + ejtag + sfx, 400, 0, 10, 400, 0, 0.2, Efix, dE_pred, pmlabel);
           if (anodeE_MeV > 0.0)
           {
-            plotter->Fill2D(rx + "_dEgasCalib_vs_Ef" + ejtag + sfx, 400, 0, 10, 800, 0, 0.4, Efix, anodeE_MeV, pmlabel);
-            plotter->Fill2D(rx + "_dEgasCalib_vs_E" + ejtag + sfx, 400, 0, 10, 800, 0, 0.4, sievent.Energy1, anodeE_MeV, pmlabel);
-            plotter->Fill2D(rx + "_dEgasCalib_vs_VertexZ" + ejtag + sfx, 800, -400, 400, 800, 0, 0.4, vertex_z, anodeE_MeV, pmlabel);
-            plotter->Fill2D(rx + "_dEgasCalib_vs_theta" + ejtag + sfx, 100, 0, 180, 800, 0, 0.4, theta * 180 / M_PI, anodeE_MeV, pmlabel);
-            plotter->Fill2D(rx + "_dEgasCalib_vs_phi" + ejtag + sfx, 100, -200, 200, 800, 0, 0.4, sievent.pos.Phi() * 180 / M_PI, anodeE_MeV, pmlabel);
+            plotter->Fill2D(rx + "_dEgasCalib_vs_Ef" + ejtag + sfx, 400, 0, 10, 800, 0, 0.2, Efix, anodeE_MeV, pmlabel);
+            plotter->Fill2D(rx + "_dEgasCalib_vs_E" + ejtag + sfx, 400, 0, 10, 800, 0, 0.2, sievent.Energy1, anodeE_MeV, pmlabel);
+            plotter->Fill2D(rx + "_dEgasCalib_vs_VertexZ" + ejtag + sfx, 800, -400, 400, 800, 0, 0.2, vertex_z, anodeE_MeV, pmlabel);
+            plotter->Fill2D(rx + "_dEgasCalib_vs_theta" + ejtag + sfx, 100, 0, 180, 800, 0, 0.2, theta * 180 / M_PI, anodeE_MeV, pmlabel);
+            plotter->Fill2D(rx + "_dEgasCalib_vs_phi" + ejtag + sfx, 100, -200, 200, 800, 0, 0.2, sievent.pos.Phi() * 180 / M_PI, anodeE_MeV, pmlabel);
             if (anodeCh >= 0 && anodeCh < 24)
               // plotter->Fill2D(rx + "_dEgasCalib_vs_E" + ejtag + sfx + "_anode" + pad2(anodeCh),
-              // 400, 0, 10, 800, 0, 0.4, sievent.Energy1, anodeE_MeV, pmlabel);
-              plotter->Fill2D(rx + "_dEgasCalib_vs_Z" + ejtag + sfx, 800, -400, 400, 800, 0, 0.4, vertex_z, anodeE_MeV, pmlabel);
-            plotter->Fill2D(rx + "_dEgasPred_vs_dEgasCalib" + ejtag + sfx, 800, 0, 0.4, 800, 0, 0.4, anodeE_MeV, dE_pred, pmlabel);
+              // 400, 0, 10, 800, 0, 0.2, sievent.Energy1, anodeE_MeV, pmlabel);
+              plotter->Fill2D(rx + "_dEgasCalib_vs_Z" + ejtag + sfx, 800, -400, 400, 800, 0, 0.2, vertex_z, anodeE_MeV, pmlabel);
+            plotter->Fill2D(rx + "_dEgasPred_vs_dEgasCalib" + ejtag + sfx, 800, 0, 0.2, 800, 0, 0.2, anodeE_MeV, dE_pred, pmlabel);
           }
         }
       };
@@ -4141,6 +4297,7 @@ void protonAlphaElastic_core(HistPlotter *plotter, const std::vector<Event> &Si_
       if (!(phicut && timecut))
         continue;
 
+      si_pos = siPixelSpread(sievent.pos, isQQQ, rand);
       bool hasCathode = (pcevent.Cathodech >= 0);
 
       // Timing/geometry QA, independent of particle ID.
@@ -4187,11 +4344,11 @@ void protonAlphaElastic_core(HistPlotter *plotter, const std::vector<Event> &Si_
         auto fillCmp = [&](double pcz, const std::string &m)
         {
           TVector3 x2(pcevent.pos.X(), pcevent.pos.Y(), pcz);
-          TVector3 rv = beamVertex(sievent.pos, x2 - sievent.pos);
+          TVector3 rv = beamVertex(si_pos, x2 - si_pos);
           if (beamPerp(rv) > perp_cut)
             return;
-          double th = (sievent.pos - rv).Theta();
-          double pl = pathLengthCm(sievent.pos, rv);
+          double th = (si_pos - rv).Theta();
+          double pl = pathLengthCm(si_pos, rv);
           double Ef = evalEloss(MeV_to_cm_spl, cm_to_MeV_spl, sievent.Energy1, pl);
           double beam_pl_cmp = TMath::Abs(rv.Z() - z_entrance) * 0.1;
           double beam_E_cmp = evalElossForward(MeV_to_cm_p_spl, cm_to_MeVp_spl, initial_energy, beam_pl_cmp);
@@ -4296,9 +4453,14 @@ void protonAlphaElastic_core(HistPlotter *plotter, const std::vector<Event> &Si_
         if (pid == SiPcPid::kUnknown)
           plotter->Fill1D(rx + "_pidUnknown" + sfx, 2, 0, 2, 1.0, misclabel);
 
-        double pcz_a0 = isA2C0 ? pc.Z() : rand.Gaus(pc.Z(), dither_sigma); // a1c0 dithered, a2c0 unambiguous (2 wires)
+        // Hybrid: a track from the beam axis has one phi at the Si and the PC, so the
+        // wire point is re-looked-up at the spread Si phi (== pc when SI_PIXEL_DITHER=0).
+        si_pos = siPixelSpread(sievent.pos, isQQQ, rand);
+        TVector3 pc_rec = isA2C0 ? a2c0_wirePos(apwire, si_pos.Phi(), isQQQ)
+                                 : a1c0_wirePos(apwire, si_pos.Phi(), isQQQ);
+        double pcz_a0 = isA2C0 ? pc_rec.Z() : rand.Gaus(pc_rec.Z(), dither_sigma); // a1c0 dithered, a2c0 unambiguous (2 wires)
 
-        reconstructAndFill(pcz_a0, pc, apSumE, -1.0, anodeE_MeV_a0, pid,
+        reconstructAndFill(pcz_a0, pc_rec, apSumE, -1.0, anodeE_MeV_a0, pid,
                            static_cast<int>(aCl.size()), 0, anodeCh_a0, false);
       }
     } // end aClusters loop (a1c0/a2c0)
@@ -4381,22 +4543,23 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
       plotter->Fill2D(rx + "_dt_si_mcp_vs_dt_si_rf" + sfx, 640, -1400, 2000, 640, -2000, 2000, dt_si_mcp, dt_si_rf,
                       folderPrefix + globaltag + "_" + rx + "+misc_" + det);
     }
+    TVector3 si_pos = sievent.pos;
 
     auto reconstructAndFill = [&](double pcz_fix, const TVector3 &pcXY, double anodeE, double cathodeE, double anodeE_MeV, double cathodeE_MeV,
                                   const std::string &topo1, const std::string &topo2 = "", int anodeCh = -1,
                                   const std::string &methodGroup = "")
     {
       TVector3 x2f(pcXY.X(), pcXY.Y(), pcz_fix);
-      TVector3 r_rhoMin_fix = beamVertex(sievent.pos, x2f - sievent.pos);
+      TVector3 r_rhoMin_fix = beamVertex(si_pos, x2f - si_pos);
       double vertex_z = r_rhoMin_fix.Z();
       const bool axisSafe = (topo1 == "a1c2fix") || (topo1 == "a2c0") || (topo2 == "a1c1_inband");
-      // fillBeamProfile(plotter, r_rhoMin_fix, sievent.pos, x2f - sievent.pos, "reaction_" + rx + "_" + det, axisSafe);
+      // fillBeamProfile(plotter, r_rhoMin_fix, si_pos, x2f - si_pos, "reaction_" + rx + "_" + det, axisSafe);
       // if (beamPerp(r_rhoMin_fix) > perp_cut || vertex_z < z_entrance || vertex_z > 30.0)
       if (vertex_z < z_entrance || vertex_z > 30.0)
         return;
 
-      double theta = (sievent.pos - r_rhoMin_fix).Theta();
-      double phi = (sievent.pos - r_rhoMin_fix).Phi();
+      double theta = (si_pos - r_rhoMin_fix).Theta();
+      double phi = (si_pos - r_rhoMin_fix).Phi();
 
       double beam_path_length = TMath::Abs(vertex_z - z_entrance) * 0.1; // mm -> cm
       double beam_energy_at_vertex = evalElossForward(beam_MeV_to_cm, beam_cm_to_MeV, beamE0, beam_path_length);
@@ -4411,7 +4574,7 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
       {
         // ---- kinematics for this mass hypothesis ----
         Kinematics kin(m_beam, mass_4He, m3, m4, beam_energy_at_vertex / m_beam); // beamE given as E/u
-        double path_length = pathLengthCm(sievent.pos, r_rhoMin_fix);
+        double path_length = pathLengthCm(si_pos, r_rhoMin_fix);
         double Efix = evalEloss(ej_fwd, ej_inv, sievent.Energy1, path_length);
         double Ex = kin.getExc(Efix, theta * 180 / M_PI);
 
@@ -4521,8 +4684,8 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
           if (TMath::Abs(sievent.pos.DeltaPhi(pcevent.pos)) > phi_win)
             continue;
           plotter->Fill2D(rx + "_Ex_vs_dT" + ejtag + sfx, 500, -2000, 2000, 600, -10, 20, (sievent.Time1 - pcevent.Time1), Ex, pmlabel);
-          plotter->Fill2D(rx + "_dEgasCalib_vs_dT" + ejtag + sfx, 500, -2000, 2000, 800, 0, 0.4, (sievent.Time1 - pcevent.Time1), anodeE_MeV, pmlabel);
-          plotter->Fill2D(rx + "_dEgasCalibCathode_vs_dT" + ejtag + sfx, 500, -2000, 2000, 800, 0, 0.4, (sievent.Time1 - pcevent.Time1), cathodeE_MeV, pmlabel);
+          plotter->Fill2D(rx + "_dEgasCalib_vs_dT" + ejtag + sfx, 500, -2000, 2000, 800, 0, 0.2, (sievent.Time1 - pcevent.Time1), anodeE_MeV, pmlabel);
+          plotter->Fill2D(rx + "_dEgasCalibCathode_vs_dT" + ejtag + sfx, 500, -2000, 2000, 800, 0, 0.2, (sievent.Time1 - pcevent.Time1), cathodeE_MeV, pmlabel);
         }
 
         if (dt_rf_mcp > -900000000)
@@ -4532,31 +4695,34 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
         forEachTier(topo1, topo2, methodGroup, plot_with_tag);
 
         // Gas segmentation validation
-        PCCollect pcc = pcCollectionPath(r_rhoMin_fix, sievent.pos);
+        PCCollect pcc = pcCollectionPath(r_rhoMin_fix, si_pos);
         if (pcc.ok)
         {
           double E_gu = evalEloss(ej_fwd, ej_inv, sievent.Energy1, pcc.guard_cm);
           double E_ca = evalEloss(ej_fwd, ej_inv, sievent.Energy1, pcc.cathode_cm);
           double dE_pred = E_gu - E_ca;
-          plotter->Fill2D(rx + "_dEgas_vs_Ef" + ejtag + sfx, 400, 0, ef_max, 800, 0, 0.4, Efix, dE_pred, pmlabel);
+          plotter->Fill2D(rx + "_dEgas_vs_Ef" + ejtag + sfx, 400, 0, ef_max, 800, 0, 0.2, Efix, dE_pred, pmlabel);
           if (anodeE_MeV >= 0.0)
           {
-            plotter->Fill2D(rx + "_dEgasCalib_vs_E" + sfx, 400, 0, ef_max, 800, 0, 0.4, sievent.Energy1, anodeE_MeV, folderPrefix + "EdEComparison");
-            plotter->Fill2D(rx + "_dEgasCalib*sintheta_vs_E" + sfx, 400, 0, ef_max, 800, 0, 0.4, sievent.Energy1, anodeE_MeV * sin(theta), folderPrefix + "EdEComparison");
-            plotter->Fill2D(rx + "_dEgasCalib_vs_Ef" + ejtag + sfx, 400, 0, ef_max, 800, 0, 0.4, Efix, anodeE_MeV, pmlabel);
-            plotter->Fill2D(rx + "_dEgasCalib_vs_EBeam" + ejtag + sfx, 400, 0, beamE0 * 1.5, 800, 0, 0.4, beam_energy_at_vertex, anodeE_MeV, pmlabel);
+            plotter->Fill2D(rx + "_dEgasCalib_vs_E" + sfx, 400, 0, ef_max, 800, 0, 0.2, sievent.Energy1, anodeE_MeV, folderPrefix + "EdEComparison");
+            plotter->Fill2D(rx + "_dEgasCalib*sintheta_vs_E" + sfx, 400, 0, ef_max, 800, 0, 0.2, sievent.Energy1, anodeE_MeV * sin(theta), folderPrefix + "EdEComparison");
+            plotter->Fill2D(rx + "_dEgasCalib_vs_Ef" + ejtag + sfx, 400, 0, ef_max, 800, 0, 0.2, Efix, anodeE_MeV, pmlabel);
+            plotter->Fill2D(rx + "_dEgasCalib_vs_EBeam" + ejtag + sfx, 400, 0, beamE0 * 1.5, 800, 0, 0.2, beam_energy_at_vertex, anodeE_MeV, pmlabel);
             plotter->Fill2D(rx + "_dEgasRaw_vs_EBeam" + ejtag + sfx, 400, 0, beamE0 * 1.5, 800, 0, 20000, beam_energy_at_vertex, anodeE, pmlabel);
-            plotter->Fill2D(rx + "_dEgasCalib_vs_E" + ejtag + sfx, 400, 0, ef_max, 800, 0, 0.4, sievent.Energy1, anodeE_MeV, pmlabel);
-            plotter->Fill2D(rx + "_dEgasCalib_vs_VertexZ" + ejtag + sfx, 800, -400, 400, 800, 0, 0.4, vertex_z, anodeE_MeV, pmlabel);
+            plotter->Fill2D(rx + "_dEgasCalib_vs_E" + ejtag + sfx, 400, 0, ef_max, 800, 0, 0.2, sievent.Energy1, anodeE_MeV, pmlabel);
+            plotter->Fill2D(rx + "_dEgasCalib_vs_VertexZ" + ejtag + sfx, 800, -400, 400, 800, 0, 0.2, vertex_z, anodeE_MeV, pmlabel);
             plotter->Fill2D(rx + "_dEgasRaw_vs_VertexZ" + ejtag + sfx, 800, -400, 400, 800, 0, 20000, vertex_z, anodeE, pmlabel);
             plotter->Fill2D(rx + "_dEgasRaw_vs_theta" + ejtag + sfx, 180, 0, 180, 800, 0, 20000, theta * 180 / M_PI, anodeE, pmlabel);
-            plotter->Fill2D(rx + "_dEgasCalib_vs_theta" + ejtag + sfx, 360, 0, 180, 800, 0, 0.4, theta * 180 / M_PI, anodeE_MeV, pmlabel);
-            plotter->Fill2D(rx + "_dEgasCalib_vs_phi" + ejtag + sfx, 90, -180, 180, 800, 0, 0.4, phi * 180 / M_PI, anodeE_MeV, pmlabel);
+            plotter->Fill2D(rx + "_dEgasCalib_vs_theta" + ejtag + sfx, 360, 0, 180, 800, 0, 0.2, theta * 180 / M_PI, anodeE_MeV, pmlabel);
+            plotter->Fill2D(rx + "_dEgasCalib_vs_phi" + ejtag + sfx, 90, -180, 180, 800, 0, 0.2, phi * 180 / M_PI, anodeE_MeV, pmlabel);
             // if (anodeCh >= 0)
-            //   plotter->Fill2D(rx + "_dEgasCalib_vs_E" + ejtag + sfx + "_anode" + pad2(anodeCh), 400, 0, ef_max, 800, 0, 0.4, sievent.Energy1, anodeE_MeV, pmlabel);
-            plotter->Fill2D(rx + "_dEgasCalib_vs_Ex" + ejtag + sfx, 600, -10, 20, 800, 0, 0.4, Ex, anodeE_MeV, pmlabel);
-            plotter->Fill2D(rx + "_dEgasCalib_vs_Z" + ejtag + sfx, 800, -400, 400, 800, 0, 0.4, vertex_z, anodeE_MeV, pmlabel);
-            plotter->Fill2D(rx + "_dEgasPred_vs_dEgasCalib" + ejtag + sfx, 800, 0, 0.4, 800, 0, 0.4, anodeE_MeV, dE_pred, pmlabel);
+            //   plotter->Fill2D(rx + "_dEgasCalib_vs_E" + ejtag + sfx + "_anode" + pad2(anodeCh), 400, 0, ef_max, 800, 0, 0.2, sievent.Energy1, anodeE_MeV, pmlabel);
+            plotter->Fill2D(rx + "_dEgasCalib_vs_Ex" + ejtag + sfx, 600, -10, 20, 800, 0, 0.2, Ex, anodeE_MeV, pmlabel);
+            forEachTier(topo1, topo2, methodGroup, [&](const std::string &topo)
+                        { if (!topo.empty())
+                          plotter->Fill2D(rx + "_dEgasCalib_vs_Ex" + ejtag + "_" + topo + sfx, 600, -10, 20, 800, 0, 0.4, Ex, anodeE_MeV, pmlabel); });
+            plotter->Fill2D(rx + "_dEgasCalib_vs_Z" + ejtag + sfx, 800, -400, 400, 800, 0, 0.2, vertex_z, anodeE_MeV, pmlabel);
+            plotter->Fill2D(rx + "_dEgasPred_vs_dEgasCalib" + ejtag + sfx, 800, 0, 0.2, 800, 0, 0.4, anodeE_MeV, dE_pred, pmlabel);
           }
         }
       };
@@ -4588,6 +4754,7 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
       bool timecut = siPcCoincident(sievent.Time1, pcevent.Time1);
       if (!(phicut && timecut))
         continue;
+      si_pos = siPixelSpread(sievent.pos, isQQQ, rand);
       double anodeE_MeV = (pcevent.Anodech >= 0 && pcevent.Anodech < 24) ? pcevent.Energy1MeV : -1.0;
       double cathodeE_MeV = (pcevent.Cathodech >= 0 && pcevent.Cathodech < 24) ? pcevent.Energy2MeV : -1.0;
 
@@ -4628,8 +4795,11 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
       }
     }
 
-    for (const auto &aCl : aClusters)
+    for (size_t aClIdx = 0; aClIdx < aClusters.size(); ++aClIdx)
     {
+      const auto &aCl = aClusters[aClIdx];
+      if (aClIdx < aClusterHasCathode.size() && aClusterHasCathode[aClIdx])
+        continue;
       if (aCl.size() < 1 || aCl.size() > 2)
         continue;
 
@@ -4677,8 +4847,12 @@ static void reaction_ax_core(HistPlotter *plotter, const std::vector<Event> &Si_
       if (anodeCh_a0 < 0 || anodeCh_a0 >= 24)
         anodeCh_a0 = -1;
 
-      double pcz_a0 = isA2C0 ? pc.Z() : rand.Gaus(pc.Z(), dither_sigma);
-      reconstructAndFill(pcz_a0, pc, apSumE, -1.0, anodeE_MeV_a0, -1.0, a0tag, "", anodeCh_a0);
+      // Hybrid: wire point re-looked-up at the spread Si phi, as in protonAlphaElastic_core.
+      si_pos = siPixelSpread(sievent.pos, isQQQ, rand);
+      TVector3 pc_rec = isA2C0 ? a2c0_wirePos(apwire, si_pos.Phi(), isQQQ)
+                               : a1c0_wirePos(apwire, si_pos.Phi(), isQQQ);
+      double pcz_a0 = isA2C0 ? pc_rec.Z() : rand.Gaus(pc_rec.Z(), dither_sigma);
+      reconstructAndFill(pcz_a0, pc_rec, apSumE, -1.0, anodeE_MeV_a0, -1.0, a0tag, "", anodeCh_a0);
     }
   }
 }

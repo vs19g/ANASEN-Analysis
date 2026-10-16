@@ -42,7 +42,7 @@ if [[ 1 -eq 0 ]]; then
     rm -f ${OUT_DIR}/all.root
     
     parallel --bar -j 6 process_run ::: {1..8}
-    exit
+    # exit
 fi
 
 # --- Block 2: 17F Source Runs (5-14) ---
