@@ -1,0 +1,88 @@
+# 27Al(a,p)30Si excitation function, Run A, QQQ3 and SX3. Same inputs as ../../scratch/xs_27Al_lowE_2026-10-15.
+#
+#   ~/myenv/bin/python -B extract_yields.py       examples/27Al_ap_runA.toml   # 1. ROOT -> out/27Al_ap_runA/yields_<det>.csv
+#   ~/myenv/bin/python -B geometric_efficiency.py examples/27Al_ap_runA.toml   # 2. detectors.py -> eps_<det>.csv
+#   ~/myenv/bin/python -B cross_section.py        examples/27Al_ap_runA.toml   # 3. -> xs_<det>.csv, xs.png
+#
+# Each script reads the sections it needs. Paths are relative to this file's folder.
+# "{det}" is replaced by each entry of `dets`.
+
+title = "27Al(a,p)30Si, Run A"
+mode = "excitation"                 # "excitation": sigma(E_cm);  "angular": dsigma/dOmega(theta_cm)
+dets = ["sx3", "qqq"]               # names known to detectors.py
+out_dir = "../out/27Al_ap"
+
+# ------------------------------------------------------------- step 1: extract_yields.py
+[extract]
+# One fill per candidate: x = vertex z, y = tracked beam energy. Projected on y (all z, including overflow).
+source = "hist"
+file = "~/ANASEN_analysis/Output_27Al_X0_Y0/Output_27Al.root"
+hist = "_m27Alax+misc_{det}/m27Alax_BeamEnergy_vs_VertexZ_{det}"
+axis = "y"
+variable = "e_beam"
+
+# ------------------------------------------------------------- the reaction (steps 2 and 3)
+[reaction]
+beam_mass_u = 26.981538             # 27Al   (atomic masses, as TrackRecon.C)
+target_mass_u = 4.002603254         # 4He
+ejectile_mass_u = 1.007825032       # p      -> Q = 2.372 MeV for the ground state
+recoil_mass_u = 29.973770           # 30Si
+detect = "ejectile"
+ecm_per_ebeam = 0.12918             # the rounded factor of the established analysis (the masses give 0.129182)
+# 30Si states weighted by the TALYS (a,p) state cross sections at each bin's E_cm
+states_csv = "../inputs/talys_27Al_ap.csv"
+# or fixed weights:  states = [{ex_mev = 0.0, weight = 1.0}, {ex_mev = 2.235, weight = 0.5}]
+
+[beam]
+# Beam energy along z;
+# the nominal E_cm of each bin and the beam energy in the efficiency toy come from the 0.962 track.
+track_csv = "../inputs/beam_tracks.csv"
+track_z_col = "z_mm"
+track_e_col = "e_beam_mev_0962"
+# Alternative: build the track from an energy-loss table (check which dE/dx scale the table was made with):
+#   eloss_table = "../../eloss_calculations/aluminum_lookup_80MeV_250torr_3pc.dat"
+#   e_entrance_mev = 56.16
+#   z_entrance_mm = -454.0
+n_beam = 1.4405e12                     # Faraday cup, ch5 ssec:beam_exposure: the 45 runs (2.2096e12)
+# For another set of runs: ../../runlog/beam_exposure.py "<runs>" --data-dir ../../Output_27Al_fb
+n_beam_rel_err = 0.5
+
+[bins]
+ecm_edges = { start = 0.0, stop = 7.25, step = 0.25 }
+
+# ------------------------------------------------------------- step 2: geometric_efficiency.py
+[efficiency]
+n_per_bin = 400000
+seed = 20261016
+
+# ------------------------------------------------------------- step 3: cross_section.py
+[target]
+# 4He in 250 Torr He + 3% CO2 at 20 C  -> 7.988e17 He atoms per cm2 per mm
+pressure_torr = 250.0
+temperature_k = 293.15
+mole_fraction = 0.97
+atoms_per_molecule = 1
+
+# [yield] csv = "..."               # only to read yields from somewhere other than <out_dir>/yields_<det>.csv
+
+[acceptance]
+source = "geometric"                # <out_dir>/eps_<det>.csv from step 2
+column = "eps_geometric"            # or eps_si, eps_si_thr, eps_counter
+# To use the adopted efficiency of ../../scratch/xs_27Al_lowE_2026-10-15 instead (includes gas loss and thresholds):
+#   source = "csv"
+#   csv = "../../scratch/xs_27Al_lowE_2026-10-15/out/xs_{det}.csv"
+#   match = "bin"
+#   x_col = "ecm_lo_mev"
+#   eps_col = "eps_tube_adopted"
+#   rel_err_col = "eps_tube_rel_err"
+
+[[reference]]
+csv = "../inputs/talys_27Al_ap.csv"
+x_col = "ecm_mev"
+y_col = "sigma_total_mb"
+label = "TALYS (a,p), discrete states"
+
+[plot]
+yscale = "log"
+xlim = [0, 7.4]
+ylim = [1e-3, 3e4]

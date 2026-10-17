@@ -98,7 +98,8 @@ if [[ 1 -eq 1 ]]; then
     # export CO2percent=4
     export DATASET="27Al"
     export PREFIX="Run_"
-    export OUT_DIR="Output_p"       
+    export OUT_DIR="Output_p"    
+    export CUTLIST=pid_cuts/pid_cutlist.txt   
     export CATHODE_GAIN=3.0
     rm -f ${OUT_DIR}/*.root
     export source_vertex=-200.0 # Source on the entrance window
@@ -109,6 +110,7 @@ if [[ 1 -eq 1 ]]; then
     parallel --bar -j 8 process_run :::  {17..22}
     hadd -j 4 -k ${OUT_DIR}/Al_protons.root ${OUT_DIR}/results_run0{15..22}.root
     unset CATHODE_GAIN
+    unset CUTLIST
     # exit
 fi
 

@@ -24,6 +24,8 @@ Int_t colors[40] = {
 #include <TRandom3.h>
 #include <TSpline.h>
 #include <TSystem.h> // gSystem->mkdir for the pc_calib_raw/ output directory
+#include <TCutG.h>   // p/alpha graphical cuts (classifySiPc)
+#include <TFile.h>
 
 #include <cmath> // std::floor/fabs/lround for vertexZSliceTag()
 #include <fstream>
@@ -102,29 +104,39 @@ inline bool siPcCoincident(double t_si, double t_pc)
   return dt > kSiPcDtMin && dt < kSiPcDtMax;
 }
 
-// PC anode dE gate, gas-region proton/alpha separation for the p(a,a)p elastic
-// branches (protonAlphaElastic_core, formerly protonMiscHistograms /
-// protonMiscHistograms_sx3). Rough,
-// energy-independent threshold read off Calib_dE_AnodeE_vs_QQQE (calibrated
-// anode dE, MeV, vs QQQ/SX3 E): proton and alpha loci are well separated below
-// ~5-6 MeV Si energy but converge at high Si energy/high dE (the bright
-// corner near the top of the plot) -- events there are NOT reliably
-// classified by a flat cut. Revisit with a TCutG/polygon if that corner
-// matters. anodeE_MeV < 0 means no valid per-wire calibration was available
-// for this hit, not "low dE" -- kUnknown must be handled as its own case,
-// never silently folded into kProton.
 constexpr double kProtonAlphaAnodeDeGate_MeV = 0.045;
+// |Ex| window that counts a p + 4He hit as elastic, for the _exgate vertex-z / theta_cm histograms.
+constexpr double kElasticExGate_MeV = 1.0;
 enum class SiPcPid
 {
   kUnknown = -1,
   kProton = 0,
-  kAlpha = 1
+  kAlpha = 1,
+  kMaybeProton = 2 // graphical cuts only: the proton band below E_Si 5 MeV
 };
-inline SiPcPid classifyByAnodeDe(double anodeE_MeV)
+struct PidCuts
+{
+  TCutG *alpha = nullptr;
+  TCutG *proton = nullptr;
+  TCutG *maybep = nullptr;
+};
+PidCuts pidCutsQQQ, pidCutsSX3;
+bool pidUseCuts = false; // true once Begin() has found all six pid_* cuts in CUTLIST
+
+inline SiPcPid classifySiPc(double siE_MeV, double anodeE_MeV, bool isQQQ)
 {
   if (anodeE_MeV < 0.0)
     return SiPcPid::kUnknown;
-  return (anodeE_MeV < kProtonAlphaAnodeDeGate_MeV) ? SiPcPid::kProton : SiPcPid::kAlpha;
+  if (!pidUseCuts)
+    return (anodeE_MeV < kProtonAlphaAnodeDeGate_MeV) ? SiPcPid::kProton : SiPcPid::kAlpha;
+  const PidCuts &cuts = isQQQ ? pidCutsQQQ : pidCutsSX3;
+  if (cuts.alpha->IsInside(siE_MeV, anodeE_MeV))
+    return SiPcPid::kAlpha;
+  if (cuts.proton->IsInside(siE_MeV, anodeE_MeV))
+    return SiPcPid::kProton;
+  if (cuts.maybep->IsInside(siE_MeV, anodeE_MeV))
+    return SiPcPid::kMaybeProton;
+  return SiPcPid::kUnknown;
 }
 
 inline TVector3 beamAxisOrigin()
@@ -588,7 +600,39 @@ void TrackRecon::Begin(TTree * /*tree*/)
       std::cerr << "CUTLIST=" << getenv("CUTLIST")
                 << " set but no cut named 'simcprfgate2' found in it -- Gate2 Si-MCP/RF gating disabled" << std::endl;
     }
+
+    const char *pidNames[6] = {"pid_alpha_qqq", "pid_proton_qqq", "pid_maybep_qqq",
+                               "pid_alpha_sx3", "pid_proton_sx3", "pid_maybep_sx3"};
+    TCutG *pidFound[6] = {};
+    int pidListed = 0;
+    for (int i = 0; i < 6; ++i)
+    {
+      try
+      {
+        pidFound[i] = plotter->FindCut(pidNames[i]);
+        ++pidListed;
+      }
+      catch (const std::out_of_range &)
+      {
+      }
+    }
+    if (pidListed > 0)
+    {
+      if (pidListed < 6 || std::find(pidFound, pidFound + 6, nullptr) != pidFound + 6)
+      {
+        std::cerr << "CUTLIST=" << getenv("CUTLIST") << ": needs all six pid_{alpha,proton,maybep}_{qqq,sx3}, each a "
+                  << "file with a TCutG named CUTG -- stopping" << std::endl;
+        gSystem->Exit(1);
+      }
+      pidCutsQQQ = {pidFound[0], pidFound[1], pidFound[2]};
+      pidCutsSX3 = {pidFound[3], pidFound[4], pidFound[5]};
+      pidUseCuts = true;
+    }
   }
+  if (pidUseCuts)
+    std::cout << "p/alpha PID: graphical cuts pid_{alpha,proton,maybep}_{qqq,sx3} from CUTLIST=" << getenv("CUTLIST") << std::endl;
+  else
+    std::cout << "p/alpha PID: flat anode gate " << kProtonAlphaAnodeDeGate_MeV << " MeV (no pid_* cuts in CUTLIST)" << std::endl;
 
   if (getenv("reactiondata"))
   {
@@ -1084,9 +1128,8 @@ inline void pcEnergyCalibrationAccumulateProton(const std::vector<Event> &PC_Eve
     if (!(pcevent.multi1 >= 1 && pcevent.multi2 >= 1))
       return;
     if (!(pcevent.Energy2 > 1400)) // cathode-tagged alpha; intentionally NOT anode-dE
-      return;                      // PID (classifyByAnodeDe) -- this function derives the
-                                   // anode calibration those thresholds depend on, so it
-                                   // needs a selection that doesn't presuppose it.
+      return;
+
     if (TMath::Abs(sievent.pos.DeltaPhi(pcevent.pos)) > phi_win)
       return;
 
@@ -4158,7 +4201,9 @@ void protonAlphaElastic_core(HistPlotter *plotter, const std::vector<Event> &Si_
       {
         // const std::string ejtag = (alphaHyp && sievent.Energy1 < 5) ? "_a" : "_p";
         std::string ejtag;
-        if (alphaHyp && sievent.Energy1 < 5)
+        if (pidUseCuts)
+          ejtag = alphaHyp ? "_a" : (pid == SiPcPid::kMaybeProton ? "_maybep" : "_p");
+        else if (alphaHyp && sievent.Energy1 < 5)
           ejtag = "_a";
         else if (sievent.Energy1 >= 5.0 && sievent.Energy1 < 7.0)
           ejtag = "_p";
@@ -4184,6 +4229,25 @@ void protonAlphaElastic_core(HistPlotter *plotter, const std::vector<Event> &Si_
         plotter->Fill2D(rx + "_Ex_vs_phi" + ejtag + sfx, 180, -180, 180, 800, -10, 10, sievent.pos.Phi() * 180 / M_PI, Ex, pmlabel);
         plotter->Fill2D(rx + "_Ex_vs_X" + ejtag + sfx, 100, -100, 120, 800, -6, 15, sievent.pos.X(), Ex, pmlabel);
         plotter->Fill2D(rx + "_Ex_vs_Y" + ejtag + sfx, 100, -100, 120, 800, -6, 15, sievent.pos.Y(), Ex, pmlabel);
+
+        {
+          const double thetaCM = alphaHyp ? 180.0 - 2.0 * theta * 180 / M_PI
+                                          : (theta + TMath::ASin(TMath::Sin(theta) * mass_1H / mass_4He)) * 180 / M_PI;
+          const bool exGate = TMath::Abs(Ex) < kElasticExGate_MeV;
+          auto fillZTheta = [&](const std::string &variant)
+          {
+            plotter->Fill2D(rx + "_VertexZ_vs_ThetaCM" + variant + ejtag + sfx, 800, -400, 400, 180, 0, 180, vertex_z, thetaCM, pmlabel);
+          };
+          fillZTheta("");
+          if (exGate)
+            fillZTheta("_exgate");
+          if (hasCathode)
+          {
+            fillZTheta("_cath");
+            if (exGate)
+              fillZTheta("_cath_exgate");
+          }
+        }
 
         if (isQQQ)
         {
@@ -4276,10 +4340,23 @@ void protonAlphaElastic_core(HistPlotter *plotter, const std::vector<Event> &Si_
         }
       };
 
-      if (pid != SiPcPid::kAlpha)
-        fillHypothesis(false); // proton, or PID unavailable (legacy default)
-      if (pid == SiPcPid::kAlpha && sievent.Energy1 < 6.2)
-        fillHypothesis(true);
+      if (pidUseCuts)
+      {
+        // Graphical cuts: each hit as what the cuts call it (p and maybe-p both with proton kinematics, filed apart);
+        // kUnknown (in no gate, or no anode calibration) is filled as nothing -- counted in elastic_pidUnknown.
+        if (pid == SiPcPid::kProton || pid == SiPcPid::kMaybeProton)
+          fillHypothesis(false);
+        else if (pid == SiPcPid::kAlpha)
+          fillHypothesis(true);
+      }
+      else
+      {
+        // Old flat gate, kept as it was: kUnknown is filled as a proton (legacy default).
+        if (pid != SiPcPid::kAlpha)
+          fillHypothesis(false);
+        if (pid == SiPcPid::kAlpha && sievent.Energy1 < 6.2)
+          fillHypothesis(true);
+      }
     };
 
     // --- a1c1/a1c2 (multi1==1) and a2c1/a2c2 (multi1==2), from PC_Events. The
@@ -4306,7 +4383,7 @@ void protonAlphaElastic_core(HistPlotter *plotter, const std::vector<Event> &Si_
         plotter->Fill1D(rx + "_dt_Cathode" + sfx, 600, -2000, 2000, pcevent.Time2 - sievent.Time1, misclabel);
 
       double anodeE_MeV = (pcevent.Anodech >= 0 && pcevent.Anodech < 24) ? pcevent.Energy1MeV : -1.0;
-      SiPcPid pid = classifyByAnodeDe(anodeE_MeV);
+      SiPcPid pid = classifySiPc(sievent.Energy1, anodeE_MeV, isQQQ);
       if (pid == SiPcPid::kUnknown)
         plotter->Fill1D(rx + "_pidUnknown" + sfx, 2, 0, 2, 1.0, misclabel);
 
@@ -4448,7 +4525,7 @@ void protonAlphaElastic_core(HistPlotter *plotter, const std::vector<Event> &Si_
         if (!anyValidWire)
           anodeE_MeV_a0 = -1.0;
 
-        SiPcPid pid = classifyByAnodeDe(anodeE_MeV_a0);
+        SiPcPid pid = classifySiPc(sievent.Energy1, anodeE_MeV_a0, isQQQ);
         if (pid == SiPcPid::kUnknown)
           plotter->Fill1D(rx + "_pidUnknown" + sfx, 2, 0, 2, 1.0, misclabel);
 

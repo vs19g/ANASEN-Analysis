@@ -1,0 +1,87 @@
+# p + 4He elastic scattering, dsigma/dOmega(theta_cm), from the alpha recoils of the Run A Ta-foil runs 18-22, straight
+# from a TrackRecon.C production file -- the same route as 27Al_ap_runA.toml. The histogram is
+# elastic_VertexZ_vs_ThetaCM_<variant>_a_<DET>, filled by protonAlphaElastic_core since 2026-10-16.
+# paap_ta_runs.toml is the same measurement from the p-alpha study's per-hit list.
+#
+#   (once) process runs 18-22 with CUTLIST=pid_cuts/pid_cutlist.txt and merge them, e.g.
+#          bash scratch/paap_hist_2026-10-16/reprocess.sh          (or run_tr.sh block 5, then hadd runs 18-22 only)
+#   ~/myenv/bin/python -B extract_yields.py       examples/paap_ta_runs_hist.toml   # or, the same in ROOT:
+#   root -l -b -q 'extract_yields.C+("examples/paap_ta_runs_hist.toml")'
+#   ~/myenv/bin/python -B geometric_efficiency.py examples/paap_ta_runs_hist.toml
+#   ~/myenv/bin/python -B cross_section.py        examples/paap_ta_runs_hist.toml
+#
+# Paths are relative to this file's folder.
+
+title = "p + 4He elastic, alpha recoils, Ta runs 18-22 (TrackRecon histograms)"
+mode = "angular"
+dets = ["qqq", "sx3"]
+out_dir = "../out/paap_ta_run22"
+
+[det_vars.qqq]                       # TrackRecon.C spells the detector in upper case in these folders
+DET = "QQQ"
+[det_vars.sx3]
+DET = "SX3"
+
+# ------------------------------------------------------------- step 1: extract_yields.py / extract_yields.C
+[extract]
+# The merged output of runs 18-22 (not 17: its foil, at z = -135.7 mm, sits inside the vertex window below).
+# Point this at your own merged file to use your own processing.
+source = "hist"
+file = "~/ANASEN_analysis/Output_p/results_run022.root"
+# Folder _a: hits the p/alpha cut (pid_alpha_<det>, CUTLIST) calls alpha. Variant _cath_exgate: cathode topologies
+# (a1c1, a1c2, a2c1, a2c2) and |Ex| < 1 MeV under the alpha hypothesis, i.e. elastic. Others: "" (all topologies,
+# no Ex gate), "_cath", "_exgate".
+hist = "elastic+misc_{DET}_a/elastic_VertexZ_vs_ThetaCM_cath_exgate_a_{DET}"
+axis = "x"                           # x = vertex z (mm)
+angle_axis = "y"                     # y = proton theta_cm (deg)
+variable = "z"
+
+# ------------------------------------------------------------- the reaction (steps 2 and 3)
+[reaction]
+beam_mass_u = 1.007825032            # p
+target_mass_u = 4.002603254          # 4He
+ejectile_mass_u = 1.007825032        # p
+recoil_mass_u = 4.002603254          # 4He
+detect = "recoil"                    # the silicon sees the alpha; theta_cm is the proton's
+states = [{ ex_mev = 0.0, weight = 1.0 }]
+
+[beam]
+# As paap_ta_runs.toml: 6.89 MeV protons into the gas; N_b = run 17's Ta-foil Rutherford current (1.35 pA) times
+# the wall time of runs 18-22. The run log's 13 pA would give 2.6378e11 (../../runlog/beam_exposure.py "18-22").
+eloss_table = "../../eloss_calculations/proton_lookup_30MeV_250torr_3pc.dat"
+e_entrance_mev = 6.89
+z_entrance_mm = -454.0
+current_a = 1.35e-12
+time_s = 672.65
+charge_state = 1
+
+[bins]
+window_z_mm = [-170.0, -53.0]        # upstream of every run's foil by 25 mm for runs 18-22, inside the counter
+theta_edges_deg = { start = 88.0, stop = 168.0, step = 8.0 }
+
+# ------------------------------------------------------------- step 2: geometric_efficiency.py
+[efficiency]
+n_per_bin = 400000
+seed = 20261016
+
+# ------------------------------------------------------------- step 3: cross_section.py
+[target]
+pressure_torr = 250.0
+temperature_k = 293.15
+mole_fraction = 0.97
+atoms_per_molecule = 1
+
+[acceptance]
+source = "geometric"
+column = "eps_geometric"
+
+[[reference]]
+csv = "reference/barnard1964_A1113003.csv"
+x_col = "theta_cm_deg"
+y_col = "dsdo_window_mb_sr"
+label = "Barnard 1964, at the window's E_p"
+
+[plot]
+yscale = "linear"
+xlim = [80, 175]
+ylim = [0, 130]
